@@ -29,9 +29,13 @@ void main() {
     final callCenter = tester.getCenter(
       find.byKey(const ValueKey('conversation-call-button')),
     );
+    final nameCenter = tester.getCenter(
+      find.byKey(const ValueKey('conversation-contact-name')),
+    );
     expect(header.height, 84);
     expect(backCenter.dy, moreOrLessEquals(avatarCenter.dy));
     expect(callCenter.dy, moreOrLessEquals(avatarCenter.dy));
+    expect(nameCenter.dx, moreOrLessEquals(avatarCenter.dx));
 
     final messageText = tester.widget<Text>(
       find.text('Let me know when you leave'),

@@ -482,13 +482,16 @@ class _ConversationHeader extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 3),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
+                  Stack(
+                    clipBehavior: Clip.none,
+                    alignment: Alignment.center,
                     children: [
                       ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 150),
                         child: Text(
                           conversation.title,
+                          key: const ValueKey('conversation-contact-name'),
+                          textAlign: TextAlign.center,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -500,11 +503,13 @@ class _ConversationHeader extends StatelessWidget {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 2),
-                      Icon(
-                        CupertinoIcons.chevron_right,
-                        size: 10,
-                        color: MessagesPalette.secondaryLabel(context),
+                      Positioned(
+                        right: -13,
+                        child: Icon(
+                          CupertinoIcons.chevron_right,
+                          size: 10,
+                          color: MessagesPalette.secondaryLabel(context),
+                        ),
                       ),
                     ],
                   ),
