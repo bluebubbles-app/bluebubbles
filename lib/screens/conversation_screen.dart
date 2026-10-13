@@ -94,8 +94,6 @@ class _ConversationScreenState extends State<ConversationScreen> {
                   child: AnimatedList(
                     key: _messageListKey,
                     controller: _scrollController,
-                    keyboardDismissBehavior:
-                        ScrollViewKeyboardDismissBehavior.onDrag,
                     padding: const EdgeInsets.fromLTRB(9, 18, 9, 10),
                     initialItemCount: widget.conversation.messages.length + 1,
                     itemBuilder: (context, index, animation) {
