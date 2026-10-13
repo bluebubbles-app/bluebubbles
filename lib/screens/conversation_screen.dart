@@ -206,37 +206,7 @@ class _ConversationScreenState extends State<ConversationScreen>
   Future<void> _showSelectableText(ChatMessage message) async {
     await showCupertinoModalPopup<void>(
       context: context,
-      builder: (context) => CupertinoPopupSurface(
-        child: SafeArea(
-          top: false,
-          child: Container(
-            constraints: const BoxConstraints(minHeight: 220),
-            padding: const EdgeInsets.fromLTRB(22, 22, 22, 14),
-            color: MessagesPalette.elevatedBackground(context),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Select Text',
-                  textAlign: TextAlign.center,
-                  style: MessagesText.headline(context),
-                ),
-                const SizedBox(height: 22),
-                SelectableText(
-                  message.text,
-                  style: MessagesText.body(context),
-                ),
-                const SizedBox(height: 22),
-                CupertinoButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Done'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+      builder: (context) => _SelectableMessageSheet(text: message.text),
     );
   }
 
@@ -1060,6 +1030,66 @@ class _PropertyRow extends StatelessWidget {
           ),
           Expanded(child: Text(value)),
         ],
+      ),
+    );
+  }
+}
+
+class _SelectableMessageSheet extends StatefulWidget {
+  const _SelectableMessageSheet({required this.text});
+
+  final String text;
+
+  @override
+  State<_SelectableMessageSheet> createState() =>
+      _SelectableMessageSheetState();
+}
+
+class _SelectableMessageSheetState extends State<_SelectableMessageSheet> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.text);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoPopupSurface(
+      child: SafeArea(
+        top: false,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 220),
+          padding: const EdgeInsets.fromLTRB(22, 22, 22, 14),
+          color: MessagesPalette.elevatedBackground(context),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Select Text',
+                textAlign: TextAlign.center,
+                style: MessagesText.headline(context),
+              ),
+              const SizedBox(height: 22),
+              CupertinoTextField(
+                controller: _controller,
+                readOnly: true,
+                maxLines: null,
+                padding: EdgeInsets.zero,
+                decoration: null,
+                style: MessagesText.body(context),
+              ),
+              const SizedBox(height: 22),
+              CupertinoButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Done'),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
