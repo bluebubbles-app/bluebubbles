@@ -10,12 +10,14 @@ class MessageBubble extends StatelessWidget {
     required this.showTail,
     required this.compactTop,
     this.showStatus = false,
+    this.shadowElevation = 0,
   });
 
   final ChatMessage message;
   final bool showTail;
   final bool compactTop;
   final bool showStatus;
+  final double shadowElevation;
 
   @override
   Widget build(BuildContext context) {
@@ -40,6 +42,7 @@ class MessageBubble extends StatelessWidget {
                   color: color,
                   isFromMe: isFromMe,
                   showTail: showTail,
+                  shadowElevation: shadowElevation,
                 ),
                 child: Container(
                   constraints: BoxConstraints(
@@ -97,69 +100,82 @@ class MessageBubblePainter extends CustomPainter {
     required this.color,
     required this.isFromMe,
     required this.showTail,
+    required this.shadowElevation,
   });
 
   final Color color;
   final bool isFromMe;
   final bool showTail;
+  final double shadowElevation;
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = color;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(18)),
-      paint,
-    );
+    final bubble = Path()
+      ..addRRect(
+        RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(18)),
+      );
 
-    if (!showTail) return;
-
-    final tail = Path();
-    if (isFromMe) {
-      tail
-        ..moveTo(size.width - 12, size.height - 10)
-        ..cubicTo(
-          size.width - 5,
-          size.height - 5,
-          size.width + 1,
-          size.height,
-          size.width + 7,
-          size.height,
-        )
-        ..cubicTo(
-          size.width + 2,
-          size.height - 2,
-          size.width,
-          size.height - 7,
-          size.width - 1,
-          size.height - 12,
-        );
-    } else {
-      tail
-        ..moveTo(12, size.height - 10)
-        ..cubicTo(
-          5,
-          size.height - 5,
-          -1,
-          size.height,
-          -7,
-          size.height,
-        )
-        ..cubicTo(
-          -2,
-          size.height - 2,
-          0,
-          size.height - 7,
-          1,
-          size.height - 12,
-        );
+    if (showTail) {
+      final tail = Path();
+      if (isFromMe) {
+        tail
+          ..moveTo(size.width - 12, size.height - 10)
+          ..cubicTo(
+            size.width - 5,
+            size.height - 5,
+            size.width + 1,
+            size.height,
+            size.width + 7,
+            size.height,
+          )
+          ..cubicTo(
+            size.width + 2,
+            size.height - 2,
+            size.width,
+            size.height - 7,
+            size.width - 1,
+            size.height - 12,
+          );
+      } else {
+        tail
+          ..moveTo(12, size.height - 10)
+          ..cubicTo(
+            5,
+            size.height - 5,
+            -1,
+            size.height,
+            -7,
+            size.height,
+          )
+          ..cubicTo(
+            -2,
+            size.height - 2,
+            0,
+            size.height - 7,
+            1,
+            size.height - 12,
+          );
+      }
+      tail.close();
+      bubble.addPath(tail, Offset.zero);
     }
-    tail.close();
-    canvas.drawPath(tail, paint);
+
+    if (shadowElevation > 0) {
+      canvas.drawShadow(
+        bubble,
+        CupertinoColors.black.withValues(alpha: .38),
+        shadowElevation,
+        true,
+      );
+    }
+    canvas.drawPath(bubble, paint);
   }
 
   @override
   bool shouldRepaint(MessageBubblePainter oldDelegate) =>
       oldDelegate.color != color ||
       oldDelegate.isFromMe != isFromMe ||
-      oldDelegate.showTail != showTail;
+      oldDelegate.showTail != showTail ||
+      oldDelegate.shadowElevation != shadowElevation;
 }

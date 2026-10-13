@@ -46,6 +46,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
       CupertinoPageRoute<void>(
         builder: (_) => ConversationScreen(
           conversation: conversation,
+          allConversations: widget.conversations,
           onSend: (text) {
             widget.onSend(conversation, text);
             setState(() {});

@@ -21,7 +21,7 @@ void main() {
     expect(messageText.textAlign, TextAlign.center);
 
     final contactName = tester.widget<Text>(find.text('Mia Parker'));
-    expect(contactName.style?.fontSize, 22);
+    expect(contactName.style?.fontSize, 17);
   });
 
   testWidgets('reveals mute and delete actions by swiping left',
@@ -51,5 +51,27 @@ void main() {
       transformedContent.transform.getTranslation().x,
       moreOrLessEquals(-156),
     );
+  });
+
+  testWidgets('opens message actions and enters multi-select after a hold',
+      (tester) async {
+    await tester.pumpWidget(const MessagesUiApp());
+    await tester.tap(find.text('Mia Parker'));
+    await tester.pumpAndSettle();
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('Let me know when you leave')),
+    );
+    await tester.pump(const Duration(milliseconds: 1510));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Copy'), findsOneWidget);
+    expect(find.text('Select'), findsOneWidget);
+    await gesture.up();
+
+    await tester.tap(find.text('Select'));
+    await tester.pumpAndSettle();
+    expect(find.text('1 Selected'), findsOneWidget);
+    expect(find.byIcon(CupertinoIcons.checkmark_circle_fill), findsOneWidget);
   });
 }
