@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:bluebubbles/main.dart';
+import 'package:bluebubbles/screens/conversation_list_screen.dart';
 
 void main() {
   testWidgets('shows the list and opens a conversation', (tester) async {
