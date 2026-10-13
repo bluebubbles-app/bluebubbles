@@ -6,6 +6,9 @@ Copyright belongs to the respective OpenBubbles and BlueBubbles contributors.
 
 Source: https://github.com/OpenBubbles/openbubbles-app
 
+The BlueBubbles launcher icon files under assets/icon were supplied by the
+project owner for use in this application.
+
 This prototype does not include Apple artwork, Apple fonts, Apple services,
 iMessage protocol code, authentication code, networking, or SMS access.
 Apple, iPhone, iMessage, and iOS are trademarks of Apple Inc. This project is

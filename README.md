@@ -14,6 +14,7 @@ by the OpenBubbles Cupertino appearance and the iPhone Messages experience.
 - message composer, local message insertion, and automatic scrolling;
 - light and dark modes based on the Android system setting;
 - local sample data with no backend.
+- BlueBubbles launcher icon and application name.
 
 ## Not included
 
@@ -28,12 +29,16 @@ Flutter 3.24 or later is recommended.
 
 ```text
 flutter create --platforms=android .
-flutter pub get
+bash tool/setup_android.sh
 flutter run
 ```
 
 The `flutter create` command adds the missing Android wrapper while preserving
-the prototype files under `lib/`.
+the prototype files under `lib/`. The setup script then sets the visible app
+name to `BlueBubbles` and generates all required Android launcher icon sizes
+from `assets/icon/bluebubbles-rounded.png`.
+
+The square and circular source variants are also preserved under `assets/icon/`.
 
 ## Connect a backend later
 

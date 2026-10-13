@@ -44,7 +44,7 @@ class _MessagesUiAppState extends State<MessagesUiApp> {
   @override
   Widget build(BuildContext context) {
     return CupertinoApp(
-      title: 'Messages',
+      title: 'BlueBubbles',
       debugShowCheckedModeBanner: false,
       theme: const CupertinoThemeData(
         primaryColor: MessagesPalette.blue,
