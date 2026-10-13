@@ -1,7 +1,7 @@
-# Messages UI for Android — front end only
+# BlueBubbles
 
-This folder contains a standalone Flutter interface inspired by the
-OpenBubbles Cupertino appearance and the iPhone Messages experience.
+BlueBubbles is a standalone Flutter messaging interface for Android, inspired
+by the OpenBubbles Cupertino appearance and the iPhone Messages experience.
 
 ## Included
 

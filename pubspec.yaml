@@ -1,5 +1,5 @@
-name: openbubbles_ui_only
-description: Standalone Flutter front end inspired by the OpenBubbles Cupertino theme.
+name: bluebubbles
+description: BlueBubbles is a standalone Flutter messaging interface for Android.
 publish_to: none
 version: 0.1.0+1
 

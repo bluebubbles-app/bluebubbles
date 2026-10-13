@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openbubbles_ui_only/main.dart';
+import 'package:bluebubbles/main.dart';
 
 void main() {
   testWidgets('shows the list and opens a conversation', (tester) async {
