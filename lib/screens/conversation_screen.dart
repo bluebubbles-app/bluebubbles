@@ -6,6 +6,7 @@ import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 
 import '../models/conversation.dart';
+import '../settings/app_settings.dart';
 import '../theme/messages_theme.dart';
 import '../widgets/contact_avatar.dart';
 import '../widgets/message_bubble.dart';
@@ -252,7 +253,7 @@ class _ConversationScreenState extends State<ConversationScreen>
             _PropertyRow(label: 'Sender', value: sender),
             _PropertyRow(
               label: directionLabel,
-              value: _formatFullDateTime(message.sentAt),
+              value: _formatFullDateTime(context, message.sentAt),
             ),
             _PropertyRow(
               label: 'Status',
@@ -844,13 +845,15 @@ class _ConversationHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final settings = AppSettingsScope.of(context);
+    final tint = MessagesPalette.isDark(context)
+        ? const Color(0xFF1C1C1E)
+        : const Color(0xFFF1F1F2);
+    final header = Container(
       key: const ValueKey('conversation-header'),
       height: 80 + topCompensation,
       decoration: BoxDecoration(
-        color: MessagesPalette.isDark(context)
-            ? const Color(0xFF1C1C1E)
-            : const Color(0xFFF1F1F2),
+        color: tint.withValues(alpha: settings.headerTintOpacity),
         border: Border(
           bottom: BorderSide(
             color: MessagesPalette.hairline(context).withValues(alpha: .55),
@@ -960,6 +963,17 @@ class _ConversationHeader extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+    if (settings.headerBlurSigma < .1) return header;
+    return ClipRect(
+      key: const ValueKey('conversation-header-glass'),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(
+          sigmaX: settings.headerBlurSigma,
+          sigmaY: settings.headerBlurSigma,
+        ),
+        child: header,
       ),
     );
   }
@@ -1076,7 +1090,7 @@ class _TimestampRevealMessage extends StatelessWidget {
                     child: Padding(
                       padding: const EdgeInsets.only(right: 2),
                       child: Text(
-                        _formatTime(sentAt),
+                        _formatTime(context, sentAt),
                         style: TextStyle(
                           color: MessagesPalette.secondaryLabel(context),
                           fontFamily: 'SF Pro Text',
@@ -1572,7 +1586,7 @@ class _DateSeparator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = _dateSeparatorParts(value);
+    final label = _dateSeparatorParts(context, value);
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Text.rich(
@@ -1600,14 +1614,14 @@ class _DateSeparator extends StatelessWidget {
   }
 }
 
-String _formatTime(DateTime value) {
-  final hour = value.hour % 12 == 0 ? 12 : value.hour % 12;
-  final minute = value.minute.toString().padLeft(2, '0');
-  final period = value.hour < 12 ? 'AM' : 'PM';
-  return '$hour:$minute $period';
+String _formatTime(BuildContext context, DateTime value) {
+  return AppSettingsScope.of(context).formatTime(
+    value,
+    platformUses24Hour: MediaQuery.alwaysUse24HourFormatOf(context),
+  );
 }
 
-(String, String) _dateSeparatorParts(DateTime value) {
+(String, String) _dateSeparatorParts(BuildContext context, DateTime value) {
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
   final messageDay = DateTime(value.year, value.month, value.day);
@@ -1615,13 +1629,20 @@ String _formatTime(DateTime value) {
   final prefix = switch (difference) {
     0 => 'Today',
     1 => 'Yesterday',
-    _ => '${value.month}/${value.day}/${value.year}',
+    _ => AppSettingsScope.of(context).formatDate(
+        value,
+        localeCode: Localizations.localeOf(context).languageCode,
+      ),
   };
-  return (prefix, _formatTime(value));
+  return (prefix, _formatTime(context, value));
 }
 
-String _formatFullDateTime(DateTime value) {
-  return '${value.month}/${value.day}/${value.year} at ${_formatTime(value)}';
+String _formatFullDateTime(BuildContext context, DateTime value) {
+  final date = AppSettingsScope.of(context).formatDate(
+    value,
+    localeCode: Localizations.localeOf(context).languageCode,
+  );
+  return '$date at ${_formatTime(context, value)}';
 }
 
 String _deliveryStateLabel(DeliveryState state) {

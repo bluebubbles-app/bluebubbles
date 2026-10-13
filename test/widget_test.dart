@@ -1,9 +1,29 @@
+import 'dart:convert';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:bluebubbles/data/demo_data.dart';
 import 'package:bluebubbles/main.dart';
+import 'package:bluebubbles/models/conversation.dart';
 import 'package:bluebubbles/screens/conversation_list_screen.dart';
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  test('conversation models survive a JSON round trip', () {
+    final original = demoConversations().first;
+    final encoded = jsonEncode(original.toJson());
+    final restored = Conversation.fromJson(
+      Map<String, Object?>.from(jsonDecode(encoded) as Map),
+    );
+
+    expect(restored.id, original.id);
+    expect(restored.title, original.title);
+    expect(restored.messages.length, original.messages.length);
+    expect(restored.messages.last.text, original.messages.last.text);
+  });
+
   testWidgets('shows the list and opens a conversation', (tester) async {
     await tester.pumpWidget(const MessagesUiApp());
     expect(find.text('Messages'), findsOneWidget);
@@ -24,6 +44,10 @@ void main() {
     expect(find.byIcon(CupertinoIcons.video_camera), findsNothing);
 
     final headerFinder = find.byKey(const ValueKey('conversation-header'));
+    expect(
+      find.byKey(const ValueKey('conversation-header-glass')),
+      findsOneWidget,
+    );
     final header = tester.getSize(
       headerFinder,
     );
@@ -76,6 +100,24 @@ void main() {
       findsNothing,
     );
     expect(find.text('Lyndsey'), findsOneWidget);
+  });
+
+  testWidgets('opens settings from the ellipsis button', (tester) async {
+    await tester.pumpWidget(const MessagesUiApp());
+
+    await tester.tap(find.byKey(const ValueKey('open-settings-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('Header Transparency'), findsOneWidget);
+    expect(find.text('Language'), findsOneWidget);
+    expect(find.text('Date Format'), findsOneWidget);
+    expect(find.text('Time Format'), findsOneWidget);
+    expect(find.text('Emoji Style'), findsOneWidget);
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.pumpAndSettle();
+    expect(find.text('Import Messages'), findsOneWidget);
+    expect(find.text('Export Messages'), findsOneWidget);
   });
 
   testWidgets('shows the SVG reference media and silenced state',

@@ -4,20 +4,24 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 
 import '../models/conversation.dart';
+import '../settings/app_settings.dart';
 import '../theme/messages_theme.dart';
 import '../widgets/contact_avatar.dart';
 import '../widgets/ios_search_field.dart';
 import 'conversation_screen.dart';
+import 'settings_screen.dart';
 
 class ConversationListScreen extends StatefulWidget {
   const ConversationListScreen({
     super.key,
     required this.conversations,
     required this.onSend,
+    required this.onReplaceConversations,
   });
 
   final List<Conversation> conversations;
   final void Function(Conversation conversation, String text) onSend;
+  final ValueChanged<List<Conversation>> onReplaceConversations;
 
   @override
   State<ConversationListScreen> createState() =>
@@ -58,6 +62,19 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
       ),
     );
     setState(() {});
+  }
+
+  Future<void> _openSettings() async {
+    HapticFeedback.selectionClick();
+    await Navigator.of(context).push(
+      CupertinoPageRoute<void>(
+        builder: (_) => SettingsScreen(
+          conversations: widget.conversations,
+          onImported: widget.onReplaceConversations,
+        ),
+      ),
+    );
+    if (mounted) setState(() {});
   }
 
   void _pinConversation(Conversation conversation) {
@@ -277,9 +294,10 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
               Positioned(
                 right: 54,
                 child: CupertinoButton(
+                  key: const ValueKey('open-settings-button'),
                   minSize: 44,
                   padding: EdgeInsets.zero,
-                  onPressed: () => HapticFeedback.selectionClick(),
+                  onPressed: _openSettings,
                   child: const Icon(CupertinoIcons.ellipsis_circle, size: 20),
                 ),
               ),
@@ -948,7 +966,7 @@ class ConversationRow extends StatelessWidget {
                       child: Row(
                         children: [
                           Text(
-                            _relativeTime(conversation.updatedAt),
+                            _relativeTime(context, conversation.updatedAt),
                             style: MessagesText.secondary(context).copyWith(
                               fontSize: 13,
                               fontWeight: highlighted
@@ -975,13 +993,19 @@ class ConversationRow extends StatelessWidget {
     );
   }
 
-  String _relativeTime(DateTime value) {
+  String _relativeTime(BuildContext context, DateTime value) {
     final difference = DateTime.now().difference(value);
     if (difference.inMinutes < 60) return '${difference.inMinutes} min';
     if (difference.inHours < 24) {
-      return '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
+      return AppSettingsScope.of(context).formatTime(
+        value,
+        platformUses24Hour: MediaQuery.alwaysUse24HourFormatOf(context),
+      );
     }
     if (difference.inDays == 1) return 'Yesterday';
-    return '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}';
+    return AppSettingsScope.of(context).formatDate(
+      value,
+      localeCode: Localizations.localeOf(context).languageCode,
+    );
   }
 }
