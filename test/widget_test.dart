@@ -17,9 +17,11 @@ void main() {
     expect(find.byIcon(CupertinoIcons.phone), findsOneWidget);
     expect(find.byIcon(CupertinoIcons.video_camera), findsNothing);
 
+    final headerFinder = find.byKey(const ValueKey('conversation-header'));
     final header = tester.getSize(
-      find.byKey(const ValueKey('conversation-header')),
+      headerFinder,
     );
+    final headerCenter = tester.getCenter(headerFinder);
     final avatarCenter = tester.getCenter(
       find.byKey(const ValueKey('conversation-contact-avatar')),
     );
@@ -33,6 +35,8 @@ void main() {
       find.byKey(const ValueKey('conversation-contact-name')),
     );
     expect(header.height, 84);
+    expect(avatarCenter.dx, moreOrLessEquals(headerCenter.dx));
+    expect(nameCenter.dx, moreOrLessEquals(headerCenter.dx));
     expect(backCenter.dy, moreOrLessEquals(avatarCenter.dy));
     expect(callCenter.dy, moreOrLessEquals(avatarCenter.dy));
     expect(nameCenter.dx, moreOrLessEquals(avatarCenter.dx));

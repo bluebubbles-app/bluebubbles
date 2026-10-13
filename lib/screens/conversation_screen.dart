@@ -457,15 +457,15 @@ class _ConversationHeader extends StatelessWidget {
             ),
           ),
           Positioned(
+            left: 0,
+            right: 0,
             top: 7,
-            child: CupertinoButton(
-              minSize: 0,
-              padding: EdgeInsets.zero,
-              onPressed: () => HapticFeedback.selectionClick(),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
+            child: Center(
+              child: CupertinoButton(
+                minSize: 0,
+                padding: EdgeInsets.zero,
+                onPressed: () => HapticFeedback.selectionClick(),
+                child: Container(
                     key: const ValueKey('conversation-contact-avatar'),
                     width: 44,
                     height: 44,
@@ -481,8 +481,19 @@ class _ConversationHeader extends StatelessWidget {
                       size: 40,
                     ),
                   ),
-                  const SizedBox(height: 3),
-                  Stack(
+              ),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 54,
+            child: Center(
+              child: CupertinoButton(
+                minSize: 0,
+                padding: EdgeInsets.zero,
+                onPressed: () => HapticFeedback.selectionClick(),
+                child: Stack(
                     clipBehavior: Clip.none,
                     alignment: Alignment.center,
                     children: [
@@ -513,7 +524,6 @@ class _ConversationHeader extends StatelessWidget {
                       ),
                     ],
                   ),
-                ],
               ),
             ),
           ),
