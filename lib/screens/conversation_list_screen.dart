@@ -359,6 +359,7 @@ class _SwipeableConversationRowState extends State<SwipeableConversationRow>
           AnimatedBuilder(
             animation: _offsetController,
             builder: (context, child) => Transform.translate(
+              key: ValueKey('swipe-content-${widget.conversation.id}'),
               offset: Offset(_offsetController.value, 0),
               child: child,
             ),

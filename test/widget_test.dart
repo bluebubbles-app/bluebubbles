@@ -30,7 +30,25 @@ void main() {
     await tester.drag(find.text('Mia Parker'), const Offset(-220, 0));
     await tester.pumpAndSettle();
 
-    expect(find.text('Mute'), findsOneWidget);
-    expect(find.text('Delete'), findsOneWidget);
+    final miaRow = find.ancestor(
+      of: find.text('Mia Parker'),
+      matching: find.byType(SwipeableConversationRow),
+    );
+    expect(
+      find.descendant(of: miaRow, matching: find.text('Mute')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: miaRow, matching: find.text('Delete')),
+      findsOneWidget,
+    );
+
+    final transformedContent = tester.widget<Transform>(
+      find.byKey(const ValueKey('swipe-content-lea')),
+    );
+    expect(
+      transformedContent.transform.getTranslation().x,
+      moreOrLessEquals(-156),
+    );
   });
 }
