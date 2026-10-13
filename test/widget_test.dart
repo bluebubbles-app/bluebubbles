@@ -110,9 +110,21 @@ void main() {
       find.byKey(const ValueKey('conversation-context-preview')),
       findsOneWidget,
     );
-    expect(find.text('Pin'), findsOneWidget);
-    expect(find.text('Hide Alerts'), findsOneWidget);
-    expect(find.text('Delete'), findsOneWidget);
+    final actions = find.byKey(
+      const ValueKey('conversation-context-actions'),
+    );
+    expect(
+      find.descendant(of: actions, matching: find.text('Pin')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: actions, matching: find.text('Hide Alerts')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: actions, matching: find.text('Delete')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('reveals mute and delete actions by swiping left',
