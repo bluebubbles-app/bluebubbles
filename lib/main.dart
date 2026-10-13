@@ -76,9 +76,7 @@ class _MessagesUiAppState extends State<MessagesUiApp> {
             textTheme: CupertinoTextThemeData(
               textStyle: TextStyle(
                 fontFamily: 'SF Pro Text',
-                fontFamilyFallback: _settings.emojiStyle == EmojiStyle.apple
-                    ? const ['Apple Color Emoji', 'Noto Color Emoji']
-                    : const ['Noto Color Emoji'],
+                fontFamilyFallback: const ['Noto Color Emoji'],
               ),
             ),
             applyThemeToAll: true,

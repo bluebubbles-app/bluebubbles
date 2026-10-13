@@ -323,32 +323,33 @@ class _ConversationScreenState extends State<ConversationScreen>
         child: SafeArea(
           child: Column(
             children: [
-              if (_selectionMode)
-                _SelectionHeader(
-                  selectionCount: _selectedMessageIds.length,
-                  onCancel: _cancelSelection,
-                )
-              else
-                _ConversationHeader(
-                  conversation: widget.conversation,
-                  topCompensation: topCompensation,
-                ),
               Expanded(
-                child: GestureDetector(
-                  onTap: () => FocusScope.of(context).unfocus(),
-                  onHorizontalDragUpdate:
-                      _selectionMode ? null : _handleHorizontalDragUpdate,
-                  onHorizontalDragEnd:
-                      _selectionMode ? null : _handleHorizontalDragEnd,
-                  child: NotificationListener<ScrollNotification>(
-                    onNotification: _handleScrollNotification,
-                    child: AnimatedList(
-                      key: _messageListKey,
-                      controller: _scrollController,
-                      physics: const BouncingScrollPhysics(
-                        parent: AlwaysScrollableScrollPhysics(),
-                      ),
-                      padding: const EdgeInsets.fromLTRB(10, 12, 14, 10),
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: GestureDetector(
+                        onTap: () => FocusScope.of(context).unfocus(),
+                        onHorizontalDragUpdate: _selectionMode
+                            ? null
+                            : _handleHorizontalDragUpdate,
+                        onHorizontalDragEnd:
+                            _selectionMode ? null : _handleHorizontalDragEnd,
+                        child: NotificationListener<ScrollNotification>(
+                          onNotification: _handleScrollNotification,
+                          child: AnimatedList(
+                            key: _messageListKey,
+                            controller: _scrollController,
+                            physics: const BouncingScrollPhysics(
+                              parent: AlwaysScrollableScrollPhysics(),
+                            ),
+                            padding: EdgeInsets.fromLTRB(
+                              10,
+                              _selectionMode
+                                  ? 64
+                                  : 92 + topCompensation,
+                              14,
+                              10,
+                            ),
                       initialItemCount:
                           widget.conversation.messages.length + 1,
                       itemBuilder: (context, index, animation) {
@@ -457,8 +458,23 @@ class _ConversationScreenState extends State<ConversationScreen>
                           child: insertedMessage,
                         );
                       },
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                    Align(
+                      alignment: Alignment.topCenter,
+                      child: _selectionMode
+                          ? _SelectionHeader(
+                              selectionCount: _selectedMessageIds.length,
+                              onCancel: _cancelSelection,
+                            )
+                          : _ConversationHeader(
+                              conversation: widget.conversation,
+                              topCompensation: topCompensation,
+                            ),
+                    ),
+                  ],
                 ),
               ),
               if (_selectionMode)

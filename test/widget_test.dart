@@ -114,6 +114,13 @@ void main() {
     expect(find.text('Date Format'), findsOneWidget);
     expect(find.text('Time Format'), findsOneWidget);
     expect(find.text('Emoji Style'), findsOneWidget);
+    await tester.tap(find.text('Emoji Style'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Apple (requires asset pack)'));
+    await tester.pumpAndSettle();
+    expect(find.text('Apple Emoji Pack Required'), findsOneWidget);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
     await tester.drag(find.byType(ListView), const Offset(0, -500));
     await tester.pumpAndSettle();
     expect(find.text('Import Messages'), findsOneWidget);

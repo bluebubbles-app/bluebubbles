@@ -174,11 +174,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       title: 'Emoji Style',
                       current: settings.emojiStyle,
                       options: const [
-                        (EmojiStyle.apple, 'Apple'),
+                        (EmojiStyle.apple, 'Apple (requires asset pack)'),
                         (EmojiStyle.android, 'Android'),
                       ],
                     );
-                    if (value != null) await settings.setEmojiStyle(value);
+                    if (value == EmojiStyle.apple &&
+                        !AppSettingsController.appleEmojiAssetsAvailable &&
+                        context.mounted) {
+                      await showCupertinoDialog<void>(
+                        context: context,
+                        builder: (context) => CupertinoAlertDialog(
+                          title: const Text('Apple Emoji Pack Required'),
+                          content: const Text(
+                            'SF Pro does not include emoji artwork. Add an '
+                            'Apple-compatible emoji font or image pack before '
+                            'this style can be enabled.',
+                          ),
+                          actions: [
+                            CupertinoDialogAction(
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: const Text('OK'),
+                            ),
+                          ],
+                        ),
+                      );
+                    } else if (value != null) {
+                      await settings.setEmojiStyle(value);
+                    }
                   },
                 ),
               ],
