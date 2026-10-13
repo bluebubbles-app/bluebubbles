@@ -87,6 +87,32 @@ void main() {
     expect(find.text('5 photos'), findsOneWidget);
     expect(find.text('Tobias has notifications silenced'), findsOneWidget);
     expect(find.text('Notify Anyway'), findsOneWidget);
+
+    final photoStack = find.byKey(const ValueKey('photo-message-stack'));
+    await tester.ensureVisible(photoStack);
+    await tester.tap(photoStack);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('full-screen-photo-viewer')),
+      findsOneWidget,
+    );
+    expect(find.text('1 of 5'), findsOneWidget);
+  });
+
+  testWidgets('shows a conversation preview and its three actions',
+      (tester) async {
+    await tester.pumpWidget(const MessagesUiApp());
+
+    await tester.longPress(find.text('Mia Parker'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('conversation-context-preview')),
+      findsOneWidget,
+    );
+    expect(find.text('Pin'), findsOneWidget);
+    expect(find.text('Hide Alerts'), findsOneWidget);
+    expect(find.text('Delete'), findsOneWidget);
   });
 
   testWidgets('reveals mute and delete actions by swiping left',

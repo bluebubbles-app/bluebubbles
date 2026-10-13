@@ -29,7 +29,7 @@ class ConversationScreen extends StatefulWidget {
 
 class _ConversationScreenState extends State<ConversationScreen>
     with SingleTickerProviderStateMixin {
-  static const _timestampRevealDistance = 82.0;
+  static const _timestampRevealDistance = 58.0;
   final _scrollController = ScrollController();
   GlobalKey<AnimatedListState> _messageListKey = GlobalKey<AnimatedListState>();
   late final AnimationController _timestampRevealController =
@@ -312,6 +312,9 @@ class _ConversationScreenState extends State<ConversationScreen>
                   child: AnimatedList(
                     key: _messageListKey,
                     controller: _scrollController,
+                    physics: const BouncingScrollPhysics(
+                      parent: AlwaysScrollableScrollPhysics(),
+                    ),
                     padding: const EdgeInsets.fromLTRB(10, 12, 14, 10),
                     initialItemCount: widget.conversation.messages.length + 1,
                     itemBuilder: (context, index, animation) {
@@ -451,6 +454,16 @@ class _PhotoStackMessage extends StatelessWidget {
     'assets/photos/hike-5.jpg',
   ];
 
+  void _openViewer(BuildContext context) {
+    HapticFeedback.selectionClick();
+    Navigator.of(context).push(
+      CupertinoPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (_) => const _FullScreenPhotoViewer(photos: _photos),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -491,12 +504,16 @@ class _PhotoStackMessage extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 9),
-          SizedBox(
-            height: 282,
-            width: double.infinity,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
+          GestureDetector(
+            key: const ValueKey('photo-message-stack'),
+            behavior: HitTestBehavior.opaque,
+            onTap: () => _openViewer(context),
+            child: SizedBox(
+              height: 282,
+              width: double.infinity,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
                 for (var index = 2; index >= 0; index--)
                   Positioned(
                     left: index * 10.0,
@@ -538,7 +555,105 @@ class _PhotoStackMessage extends StatelessWidget {
                     ),
                   ),
                 ),
-              ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FullScreenPhotoViewer extends StatefulWidget {
+  const _FullScreenPhotoViewer({required this.photos});
+
+  final List<String> photos;
+
+  @override
+  State<_FullScreenPhotoViewer> createState() =>
+      _FullScreenPhotoViewerState();
+}
+
+class _FullScreenPhotoViewerState extends State<_FullScreenPhotoViewer> {
+  late final PageController _pageController;
+  int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoPageScaffold(
+      key: const ValueKey('full-screen-photo-viewer'),
+      backgroundColor: CupertinoColors.black,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: PageView.builder(
+              controller: _pageController,
+              itemCount: widget.photos.length,
+              onPageChanged: (index) => setState(() => _currentIndex = index),
+              itemBuilder: (context, index) => InteractiveViewer(
+                minScale: 1,
+                maxScale: 4,
+                clipBehavior: Clip.none,
+                child: Center(
+                  child: Image.asset(
+                    widget.photos[index],
+                    key: ValueKey('full-screen-photo-$index'),
+                    width: double.infinity,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: CupertinoButton(
+                  minSize: 40,
+                  padding: EdgeInsets.zero,
+                  color: CupertinoColors.systemGrey
+                      .withValues(alpha: .55),
+                  borderRadius: BorderRadius.circular(20),
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Icon(
+                    CupertinoIcons.xmark,
+                    color: CupertinoColors.white,
+                    size: 19,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Text(
+                  '${_currentIndex + 1} of ${widget.photos.length}',
+                  style: const TextStyle(
+                    color: CupertinoColors.white,
+                    fontFamily: 'SF Pro Text',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
             ),
           ),
         ],

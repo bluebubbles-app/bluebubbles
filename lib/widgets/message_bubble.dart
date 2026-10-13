@@ -5,7 +5,7 @@ import 'package:flutter/cupertino.dart';
 import '../models/conversation.dart';
 import '../theme/messages_theme.dart';
 
-class MessageBubble extends StatelessWidget {
+class MessageBubble extends StatefulWidget {
   const MessageBubble({
     super.key,
     required this.message,
@@ -22,7 +22,52 @@ class MessageBubble extends StatelessWidget {
   final double shadowElevation;
 
   @override
+  State<MessageBubble> createState() => _MessageBubbleState();
+}
+
+class _MessageBubbleState extends State<MessageBubble> {
+  final _paintKey = GlobalKey();
+  ScrollPosition? _scrollPosition;
+  double _screenTop = 0;
+  bool _positionUpdateScheduled = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final nextPosition = Scrollable.maybeOf(context)?.position;
+    if (!identical(nextPosition, _scrollPosition)) {
+      _scrollPosition?.removeListener(_schedulePositionUpdate);
+      _scrollPosition = nextPosition;
+      _scrollPosition?.addListener(_schedulePositionUpdate);
+    }
+    _schedulePositionUpdate();
+  }
+
+  void _schedulePositionUpdate() {
+    if (_positionUpdateScheduled) return;
+    _positionUpdateScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _positionUpdateScheduled = false;
+      if (!mounted) return;
+      final renderObject =
+          _paintKey.currentContext?.findRenderObject() as RenderBox?;
+      if (renderObject == null || !renderObject.hasSize) return;
+      final nextTop = renderObject.localToGlobal(Offset.zero).dy;
+      if ((nextTop - _screenTop).abs() > .25) {
+        setState(() => _screenTop = nextTop);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollPosition?.removeListener(_schedulePositionUpdate);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final message = widget.message;
     final isFromMe = message.isFromMe;
     final color = isFromMe
         ? MessagesPalette.sentBubble(context)
@@ -31,7 +76,7 @@ class MessageBubble extends StatelessWidget {
     return Semantics(
       label: isFromMe ? 'Sent message' : 'Received message',
       child: Padding(
-        padding: EdgeInsets.only(top: compactTop ? 2 : 8),
+        padding: EdgeInsets.only(top: widget.compactTop ? 2 : 8),
         child: Column(
           crossAxisAlignment:
               isFromMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
@@ -40,11 +85,24 @@ class MessageBubble extends StatelessWidget {
               alignment:
                   isFromMe ? Alignment.centerRight : Alignment.centerLeft,
               child: CustomPaint(
+                key: _paintKey,
                 painter: MessageBubblePainter(
                   color: color,
+                  gradient: isFromMe
+                      ? const LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Color(0xFF00B7FF),
+                            MessagesPalette.blue,
+                          ],
+                        )
+                      : null,
+                  screenTop: _screenTop,
+                  screenHeight: MediaQuery.sizeOf(context).height,
                   isFromMe: isFromMe,
-                  showTail: showTail,
-                  shadowElevation: shadowElevation,
+                  showTail: widget.showTail,
+                  shadowElevation: widget.shadowElevation,
                 ),
                 child: Container(
                   constraints: BoxConstraints(
@@ -71,7 +129,7 @@ class MessageBubble extends StatelessWidget {
                 ),
               ),
             ),
-            if (showStatus && isFromMe)
+            if (widget.showStatus && isFromMe)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
@@ -104,12 +162,18 @@ class MessageBubble extends StatelessWidget {
 class MessageBubblePainter extends CustomPainter {
   const MessageBubblePainter({
     required this.color,
+    required this.gradient,
+    required this.screenTop,
+    required this.screenHeight,
     required this.isFromMe,
     required this.showTail,
     required this.shadowElevation,
   });
 
   final Color color;
+  final LinearGradient? gradient;
+  final double screenTop;
+  final double screenHeight;
   final bool isFromMe;
   final bool showTail;
   final double shadowElevation;
@@ -117,6 +181,11 @@ class MessageBubblePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = color;
+    if (gradient != null && screenHeight > 0) {
+      paint.shader = gradient!.createShader(
+        Rect.fromLTWH(0, -screenTop, size.width, screenHeight),
+      );
+    }
     final body = Path()
       ..addRRect(
         RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(20)),
@@ -127,33 +196,33 @@ class MessageBubblePainter extends CustomPainter {
       final tail = Path();
       if (isFromMe) {
         tail
-          ..moveTo(size.width - 4.5, size.height - 6.5)
+          ..moveTo(size.width - 1, size.height - 6.5)
           ..cubicTo(
-            size.width - 4,
+            size.width - .5,
             size.height - 3.49,
-            size.width - 1.17,
+            size.width + 2.33,
             size.height - .67,
-            size.width + .5,
+            size.width + 4,
             size.height,
           )
           ..cubicTo(
-            size.width - 5.9,
+            size.width - 2.4,
             size.height,
-            size.width - 10,
+            size.width - 6.5,
             size.height - 2.17,
-            size.width - 11,
+            size.width - 7.5,
             size.height - 3.5,
           )
-          ..lineTo(size.width - 16, size.height - 2)
-          ..lineTo(size.width - 15.5, size.height - 17)
-          ..lineTo(size.width - 5, size.height - 17)
-          ..lineTo(size.width - 5, size.height - 12.5)
+          ..lineTo(size.width - 12.5, size.height - 2)
+          ..lineTo(size.width - 12, size.height - 17)
+          ..lineTo(size.width - 1.5, size.height - 17)
+          ..lineTo(size.width - 1.5, size.height - 12.5)
           ..cubicTo(
-            size.width - 5,
+            size.width - 1.5,
             size.height - 11.5,
-            size.width - 5,
+            size.width - 1.5,
             size.height - 9.5,
-            size.width - 4.5,
+            size.width - 1,
             size.height - 6.5,
           );
       } else {
@@ -209,6 +278,9 @@ class MessageBubblePainter extends CustomPainter {
   @override
   bool shouldRepaint(MessageBubblePainter oldDelegate) =>
       oldDelegate.color != color ||
+      oldDelegate.gradient != gradient ||
+      oldDelegate.screenTop != screenTop ||
+      oldDelegate.screenHeight != screenHeight ||
       oldDelegate.isFromMe != isFromMe ||
       oldDelegate.showTail != showTail ||
       oldDelegate.shadowElevation != shadowElevation;
