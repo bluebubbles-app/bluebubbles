@@ -1,0 +1,53 @@
+# Messages UI for Android — front end only
+
+This folder contains a standalone Flutter interface inspired by the
+OpenBubbles Cupertino appearance and the iPhone Messages experience.
+
+## Included
+
+- conversation list and pinned conversations;
+- local search;
+- conversation screen with a contact header;
+- incoming and outgoing message bubbles with tails;
+- visual message grouping;
+- delivery status;
+- message composer, local message insertion, and automatic scrolling;
+- light and dark modes based on the Android system setting;
+- local sample data with no backend.
+
+## Not included
+
+- SMS, MMS, or RCS access;
+- iMessage, Apple account, or OpenBubbles connectivity;
+- database, synchronization, notifications, or contacts access;
+- proprietary Apple assets, including the San Francisco font.
+
+## Run the prototype
+
+Flutter 3.24 or later is recommended.
+
+```text
+flutter create --platforms=android .
+flutter pub get
+flutter run
+```
+
+The `flutter create` command adds the missing Android wrapper while preserving
+the prototype files under `lib/`.
+
+## Connect a backend later
+
+Sample data is stored in `lib/data/demo_data.dart`. Replace this source with an
+SMS repository or API and keep the models in `lib/models/` as the interface
+contract. Visual message sending is handled by the `onSend` callback in
+`ConversationScreen`.
+
+To become the default Android SMS application, the native components required
+by `ROLE_SMS` must be added later. That functionality is intentionally outside
+the scope of this UI-only deliverable.
+
+## License and attribution
+
+This prototype preserves the OpenBubbles Apache 2.0 license for adapted
+portions. See `LICENSE` and `NOTICE`. It is not affiliated with Apple and does
+not contain assets extracted from Apple software.
