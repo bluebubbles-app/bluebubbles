@@ -371,12 +371,24 @@ class _ConversationScreenState extends State<ConversationScreen>
                           ).animate(curvedAnimation),
                           child: _selectionMode
                               ? Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.center,
                                   children: [
-                                    _SelectionCircle(
-                                      selected: _selectedMessageIds
-                                          .contains(message.id),
-                                      onPressed: () =>
-                                          _toggleSelection(message),
+                                    Transform.translate(
+                                      // MessageBubble paints below its own top
+                                      // spacing. Compensate for half that
+                                      // spacing so the control is centered on
+                                      // the visible bubble, not its full box.
+                                      offset: Offset(
+                                        0,
+                                        compactTop ? 1 : 4,
+                                      ),
+                                      child: _SelectionCircle(
+                                        selected: _selectedMessageIds
+                                            .contains(message.id),
+                                        onPressed: () =>
+                                            _toggleSelection(message),
+                                      ),
                                     ),
                                     Expanded(child: interactiveMessage),
                                   ],
@@ -433,12 +445,12 @@ class _ConversationHeader extends StatelessWidget {
         alignment: Alignment.topCenter,
         children: [
           Positioned(
-            left: 12,
+            left: 8,
             top: 16,
-            child: _HeaderCircleButton(
+            child: _HeaderButton(
               onPressed: () => Navigator.of(context).maybePop(),
               icon: CupertinoIcons.back,
-              iconSize: 27,
+              iconSize: 30,
             ),
           ),
           CupertinoButton(
@@ -462,9 +474,9 @@ class _ConversationHeader extends StatelessWidget {
                         style: TextStyle(
                           color: MessagesPalette.label(context),
                           fontFamily: 'SF Pro Text',
-                          fontSize: 17,
+                          fontSize: 14,
                           height: 1,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ),
@@ -480,12 +492,12 @@ class _ConversationHeader extends StatelessWidget {
             ),
           ),
           Positioned(
-            right: 12,
+            right: 8,
             top: 16,
-            child: _HeaderCircleButton(
+            child: _HeaderButton(
               onPressed: () => HapticFeedback.selectionClick(),
-              icon: CupertinoIcons.video_camera,
-              iconSize: 25,
+              icon: CupertinoIcons.phone,
+              iconSize: 24,
             ),
           ),
         ],
@@ -494,8 +506,8 @@ class _ConversationHeader extends StatelessWidget {
   }
 }
 
-class _HeaderCircleButton extends StatelessWidget {
-  const _HeaderCircleButton({
+class _HeaderButton extends StatelessWidget {
+  const _HeaderButton({
     required this.onPressed,
     required this.icon,
     required this.iconSize,
@@ -511,23 +523,10 @@ class _HeaderCircleButton extends StatelessWidget {
       minSize: 48,
       padding: EdgeInsets.zero,
       onPressed: onPressed,
-      child: Container(
-        width: 48,
-        height: 48,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: MessagesPalette.hairline(context).withValues(alpha: .75),
-            width: .8,
-          ),
-          color: MessagesPalette.elevatedBackground(context),
-        ),
-        child: Icon(
-          icon,
-          size: iconSize,
-          color: MessagesPalette.label(context),
-        ),
+      child: Icon(
+        icon,
+        size: iconSize,
+        color: MessagesPalette.blue,
       ),
     );
   }
@@ -666,7 +665,7 @@ class _MessageHoldRegionState extends State<_MessageHoldRegion> {
     if (!widget.enabled) return;
     _cancelHold();
     _downPosition = event.position;
-    _holdTimer = Timer(const Duration(milliseconds: 1500), widget.onHold);
+    _holdTimer = Timer(const Duration(milliseconds: 700), widget.onHold);
   }
 
   void _handlePointerMove(PointerMoveEvent event) {
@@ -736,63 +735,69 @@ class _MessageContextOverlay extends StatelessWidget {
         ),
         SafeArea(
           child: Center(
-            child: TweenAnimationBuilder<double>(
-              duration: const Duration(milliseconds: 170),
-              curve: Curves.easeOutBack,
-              tween: Tween<double>(begin: .92, end: 1.08),
-              builder: (context, scale, child) => Transform.scale(
-                scale: scale,
-                child: child,
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 18),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(
-                      width: MediaQuery.sizeOf(context).width * .84,
-                      child: MessageBubble(
-                        message: message,
-                        showTail: true,
-                        compactTop: false,
-                        shadowElevation: 18,
-                      ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TweenAnimationBuilder<double>(
+                    duration: const Duration(milliseconds: 170),
+                    curve: Curves.easeOutBack,
+                    tween: Tween<double>(begin: .92, end: 1.08),
+                    builder: (context, scale, child) => Transform.scale(
+                      scale: scale,
+                      child: child,
                     ),
-                    const SizedBox(height: 18),
-                    Container(
-                      constraints: const BoxConstraints(maxWidth: 292),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 12,
-                      ),
+                    child: MessageBubble(
+                      message: message,
+                      showTail: true,
+                      compactTop: false,
+                      shadowElevation: 18,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Align(
+                    alignment: message.isFromMe
+                        ? Alignment.centerRight
+                        : Alignment.centerLeft,
+                    child: Container(
+                      width: 238,
                       decoration: BoxDecoration(
                         color: MessagesPalette.elevatedBackground(context)
-                            .withValues(alpha: .96),
-                        borderRadius: BorderRadius.circular(18),
+                            .withValues(alpha: .94),
+                        borderRadius: BorderRadius.circular(14),
                         boxShadow: [
                           BoxShadow(
-                            color: CupertinoColors.black.withValues(alpha: .15),
-                            blurRadius: 24,
-                            offset: const Offset(0, 10),
+                            color:
+                                CupertinoColors.black.withValues(alpha: .16),
+                            blurRadius: 22,
+                            offset: const Offset(0, 9),
                           ),
                         ],
                       ),
-                      child: Wrap(
-                        alignment: WrapAlignment.center,
-                        spacing: 10,
-                        runSpacing: 12,
-                        children: actions
-                            .map(
-                              (action) => _MessageActionButton(
-                                action: action,
-                                onPressed: () => onAction(action.id),
+                      clipBehavior: Clip.antiAlias,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (var index = 0;
+                              index < actions.length;
+                              index++) ...[
+                            if (index > 0)
+                              Container(
+                                height: .5,
+                                margin: const EdgeInsets.only(left: 14),
+                                color: MessagesPalette.hairline(context),
                               ),
-                            )
-                            .toList(),
+                            _MessageActionButton(
+                              action: actions[index],
+                              onPressed: () => onAction(actions[index].id),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -821,34 +826,35 @@ class _MessageActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 78,
-      child: CupertinoButton(
-        minSize: 62,
-        padding: EdgeInsets.zero,
-        onPressed: onPressed,
-        child: Column(
+    final isDestructive = action.id == 'delete';
+    final foreground = isDestructive
+        ? CupertinoColors.systemRed.resolveFrom(context)
+        : MessagesPalette.label(context);
+
+    return CupertinoButton(
+      minSize: 46,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      onPressed: onPressed,
+      child: SizedBox(
+        height: 46,
+        child: Row(
           children: [
-            Container(
-              width: 40,
-              height: 40,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: MessagesPalette.fill(context),
+            Expanded(
+              child: Text(
+                action.label,
+                maxLines: 1,
+                style: TextStyle(
+                  color: foreground,
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w400,
+                ),
               ),
-              child: Icon(action.icon, size: 20),
             ),
-            const SizedBox(height: 5),
-            Text(
-              action.label,
-              maxLines: 1,
-              style: TextStyle(
-                color: MessagesPalette.label(context),
-                fontFamily: 'SF Pro Text',
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-              ),
+            Icon(
+              action.icon,
+              size: 20,
+              color: foreground,
             ),
           ],
         ),

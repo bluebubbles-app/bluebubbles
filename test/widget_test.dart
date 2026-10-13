@@ -14,6 +14,8 @@ void main() {
     expect(find.byType(CupertinoTextField), findsOneWidget);
     expect(find.text('Let me know when you leave'), findsOneWidget);
     expect(find.byIcon(CupertinoIcons.arrow_up_circle_fill), findsOneWidget);
+    expect(find.byIcon(CupertinoIcons.phone), findsOneWidget);
+    expect(find.byIcon(CupertinoIcons.video_camera), findsNothing);
 
     final messageText = tester.widget<Text>(
       find.text('Let me know when you leave'),
@@ -21,7 +23,7 @@ void main() {
     expect(messageText.textAlign, TextAlign.center);
 
     final contactName = tester.widget<Text>(find.text('Mia Parker'));
-    expect(contactName.style?.fontSize, 17);
+    expect(contactName.style?.fontSize, 14);
   });
 
   testWidgets('reveals mute and delete actions by swiping left',
@@ -62,7 +64,9 @@ void main() {
     final gesture = await tester.startGesture(
       tester.getCenter(find.text('Let me know when you leave')),
     );
-    await tester.pump(const Duration(milliseconds: 1510));
+    await tester.pump(const Duration(milliseconds: 690));
+    expect(find.text('Copy'), findsNothing);
+    await tester.pump(const Duration(milliseconds: 20));
     await tester.pumpAndSettle();
 
     expect(find.text('Copy'), findsOneWidget);

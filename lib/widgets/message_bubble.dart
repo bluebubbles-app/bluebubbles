@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/cupertino.dart';
 
 import '../models/conversation.dart';
@@ -111,10 +113,11 @@ class MessageBubblePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = color;
-    final bubble = Path()
+    final body = Path()
       ..addRRect(
         RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(18)),
       );
+    var bubble = body;
 
     if (showTail) {
       final tail = Path();
@@ -158,7 +161,10 @@ class MessageBubblePainter extends CustomPainter {
           );
       }
       tail.close();
-      bubble.addPath(tail, Offset.zero);
+      // Joining two subpaths can cancel their overlapping winding area and
+      // leave a white notch between the body and tail. A geometric union
+      // guarantees a single solid silhouette on every Android renderer.
+      bubble = Path.combine(PathOperation.union, body, tail);
     }
 
     if (shadowElevation > 0) {
