@@ -37,6 +37,7 @@ abstract final class MessagesPalette {
 }
 abstract final class MessagesText {
   static TextStyle largeTitle(BuildContext context) => TextStyle(
+        fontFamily: 'SF Pro Text',
         color: MessagesPalette.label(context),
         fontSize: 34,
         height: 1.12,
@@ -45,6 +46,7 @@ abstract final class MessagesText {
       );
 
   static TextStyle headline(BuildContext context) => TextStyle(
+        fontFamily: 'SF Pro Text',
         color: MessagesPalette.label(context),
         fontSize: 16.5,
         height: 1.25,
@@ -53,6 +55,7 @@ abstract final class MessagesText {
       );
 
   static TextStyle body(BuildContext context) => TextStyle(
+        fontFamily: 'SF Pro Text',
         color: MessagesPalette.label(context),
         fontSize: 17,
         height: 1.25,
@@ -61,6 +64,7 @@ abstract final class MessagesText {
       );
 
   static TextStyle secondary(BuildContext context) => TextStyle(
+        fontFamily: 'SF Pro Text',
         color: MessagesPalette.secondaryLabel(context),
         fontSize: 15,
         height: 1.3,

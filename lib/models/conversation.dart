@@ -40,8 +40,8 @@ class Conversation {
   final List<ChatMessage> messages;
   final String? subtitle;
   int unreadCount;
-  final bool isPinned;
-  final bool isMuted;
+  bool isPinned;
+  bool isMuted;
 
   String get initials {
     final words = title.trim().split(RegExp(r'\s+'));

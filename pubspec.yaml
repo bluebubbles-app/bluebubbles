@@ -7,6 +7,7 @@ environment:
   sdk: ">=3.1.0 <4.0.0"
 
 dependencies:
+  audioplayers: ^6.8.1
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
@@ -19,6 +20,21 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/sounds/
+  fonts:
+    - family: SF Pro Text
+      fonts:
+        - asset: assets/fonts/SF-Pro-Text-Regular.otf
+          weight: 400
+        - asset: assets/fonts/SF-Pro-Text-Medium.otf
+          weight: 500
+        - asset: assets/fonts/SF-Pro-Text-Bold.otf
+          weight: 700
+        - asset: assets/fonts/SF-Pro-Text-Heavy.otf
+          weight: 800
+        - asset: assets/fonts/SF-Pro-Text-Black.otf
+          weight: 900
 
 flutter_launcher_icons:
   android: true

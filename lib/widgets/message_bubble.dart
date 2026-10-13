@@ -35,8 +35,9 @@ class MessageBubble extends StatelessWidget {
             Align(
               alignment:
                   isFromMe ? Alignment.centerRight : Alignment.centerLeft,
-              child: ClipPath(
-                clipper: MessageTailClipper(
+              child: CustomPaint(
+                painter: MessageBubblePainter(
+                  color: color,
                   isFromMe: isFromMe,
                   showTail: showTail,
                 ),
@@ -45,15 +46,14 @@ class MessageBubble extends StatelessWidget {
                     minHeight: 36,
                     maxWidth: MediaQuery.sizeOf(context).width * .77,
                   ),
-                  color: color,
-                  padding: EdgeInsets.fromLTRB(
-                    isFromMe ? 13 : (showTail ? 19 : 13),
-                    8,
-                    isFromMe ? (showTail ? 19 : 13) : 13,
-                    8,
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 13,
+                    vertical: 8,
                   ),
                   child: Text(
                     message.text,
+                    textAlign: TextAlign.center,
                     style: MessagesText.body(context).copyWith(
                       color: isFromMe
                           ? CupertinoColors.white
@@ -91,91 +91,76 @@ class MessageBubble extends StatelessWidget {
   }
 }
 
-/// Geometry adapted from the OpenBubbles TailClipper (Apache-2.0).
-class MessageTailClipper extends CustomClipper<Path> {
-  const MessageTailClipper({
+/// Paints the tail outside the bubble's layout bounds so adding a new message
+/// never changes the position of text in an existing bubble.
+class MessageBubblePainter extends CustomPainter {
+  const MessageBubblePainter({
+    required this.color,
     required this.isFromMe,
     required this.showTail,
   });
 
+  final Color color;
   final bool isFromMe;
   final bool showTail;
 
   @override
-  Path getClip(Size size) {
-    final path = Path();
-    final start = isFromMe ? 0.0 : 8.0;
-    final end = isFromMe ? size.width - 8 : size.width;
-
-    path.moveTo(start, 18);
-
-    if (!isFromMe && showTail) {
-      path.lineTo(start, size.height - 9);
-      path.arcToPoint(
-        Offset(0, size.height),
-        radius: const Radius.circular(9),
-      );
-      path.arcToPoint(
-        Offset(start + 6, size.height - 5),
-        radius: const Radius.circular(18),
-        clockwise: false,
-      );
-      path.arcToPoint(
-        Offset(start + 18, size.height),
-        radius: const Radius.circular(18),
-        clockwise: false,
-      );
-    } else {
-      path.lineTo(start, size.height - 18);
-      path.arcToPoint(
-        Offset(start + 18, size.height),
-        radius: const Radius.circular(18),
-        clockwise: false,
-      );
-    }
-
-    if (isFromMe && showTail) {
-      path.lineTo(end - 18, size.height);
-      path.arcToPoint(
-        Offset(end - 6, size.height - 5),
-        radius: const Radius.circular(18),
-        clockwise: false,
-      );
-      path.arcToPoint(
-        Offset(size.width, size.height),
-        radius: const Radius.circular(18),
-        clockwise: false,
-      );
-      path.arcToPoint(
-        Offset(end, size.height - 9),
-        radius: const Radius.circular(9),
-      );
-    } else {
-      path.lineTo(end - 18, size.height);
-      path.arcToPoint(
-        Offset(end, size.height - 18),
-        radius: const Radius.circular(18),
-        clockwise: false,
-      );
-    }
-
-    path.lineTo(end, 18);
-    path.arcToPoint(
-      Offset(end - 18, 0),
-      radius: const Radius.circular(18),
-      clockwise: false,
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = color;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(18)),
+      paint,
     );
-    path.lineTo(start + 18, 0);
-    path.arcToPoint(
-      Offset(start, 18),
-      radius: const Radius.circular(18),
-      clockwise: false,
-    );
-    path.close();
-    return path;
+
+    if (!showTail) return;
+
+    final tail = Path();
+    if (isFromMe) {
+      tail
+        ..moveTo(size.width - 12, size.height - 10)
+        ..cubicTo(
+          size.width - 5,
+          size.height - 5,
+          size.width + 1,
+          size.height,
+          size.width + 7,
+          size.height,
+        )
+        ..cubicTo(
+          size.width + 2,
+          size.height - 2,
+          size.width,
+          size.height - 7,
+          size.width - 1,
+          size.height - 12,
+        );
+    } else {
+      tail
+        ..moveTo(12, size.height - 10)
+        ..cubicTo(
+          5,
+          size.height - 5,
+          -1,
+          size.height,
+          -7,
+          size.height,
+        )
+        ..cubicTo(
+          -2,
+          size.height - 2,
+          0,
+          size.height - 7,
+          1,
+          size.height - 12,
+        );
+    }
+    tail.close();
+    canvas.drawPath(tail, paint);
   }
 
   @override
-  bool shouldReclip(MessageTailClipper oldClipper) =>
-      oldClipper.isFromMe != isFromMe || oldClipper.showTail != showTail;
+  bool shouldRepaint(MessageBubblePainter oldDelegate) =>
+      oldDelegate.color != color ||
+      oldDelegate.isFromMe != isFromMe ||
+      oldDelegate.showTail != showTail;
 }

@@ -48,6 +48,9 @@ class _MessagesUiAppState extends State<MessagesUiApp> {
       debugShowCheckedModeBanner: false,
       theme: const CupertinoThemeData(
         primaryColor: MessagesPalette.blue,
+        textTheme: CupertinoTextThemeData(
+          textStyle: TextStyle(fontFamily: 'SF Pro Text'),
+        ),
         applyThemeToAll: true,
       ),
       home: ConversationListScreen(

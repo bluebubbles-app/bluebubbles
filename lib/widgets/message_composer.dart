@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 
+import '../services/message_sounds.dart';
 import '../theme/messages_theme.dart';
 
 class MessageComposer extends StatefulWidget {
@@ -35,6 +38,7 @@ class _MessageComposerState extends State<MessageComposer> {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
     HapticFeedback.lightImpact();
+    unawaited(MessageSounds.playSent());
     widget.onSend(text);
     _controller.clear();
     _focusNode.requestFocus();
@@ -119,32 +123,20 @@ class _MessageComposerState extends State<MessageComposer> {
                       padding: const EdgeInsets.only(right: 4, bottom: 3),
                       child: AnimatedSwitcher(
                         duration: const Duration(milliseconds: 160),
-                        child: _hasText
-                            ? CupertinoButton(
-                                key: const ValueKey('send'),
-                                minSize: 28,
-                                padding: EdgeInsets.zero,
-                                onPressed: _send,
-                                child: Container(
-                                  width: 28,
-                                  height: 28,
-                                  decoration: const BoxDecoration(
-                                    color: MessagesPalette.blue,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(
-                                    CupertinoIcons.arrow_up,
-                                    size: 19,
-                                    color: CupertinoColors.white,
-                                  ),
-                                ),
-                              )
-                            : Icon(
-                                key: const ValueKey('mic'),
-                                CupertinoIcons.mic,
-                                size: 23,
-                                color: MessagesPalette.secondaryLabel(context),
-                              ),
+                        child: CupertinoButton(
+                          key: ValueKey(_hasText),
+                          minSize: 30,
+                          padding: EdgeInsets.zero,
+                          onPressed: _hasText ? _send : null,
+                          child: Icon(
+                            CupertinoIcons.arrow_up_circle_fill,
+                            size: 30,
+                            color: _hasText
+                                ? MessagesPalette.blue
+                                : MessagesPalette.secondaryLabel(context)
+                                    .withValues(alpha: .45),
+                          ),
+                        ),
                       ),
                     ),
                   ],

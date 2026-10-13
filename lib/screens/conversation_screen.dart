@@ -25,6 +25,7 @@ class ConversationScreen extends StatefulWidget {
 
 class _ConversationScreenState extends State<ConversationScreen> {
   final _scrollController = ScrollController();
+  final _messageListKey = GlobalKey<AnimatedListState>();
 
   @override
   void initState() {
@@ -42,9 +43,14 @@ class _ConversationScreenState extends State<ConversationScreen> {
   }
 
   void _send(String text) {
+    final insertionIndex = widget.conversation.messages.length + 1;
     widget.onSend(text);
-    setState(() {});
+    _messageListKey.currentState?.insertItem(
+      insertionIndex,
+      duration: const Duration(milliseconds: 280),
+    );
     Timer(const Duration(milliseconds: 40), _scrollToBottom);
+    Timer(const Duration(milliseconds: 300), _scrollToBottom);
   }
 
   @override
@@ -85,13 +91,14 @@ class _ConversationScreenState extends State<ConversationScreen> {
               Expanded(
                 child: GestureDetector(
                   onTap: () => FocusScope.of(context).unfocus(),
-                  child: ListView.builder(
+                  child: AnimatedList(
+                    key: _messageListKey,
                     controller: _scrollController,
                     keyboardDismissBehavior:
                         ScrollViewKeyboardDismissBehavior.onDrag,
                     padding: const EdgeInsets.fromLTRB(9, 18, 9, 10),
-                    itemCount: widget.conversation.messages.length + 1,
-                    itemBuilder: (context, index) {
+                    initialItemCount: widget.conversation.messages.length + 1,
+                    itemBuilder: (context, index, animation) {
                       if (index == 0) return const _DateSeparator();
 
                       final messageIndex = index - 1;
@@ -110,12 +117,26 @@ class _ConversationScreenState extends State<ConversationScreen> {
                           previous.isFromMe == message.isFromMe &&
                           message.sentAt.difference(previous.sentAt).inMinutes <= 3;
 
-                      return MessageBubble(
-                        message: message,
-                        showTail: showTail,
-                        compactTop: compactTop,
-                        showStatus: messageIndex ==
-                            widget.conversation.messages.length - 1,
+                      final curvedAnimation = CurvedAnimation(
+                        parent: animation,
+                        curve: Curves.easeOutCubic,
+                      );
+                      return FadeTransition(
+                        opacity: curvedAnimation,
+                        child: SlideTransition(
+                          position: Tween<Offset>(
+                            begin: const Offset(.10, .10),
+                            end: Offset.zero,
+                          ).animate(curvedAnimation),
+                          child: MessageBubble(
+                            key: ValueKey(message.id),
+                            message: message,
+                            showTail: showTail,
+                            compactTop: compactTop,
+                            showStatus: messageIndex ==
+                                widget.conversation.messages.length - 1,
+                          ),
+                        ),
                       );
                     },
                   ),
@@ -141,33 +162,31 @@ class _ContactHeader extends StatelessWidget {
       minSize: 42,
       padding: EdgeInsets.zero,
       onPressed: () => HapticFeedback.selectionClick(),
-      child: Column(
+      child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          ContactAvatar(conversation: conversation, size: 30),
-          const SizedBox(height: 1),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 145),
-                child: Text(
-                  conversation.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: MessagesPalette.label(context),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
+          ContactAvatar(conversation: conversation, size: 28),
+          const SizedBox(width: 7),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 145),
+            child: Text(
+              conversation.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: MessagesPalette.label(context),
+                fontFamily: 'SF Pro Text',
+                fontSize: 22,
+                height: 1,
+                fontWeight: FontWeight.w600,
               ),
-              Icon(
-                CupertinoIcons.chevron_right,
-                size: 9,
-                color: MessagesPalette.secondaryLabel(context),
-              ),
-            ],
+            ),
+          ),
+          Icon(
+            CupertinoIcons.chevron_right,
+            size: 12,
+            color: MessagesPalette.secondaryLabel(context),
           ),
         ],
       ),

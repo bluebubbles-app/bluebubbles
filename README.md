@@ -11,7 +11,11 @@ by the OpenBubbles Cupertino appearance and the iPhone Messages experience.
 - incoming and outgoing message bubbles with tails;
 - visual message grouping;
 - delivery status;
-- message composer, local message insertion, and automatic scrolling;
+- centered message text and stable bubble geometry;
+- animated local message insertion and automatic scrolling;
+- swipe actions for pinning, muting, and deleting conversations;
+- message composer with a visible send button;
+- bundled SF Pro typography and sent/received message sounds;
 - light and dark modes based on the Android system setting;
 - local sample data with no backend.
 - BlueBubbles launcher icon and application name.
@@ -21,7 +25,6 @@ by the OpenBubbles Cupertino appearance and the iPhone Messages experience.
 - SMS, MMS, or RCS access;
 - iMessage, Apple account, or OpenBubbles connectivity;
 - database, synchronization, notifications, or contacts access;
-- proprietary Apple assets, including the San Francisco font.
 
 ## Run the prototype
 

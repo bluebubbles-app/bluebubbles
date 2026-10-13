@@ -56,6 +56,42 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
     setState(() {});
   }
 
+  void _pinConversation(Conversation conversation) {
+    HapticFeedback.mediumImpact();
+    setState(() => conversation.isPinned = true);
+  }
+
+  void _toggleMute(Conversation conversation) {
+    HapticFeedback.mediumImpact();
+    setState(() => conversation.isMuted = !conversation.isMuted);
+  }
+
+  Future<void> _confirmDelete(Conversation conversation) async {
+    final shouldDelete = await showCupertinoModalPopup<bool>(
+      context: context,
+      builder: (context) => CupertinoActionSheet(
+        title: Text('Delete “${conversation.title}”?'),
+        message: const Text('This conversation will be removed from the list.'),
+        actions: [
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete Conversation'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+      ),
+    );
+
+    if (shouldDelete == true && mounted) {
+      HapticFeedback.mediumImpact();
+      setState(() => widget.conversations.remove(conversation));
+    }
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -64,8 +100,10 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final pinned = _filtered.where((conversation) => conversation.isPinned).toList();
-    final regular = _filtered.where((conversation) => !conversation.isPinned).toList();
+    final pinned =
+        _filtered.where((conversation) => conversation.isPinned).toList();
+    final regular =
+        _filtered.where((conversation) => !conversation.isPinned).toList();
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: MessagesPalette.isDark(context)
@@ -89,10 +127,12 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                 ),
               ),
               if (pinned.isNotEmpty)
-                SliverToBoxAdapter(child: _PinnedGrid(
-                  conversations: pinned,
-                  onTap: _openConversation,
-                )),
+                SliverToBoxAdapter(
+                  child: _PinnedGrid(
+                    conversations: pinned,
+                    onTap: _openConversation,
+                  ),
+                ),
               if (_filtered.isEmpty)
                 SliverFillRemaining(
                   hasScrollBody: false,
@@ -106,9 +146,12 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
               else
                 SliverList(
                   delegate: SliverChildBuilderDelegate(
-                    (context, index) => ConversationRow(
+                    (context, index) => SwipeableConversationRow(
                       conversation: regular[index],
                       onTap: () => _openConversation(regular[index]),
+                      onPin: () => _pinConversation(regular[index]),
+                      onToggleMute: () => _toggleMute(regular[index]),
+                      onDelete: () => _confirmDelete(regular[index]),
                     ),
                     childCount: regular.length,
                   ),
@@ -195,6 +238,173 @@ class _PinnedGrid extends StatelessWidget {
   }
 }
 
+class SwipeableConversationRow extends StatefulWidget {
+  const SwipeableConversationRow({
+    super.key,
+    required this.conversation,
+    required this.onTap,
+    required this.onPin,
+    required this.onToggleMute,
+    required this.onDelete,
+  });
+
+  final Conversation conversation;
+  final VoidCallback onTap;
+  final VoidCallback onPin;
+  final VoidCallback onToggleMute;
+  final VoidCallback onDelete;
+
+  @override
+  State<SwipeableConversationRow> createState() =>
+      _SwipeableConversationRowState();
+}
+
+class _SwipeableConversationRowState extends State<SwipeableConversationRow>
+    with SingleTickerProviderStateMixin {
+  static const _actionWidth = 78.0;
+  static const _rightActionsWidth = _actionWidth * 2;
+  late final AnimationController _offsetController =
+      AnimationController.unbounded(vsync: this);
+
+  void _animateTo(double target) {
+    _offsetController.animateTo(
+      target,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  void _handleDragUpdate(DragUpdateDetails details) {
+    _offsetController.value = (_offsetController.value + details.delta.dx)
+        .clamp(-_rightActionsWidth, _actionWidth)
+        .toDouble();
+  }
+
+  void _handleDragEnd(DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+    if (velocity > 700 || _offsetController.value > _actionWidth * .48) {
+      _animateTo(_actionWidth);
+    } else if (velocity < -700 ||
+        _offsetController.value < -_rightActionsWidth * .3) {
+      _animateTo(-_rightActionsWidth);
+    } else {
+      _animateTo(0);
+    }
+  }
+
+  void _perform(VoidCallback action) {
+    _offsetController.value = 0;
+    action();
+  }
+
+  @override
+  void dispose() {
+    _offsetController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRect(
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: Row(
+              children: [
+                SizedBox(
+                  width: _actionWidth,
+                  child: CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    color: MessagesPalette.blue,
+                    borderRadius: BorderRadius.zero,
+                    onPressed: () => _perform(widget.onPin),
+                    child: const _SwipeActionContent(
+                      icon: CupertinoIcons.pin_fill,
+                      label: 'Pin',
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                SizedBox(
+                  width: _actionWidth,
+                  child: CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    color: Color(0xFFFF9F0A),
+                    borderRadius: BorderRadius.zero,
+                    onPressed: () => _perform(widget.onToggleMute),
+                    child: _SwipeActionContent(
+                      icon: widget.conversation.isMuted
+                          ? CupertinoIcons.bell_fill
+                          : CupertinoIcons.bell_slash_fill,
+                      label: widget.conversation.isMuted ? 'Unmute' : 'Mute',
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: _actionWidth,
+                  child: CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    color: CupertinoColors.systemRed,
+                    borderRadius: BorderRadius.zero,
+                    onPressed: () => _perform(widget.onDelete),
+                    child: const _SwipeActionContent(
+                      icon: CupertinoIcons.delete_solid,
+                      label: 'Delete',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          AnimatedBuilder(
+            animation: _offsetController,
+            builder: (context, child) => Transform.translate(
+              offset: Offset(_offsetController.value, 0),
+              child: child,
+            ),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onHorizontalDragUpdate: _handleDragUpdate,
+              onHorizontalDragEnd: _handleDragEnd,
+              child: ConversationRow(
+                conversation: widget.conversation,
+                onTap: widget.onTap,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SwipeActionContent extends StatelessWidget {
+  const _SwipeActionContent({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(icon, color: CupertinoColors.white, size: 23),
+        const SizedBox(height: 3),
+        Text(
+          label,
+          style: const TextStyle(
+            color: CupertinoColors.white,
+            fontFamily: 'SF Pro Text',
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class ConversationRow extends StatelessWidget {
   const ConversationRow({
     super.key,
@@ -208,114 +418,121 @@ class ConversationRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final highlighted = conversation.unreadCount > 0;
-    return CupertinoButton(
-      pressedOpacity: .55,
-      padding: EdgeInsets.zero,
-      onPressed: onTap,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
-            child: ContactAvatar(conversation: conversation, size: 50),
-          ),
-          Expanded(
-            child: Container(
-              constraints: const BoxConstraints(minHeight: 70),
-              padding: const EdgeInsets.fromLTRB(0, 10, 10, 9),
-              decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(
-                    color: MessagesPalette.hairline(context).withValues(alpha: .55),
-                    width: .45,
+    return ColoredBox(
+      color: MessagesPalette.background(context),
+      child: CupertinoButton(
+        pressedOpacity: .55,
+        padding: EdgeInsets.zero,
+        onPressed: onTap,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
+              child: ContactAvatar(conversation: conversation, size: 50),
+            ),
+            Expanded(
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 70),
+                padding: const EdgeInsets.fromLTRB(0, 10, 10, 9),
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(
+                      color: MessagesPalette.hairline(context)
+                          .withValues(alpha: .55),
+                      width: .45,
+                    ),
                   ),
                 ),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (highlighted)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 8, right: 7),
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: MessagesPalette.blue,
-                          shape: BoxShape.circle,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (highlighted)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 8, right: 7),
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: MessagesPalette.blue,
+                            shape: BoxShape.circle,
+                          ),
+                          child: SizedBox(width: 9, height: 9),
                         ),
-                        child: SizedBox(width: 9, height: 9),
+                      ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            conversation.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: MessagesText.headline(context).copyWith(
+                              fontWeight: highlighted
+                                  ? FontWeight.w700
+                                  : FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              if (conversation.isMuted)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 4),
+                                  child: Icon(
+                                    CupertinoIcons.bell_slash_fill,
+                                    size: 12,
+                                    color: MessagesPalette.secondaryLabel(
+                                      context,
+                                    ),
+                                  ),
+                                ),
+                              Expanded(
+                                child: Text(
+                                  conversation.preview,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style:
+                                      MessagesText.secondary(context).copyWith(
+                                    fontWeight: highlighted
+                                        ? FontWeight.w600
+                                        : FontWeight.w400,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          conversation.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: MessagesText.headline(context).copyWith(
-                            fontWeight: highlighted
-                                ? FontWeight.w700
-                                : FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Row(
-                          children: [
-                            if (conversation.isMuted)
-                              Padding(
-                                padding: const EdgeInsets.only(right: 4),
-                                child: Icon(
-                                  CupertinoIcons.bell_slash_fill,
-                                  size: 12,
-                                  color: MessagesPalette.secondaryLabel(context),
-                                ),
-                              ),
-                            Expanded(
-                              child: Text(
-                                conversation.preview,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: MessagesText.secondary(context).copyWith(
-                                  fontWeight: highlighted
-                                      ? FontWeight.w600
-                                      : FontWeight.w400,
-                                ),
-                              ),
+                    const SizedBox(width: 6),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 1),
+                      child: Row(
+                        children: [
+                          Text(
+                            _relativeTime(conversation.updatedAt),
+                            style: MessagesText.secondary(context).copyWith(
+                              fontSize: 13,
+                              fontWeight: highlighted
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
                             ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Padding(
-                    padding: const EdgeInsets.only(top: 1),
-                    child: Row(
-                      children: [
-                        Text(
-                          _relativeTime(conversation.updatedAt),
-                          style: MessagesText.secondary(context).copyWith(
-                            fontSize: 13,
-                            fontWeight: highlighted
-                                ? FontWeight.w600
-                                : FontWeight.w400,
                           ),
-                        ),
-                        const SizedBox(width: 3),
-                        Icon(
-                          CupertinoIcons.chevron_right,
-                          size: 13,
-                          color: MessagesPalette.secondaryLabel(context),
-                        ),
-                      ],
+                          const SizedBox(width: 3),
+                          Icon(
+                            CupertinoIcons.chevron_right,
+                            size: 13,
+                            color: MessagesPalette.secondaryLabel(context),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

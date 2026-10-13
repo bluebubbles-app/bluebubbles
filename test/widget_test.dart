@@ -12,5 +12,25 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(CupertinoTextField), findsOneWidget);
     expect(find.text('Let me know when you leave'), findsOneWidget);
+    expect(find.byIcon(CupertinoIcons.arrow_up_circle_fill), findsOneWidget);
+
+    final messageText = tester.widget<Text>(
+      find.text('Let me know when you leave'),
+    );
+    expect(messageText.textAlign, TextAlign.center);
+
+    final contactName = tester.widget<Text>(find.text('Mia Parker'));
+    expect(contactName.style?.fontSize, 22);
+  });
+
+  testWidgets('reveals mute and delete actions by swiping left',
+      (tester) async {
+    await tester.pumpWidget(const MessagesUiApp());
+
+    await tester.drag(find.text('Mia Parker'), const Offset(-220, 0));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Mute'), findsOneWidget);
+    expect(find.text('Delete'), findsOneWidget);
   });
 }
