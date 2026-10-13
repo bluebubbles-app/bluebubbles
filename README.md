@@ -39,7 +39,7 @@ flutter run
 The `flutter create` command adds the missing Android wrapper while preserving
 the prototype files under `lib/`. The setup script then sets the visible app
 name to `BlueBubbles` and generates all required Android launcher icon sizes
-from `assets/icon/bluebubbles-rounded.png`.
+from `assets/icon/bluebubbles-circle.png`, including Android adaptive icons.
 
 The square and circular source variants are also preserved under `assets/icon/`.
 
