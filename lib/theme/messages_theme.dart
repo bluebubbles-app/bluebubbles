@@ -30,7 +30,7 @@ abstract final class MessagesPalette {
       isDark(context) ? const Color(0xFF2C2C2E) : const Color(0xFFE9E9EB);
 
   static Color sentBubble(BuildContext context) =>
-      isDark(context) ? darkBlue : blue;
+      isDark(context) ? darkBlue : const Color(0xFF00B7FF);
 
   static Color hairline(BuildContext context) =>
       isDark(context) ? const Color(0xFF38383A) : separator;

@@ -25,6 +25,7 @@ class ConversationListScreen extends StatefulWidget {
 class _ConversationListScreenState extends State<ConversationListScreen> {
   final _searchController = TextEditingController();
   String _query = '';
+  bool _editingFavorites = false;
 
   List<Conversation> get _filtered {
     final conversations = [...widget.conversations]
@@ -60,6 +61,36 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
   void _pinConversation(Conversation conversation) {
     HapticFeedback.mediumImpact();
     setState(() => conversation.isPinned = true);
+  }
+
+  void _unpinConversation(Conversation conversation) {
+    HapticFeedback.mediumImpact();
+    setState(() {
+      conversation.isPinned = false;
+      if (!widget.conversations.any((item) => item.isPinned)) {
+        _editingFavorites = false;
+      }
+    });
+  }
+
+  Future<void> _showFavoriteActions(Conversation conversation) async {
+    final shouldUnpin = await showCupertinoModalPopup<bool>(
+      context: context,
+      builder: (context) => CupertinoActionSheet(
+        title: Text(conversation.title),
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Unpin Conversation'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+      ),
+    );
+    if (shouldUnpin == true && mounted) _unpinConversation(conversation);
   }
 
   void _toggleMute(Conversation conversation) {
@@ -132,6 +163,9 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                   child: _PinnedGrid(
                     conversations: pinned,
                     onTap: _openConversation,
+                    editing: _editingFavorites,
+                    onUnpin: _unpinConversation,
+                    onLongPress: _showFavoriteActions,
                   ),
                 ),
               if (_filtered.isEmpty)
@@ -166,65 +200,90 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
   }
 
   Widget _buildHeader(BuildContext context) {
+    final topCompensation =
+        (44.0 - MediaQuery.paddingOf(context).top)
+            .clamp(0.0, 44.0)
+            .toDouble();
     return SizedBox(
-      height: 64,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          const Text(
-            'Messages',
-            style: TextStyle(
-              fontFamily: 'SF Pro Text',
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -.25,
-            ),
-          ),
-          Positioned(
-            left: 8,
-            child: CupertinoButton(
-              minSize: 44,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              onPressed: () => HapticFeedback.selectionClick(),
-              child: const Text(
-                'Edit',
+      height: 44 + topCompensation,
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: SizedBox(
+          height: 44,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Text(
+                'Messages',
+                key: const ValueKey('messages-title'),
                 style: TextStyle(
+                  color: MessagesPalette.label(context),
                   fontFamily: 'SF Pro Text',
-                  fontSize: 14,
-                  fontWeight: FontWeight.w400,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -.25,
                 ),
               ),
-            ),
+              Positioned(
+                left: 8,
+                child: CupertinoButton(
+                  minSize: 44,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  onPressed: () {
+                    HapticFeedback.selectionClick();
+                    setState(() => _editingFavorites = !_editingFavorites);
+                  },
+                  child: Text(
+                    _editingFavorites ? 'Done' : 'Edit',
+                    style: const TextStyle(
+                      color: MessagesPalette.blue,
+                      fontFamily: 'SF Pro Text',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 54,
+                child: CupertinoButton(
+                  minSize: 44,
+                  padding: EdgeInsets.zero,
+                  onPressed: () => HapticFeedback.selectionClick(),
+                  child: const Icon(CupertinoIcons.ellipsis_circle, size: 20),
+                ),
+              ),
+              Positioned(
+                right: 8,
+                child: CupertinoButton(
+                  minSize: 44,
+                  padding: EdgeInsets.zero,
+                  onPressed: () => HapticFeedback.selectionClick(),
+                  child: const Icon(CupertinoIcons.square_pencil, size: 20),
+                ),
+              ),
+            ],
           ),
-          Positioned(
-            right: 54,
-            child: CupertinoButton(
-              minSize: 44,
-              padding: EdgeInsets.zero,
-              onPressed: () => HapticFeedback.selectionClick(),
-              child: const Icon(CupertinoIcons.ellipsis_circle, size: 20),
-            ),
-          ),
-          Positioned(
-            right: 8,
-            child: CupertinoButton(
-              minSize: 44,
-              padding: EdgeInsets.zero,
-              onPressed: () => HapticFeedback.selectionClick(),
-              child: const Icon(CupertinoIcons.square_pencil, size: 20),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
 class _PinnedGrid extends StatelessWidget {
-  const _PinnedGrid({required this.conversations, required this.onTap});
+  const _PinnedGrid({
+    required this.conversations,
+    required this.onTap,
+    required this.editing,
+    required this.onUnpin,
+    required this.onLongPress,
+  });
 
   final List<Conversation> conversations;
   final ValueChanged<Conversation> onTap;
+  final bool editing;
+  final ValueChanged<Conversation> onUnpin;
+  final ValueChanged<Conversation> onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -237,45 +296,84 @@ class _PinnedGrid extends StatelessWidget {
         children: conversations.map((conversation) {
           return SizedBox(
             width: itemWidth,
-            child: CupertinoButton(
-              padding: EdgeInsets.zero,
-              onPressed: () => onTap(conversation),
-              child: Column(
-                children: [
-                  ContactAvatar(
-                    key: ValueKey('pinned-avatar-${conversation.id}'),
-                    conversation: conversation,
-                    size: 95,
-                  ),
-                  const SizedBox(height: 5),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      if (conversation.unreadCount > 0) ...[
-                        const DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: MessagesPalette.blue,
-                            shape: BoxShape.circle,
-                          ),
-                          child: SizedBox(width: 10, height: 10),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onLongPress: editing ? null : () => onLongPress(conversation),
+              child: CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: editing ? () {} : () => onTap(conversation),
+                child: Column(
+                  children: [
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        ContactAvatar(
+                          key: ValueKey('pinned-avatar-${conversation.id}'),
+                          conversation: conversation,
+                          size: 95,
                         ),
-                        const SizedBox(width: 3),
+                        if (editing)
+                          Positioned(
+                            left: -3,
+                            top: -3,
+                            child: CupertinoButton(
+                              key: ValueKey(
+                                'unpin-favorite-${conversation.id}',
+                              ),
+                              minSize: 28,
+                              padding: EdgeInsets.zero,
+                              onPressed: () => onUnpin(conversation),
+                              child: Container(
+                                width: 24,
+                                height: 24,
+                                decoration: BoxDecoration(
+                                  color: CupertinoColors.systemGray,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: MessagesPalette.background(context),
+                                    width: 2,
+                                  ),
+                                ),
+                                child: const Icon(
+                                  CupertinoIcons.minus,
+                                  size: 15,
+                                  color: CupertinoColors.white,
+                                ),
+                              ),
+                            ),
+                          ),
                       ],
-                      Flexible(
-                        child: Text(
-                          conversation.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: MessagesText.secondary(context).copyWith(
-                            color: MessagesPalette.secondaryLabel(context),
-                            fontSize: 12.5,
-                            height: 1.2,
+                    ),
+                    const SizedBox(height: 5),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (conversation.unreadCount > 0) ...[
+                          const DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: MessagesPalette.blue,
+                              shape: BoxShape.circle,
+                            ),
+                            child: SizedBox(width: 10, height: 10),
+                          ),
+                          const SizedBox(width: 3),
+                        ],
+                        Flexible(
+                          child: Text(
+                            conversation.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: MessagesText.secondary(context).copyWith(
+                              color: MessagesPalette.secondaryLabel(context),
+                              fontSize: 12.5,
+                              height: 1.2,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           );

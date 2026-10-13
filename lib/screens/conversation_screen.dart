@@ -279,6 +279,10 @@ class _ConversationScreenState extends State<ConversationScreen>
 
   @override
   Widget build(BuildContext context) {
+    final topCompensation =
+        (44.0 - MediaQuery.paddingOf(context).top)
+            .clamp(0.0, 44.0)
+            .toDouble();
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: MessagesPalette.isDark(context)
           ? SystemUiOverlayStyle.light
@@ -294,7 +298,10 @@ class _ConversationScreenState extends State<ConversationScreen>
                   onCancel: _cancelSelection,
                 )
               else
-                _ConversationHeader(conversation: widget.conversation),
+                _ConversationHeader(
+                  conversation: widget.conversation,
+                  topCompensation: topCompensation,
+                ),
               Expanded(
                 child: GestureDetector(
                   onTap: () => FocusScope.of(context).unfocus(),
@@ -618,121 +625,131 @@ class _MutedConversationNotice extends StatelessWidget {
 }
 
 class _ConversationHeader extends StatelessWidget {
-  const _ConversationHeader({required this.conversation});
+  const _ConversationHeader({
+    required this.conversation,
+    required this.topCompensation,
+  });
 
   final Conversation conversation;
+  final double topCompensation;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       key: const ValueKey('conversation-header'),
-      height: 72,
+      height: 72 + topCompensation,
       decoration: BoxDecoration(
         color: MessagesPalette.isDark(context)
             ? const Color(0xFF1C1C1E)
-            : const Color(0xFFF9F9FB),
+            : const Color(0xFFF1F1F2),
         border: Border(
           bottom: BorderSide(
             color: MessagesPalette.hairline(context).withValues(alpha: .55),
             width: .5,
           ),
         ),
-      ),
-      child: Stack(
-        alignment: Alignment.topCenter,
-        children: [
-          Positioned(
-            left: 8,
-            top: 4,
-            child: _HeaderButton(
-              key: const ValueKey('conversation-back-button'),
-              onPressed: () => Navigator.of(context).maybePop(),
-              icon: CupertinoIcons.back,
-              iconSize: 28,
-            ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            top: 2,
-            child: Center(
-              child: CupertinoButton(
-                minSize: 0,
-                padding: EdgeInsets.zero,
-                onPressed: () => HapticFeedback.selectionClick(),
-                child: Container(
-                    key: const ValueKey('conversation-contact-avatar'),
-                    width: 48,
-                    height: 48,
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: MessagesPalette.isDark(context)
-                          ? const Color(0xFF48484A)
-                          : const Color(0xFFE5E5EA),
-                    ),
-                    child: ContactAvatar(
-                      conversation: conversation,
-                      size: 44,
-                    ),
-                  ),
-              ),
-            ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            top: 53,
-            child: Center(
-              child: CupertinoButton(
-                minSize: 0,
-                padding: EdgeInsets.zero,
-                onPressed: () => HapticFeedback.selectionClick(),
-                child: Stack(
-                    clipBehavior: Clip.none,
-                    alignment: Alignment.center,
-                    children: [
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 150),
-                        child: Text(
-                          conversation.title,
-                          key: const ValueKey('conversation-contact-name'),
-                          textAlign: TextAlign.center,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: MessagesPalette.label(context),
-                            fontFamily: 'SF Pro Text',
-                            fontSize: 11,
-                            height: 1,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        right: -13,
-                        child: Icon(
-                          CupertinoIcons.chevron_right,
-                          size: 10,
-                          color: MessagesPalette.secondaryLabel(context),
-                        ),
-                      ),
-                    ],
-                  ),
-              ),
-            ),
-          ),
-          Positioned(
-            right: 8,
-            top: 4,
-            child: _HeaderButton(
-              key: const ValueKey('conversation-call-button'),
-              onPressed: () => HapticFeedback.selectionClick(),
-              icon: CupertinoIcons.phone,
-              iconSize: 23,
-            ),
+        boxShadow: [
+          BoxShadow(
+            color: CupertinoColors.black.withValues(alpha: .12),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
+      ),
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: SizedBox(
+          height: 72,
+          child: Stack(
+            alignment: Alignment.topCenter,
+            children: [
+              Positioned(
+                left: 8,
+                top: 3,
+                child: _HeaderButton(
+                  key: const ValueKey('conversation-back-button'),
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  icon: CupertinoIcons.back,
+                  iconSize: 28,
+                ),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 1,
+                child: Center(
+                  child: CupertinoButton(
+                    minSize: 0,
+                    padding: EdgeInsets.zero,
+                    onPressed: () => HapticFeedback.selectionClick(),
+                    child: SizedBox(
+                      key: const ValueKey('conversation-contact-avatar'),
+                      width: 48,
+                      height: 48,
+                      child: ContactAvatar(
+                        conversation: conversation,
+                        size: 48,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 53,
+                child: Center(
+                  child: CupertinoButton(
+                    minSize: 0,
+                    padding: EdgeInsets.zero,
+                    onPressed: () => HapticFeedback.selectionClick(),
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      alignment: Alignment.center,
+                      children: [
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 150),
+                          child: Text(
+                            conversation.title,
+                            key: const ValueKey('conversation-contact-name'),
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: MessagesPalette.label(context),
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 11,
+                              height: 1,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          right: -13,
+                          child: Icon(
+                            CupertinoIcons.chevron_right,
+                            size: 10,
+                            color: MessagesPalette.secondaryLabel(context),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 8,
+                top: 3,
+                child: _HeaderButton(
+                  key: const ValueKey('conversation-call-button'),
+                  onPressed: () => HapticFeedback.selectionClick(),
+                  icon: CupertinoIcons.phone,
+                  iconSize: 23,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1345,15 +1362,28 @@ class _DateSeparator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final label = _dateSeparatorParts(value);
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Text(
-        _formatDateSeparator(value),
+      child: Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: label.$1,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            TextSpan(
+              text: '  ${label.$2}',
+              style: const TextStyle(fontWeight: FontWeight.w400),
+            ),
+          ],
+        ),
         textAlign: TextAlign.center,
         style: TextStyle(
           color: MessagesPalette.secondaryLabel(context),
+          fontFamily: 'SF Pro Text',
           fontSize: 11,
-          fontWeight: FontWeight.w600,
+          height: 1,
         ),
       ),
     );
@@ -1367,7 +1397,7 @@ String _formatTime(DateTime value) {
   return '$hour:$minute $period';
 }
 
-String _formatDateSeparator(DateTime value) {
+(String, String) _dateSeparatorParts(DateTime value) {
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
   final messageDay = DateTime(value.year, value.month, value.day);
@@ -1377,7 +1407,7 @@ String _formatDateSeparator(DateTime value) {
     1 => 'Yesterday',
     _ => '${value.month}/${value.day}/${value.year}',
   };
-  return '$prefix  ${_formatTime(value)}';
+  return (prefix, _formatTime(value));
 }
 
 String _formatFullDateTime(DateTime value) {

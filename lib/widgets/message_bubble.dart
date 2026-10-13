@@ -49,7 +49,8 @@ class MessageBubble extends StatelessWidget {
                 child: Container(
                   constraints: BoxConstraints(
                     minHeight: 36,
-                    maxWidth: MediaQuery.sizeOf(context).width * .78,
+                    // 274 pt on the 375 pt-wide SVG artboard.
+                    maxWidth: MediaQuery.sizeOf(context).width * (274 / 375),
                   ),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
@@ -59,6 +60,9 @@ class MessageBubble extends StatelessWidget {
                     message.text,
                     textAlign: TextAlign.center,
                     style: MessagesText.body(context).copyWith(
+                      fontSize: 16,
+                      height: 1.18,
+                      letterSpacing: -.15,
                       color: isFromMe
                           ? CupertinoColors.white
                           : MessagesPalette.label(context),
@@ -123,41 +127,65 @@ class MessageBubblePainter extends CustomPainter {
       final tail = Path();
       if (isFromMe) {
         tail
-          ..moveTo(size.width - 12, size.height - 10)
+          ..moveTo(size.width - 4.5, size.height - 6.5)
           ..cubicTo(
-            size.width - 5,
-            size.height - 5,
-            size.width + 1,
-            size.height,
-            size.width + 7,
+            size.width - 4,
+            size.height - 3.49,
+            size.width - 1.17,
+            size.height - .67,
+            size.width + .5,
             size.height,
           )
           ..cubicTo(
-            size.width + 2,
-            size.height - 2,
-            size.width,
-            size.height - 7,
-            size.width - 1,
-            size.height - 12,
+            size.width - 5.9,
+            size.height,
+            size.width - 10,
+            size.height - 2.17,
+            size.width - 11,
+            size.height - 3.5,
+          )
+          ..lineTo(size.width - 16, size.height - 2)
+          ..lineTo(size.width - 15.5, size.height - 17)
+          ..lineTo(size.width - 5, size.height - 17)
+          ..lineTo(size.width - 5, size.height - 12.5)
+          ..cubicTo(
+            size.width - 5,
+            size.height - 11.5,
+            size.width - 5,
+            size.height - 9.5,
+            size.width - 4.5,
+            size.height - 6.5,
           );
       } else {
         tail
-          ..moveTo(12, size.height - 10)
+          ..moveTo(1, size.height - 6.5)
           ..cubicTo(
-            5,
-            size.height - 5,
-            -1,
-            size.height,
-            -7,
+            .5,
+            size.height - 3.49,
+            -2.33,
+            size.height - .67,
+            -4,
             size.height,
           )
           ..cubicTo(
-            -2,
-            size.height - 2,
-            0,
-            size.height - 7,
+            2.4,
+            size.height,
+            6.5,
+            size.height - 2.17,
+            7.5,
+            size.height - 3.5,
+          )
+          ..lineTo(12.5, size.height - 2)
+          ..lineTo(12, size.height - 17)
+          ..lineTo(1.5, size.height - 17)
+          ..lineTo(1.5, size.height - 12.5)
+          ..cubicTo(
+            1.5,
+            size.height - 11.5,
+            1.5,
+            size.height - 9.5,
             1,
-            size.height - 12,
+            size.height - 6.5,
           );
       }
       tail.close();

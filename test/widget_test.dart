@@ -8,6 +8,7 @@ void main() {
     await tester.pumpWidget(const MessagesUiApp());
     expect(find.text('Messages'), findsOneWidget);
     expect(find.text('Edit'), findsOneWidget);
+    expect(find.byKey(const ValueKey('messages-title')), findsOneWidget);
     expect(find.text('Mia Parker'), findsOneWidget);
     expect(
       tester.getSize(find.byKey(const ValueKey('pinned-avatar-camille'))),
@@ -39,7 +40,7 @@ void main() {
     final nameCenter = tester.getCenter(
       find.byKey(const ValueKey('conversation-contact-name')),
     );
-    expect(header.height, 72);
+    expect(header.height, inInclusiveRange(72, 116));
     expect(avatarCenter.dx, moreOrLessEquals(headerCenter.dx));
     expect(nameCenter.dx, moreOrLessEquals(headerCenter.dx));
     expect(backCenter.dy, moreOrLessEquals(avatarCenter.dy));
@@ -57,6 +58,24 @@ void main() {
     await tester.enterText(find.byType(CupertinoTextField), 'Hello');
     await tester.pump();
     expect(find.byIcon(CupertinoIcons.arrow_up_circle_fill), findsOneWidget);
+  });
+
+  testWidgets('favorites can be unpinned from edit mode', (tester) async {
+    await tester.pumpWidget(const MessagesUiApp());
+
+    await tester.tap(find.text('Edit'));
+    await tester.pump();
+    expect(find.text('Done'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('unpin-favorite-camille')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('pinned-avatar-camille')),
+      findsNothing,
+    );
+    expect(find.text('Lyndsey'), findsOneWidget);
   });
 
   testWidgets('shows the SVG reference media and silenced state',
