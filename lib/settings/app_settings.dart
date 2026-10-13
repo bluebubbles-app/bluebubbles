@@ -13,7 +13,6 @@ enum ClockFormat { system, hour12, hour24 }
 enum EmojiStyle { apple, android }
 
 class AppSettingsController extends ChangeNotifier {
-  static const appleEmojiAssetsAvailable = false;
   static const _headerTransparencyKey = 'header_transparency';
   static const _fontScaleKey = 'font_scale';
   static const _languageKey = 'language';
@@ -57,9 +56,6 @@ class AppSettingsController extends ChangeNotifier {
         preferences.getString(_emojiStyleKey),
         emojiStyle,
       );
-      if (!appleEmojiAssetsAvailable && emojiStyle == EmojiStyle.apple) {
-        emojiStyle = EmojiStyle.android;
-      }
     } on Exception {
       // Widget tests and preview hosts may not expose a preferences backend.
     }
@@ -116,7 +112,6 @@ class AppSettingsController extends ChangeNotifier {
   }
 
   Future<void> setEmojiStyle(EmojiStyle value) async {
-    if (value == EmojiStyle.apple && !appleEmojiAssetsAvailable) return;
     emojiStyle = value;
     _notifyIfActive();
     await _persist(

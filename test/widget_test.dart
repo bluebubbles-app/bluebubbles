@@ -7,6 +7,7 @@ import 'package:bluebubbles/data/demo_data.dart';
 import 'package:bluebubbles/main.dart';
 import 'package:bluebubbles/models/conversation.dart';
 import 'package:bluebubbles/screens/conversation_list_screen.dart';
+import 'package:bluebubbles/widgets/message_bubble.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -22,6 +23,14 @@ void main() {
     expect(restored.title, original.title);
     expect(restored.messages.length, original.messages.length);
     expect(restored.messages.last.text, original.messages.last.text);
+  });
+
+  test('scales emoji-only messages by their emoji count', () {
+    expect(emojiOnlyTextScale('😀'), 2);
+    expect(emojiOnlyTextScale('👨‍👩‍👧‍👦'), 2);
+    expect(emojiOnlyTextScale('😀 ❤️ 🎉'), 1.5);
+    expect(emojiOnlyTextScale('😀😁😂🤣😃😄'), 1);
+    expect(emojiOnlyTextScale('Hello 😀'), 1);
   });
 
   testWidgets('shows the list and opens a conversation', (tester) async {
@@ -116,11 +125,14 @@ void main() {
     expect(find.text('Emoji Style'), findsOneWidget);
     await tester.tap(find.text('Emoji Style'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Apple (requires asset pack)'));
+    await tester.tap(find.text('Apple'));
     await tester.pumpAndSettle();
-    expect(find.text('Apple Emoji Pack Required'), findsOneWidget);
-    await tester.tap(find.text('OK'));
-    await tester.pumpAndSettle();
+    expect(find.text('Apple'), findsOneWidget);
+    final app = tester.widget<CupertinoApp>(find.byType(CupertinoApp));
+    expect(
+      app.theme?.textTheme.textStyle.fontFamilyFallback?.first,
+      'Apple Color Emoji',
+    );
     await tester.drag(find.byType(ListView), const Offset(0, -500));
     await tester.pumpAndSettle();
     expect(find.text('Import Messages'), findsOneWidget);

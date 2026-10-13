@@ -1,9 +1,63 @@
 import 'dart:ui';
 
+import 'package:characters/characters.dart';
 import 'package:flutter/cupertino.dart';
 
 import '../models/conversation.dart';
 import '../theme/messages_theme.dart';
+
+double emojiOnlyTextScale(String text) {
+  final compact = text.replaceAll(RegExp(r'\s+'), '');
+  if (compact.isEmpty) return 1;
+
+  final emojiCount = compact.characters.length;
+  if (!compact.characters.every(_isEmojiCluster)) return 1;
+  if (emojiCount == 1) return 2;
+  if (emojiCount <= 5) return 1.5;
+  return 1;
+}
+
+bool _isEmojiCluster(String cluster) {
+  final runes = cluster.runes.toList(growable: false);
+  final isKeycap = runes.contains(0x20E3);
+  var hasEmojiBase = false;
+
+  for (final rune in runes) {
+    if (_isEmojiBase(rune) ||
+        (isKeycap &&
+            (rune == 0x23 ||
+                rune == 0x2A ||
+                (rune >= 0x30 && rune <= 0x39)))) {
+      hasEmojiBase = true;
+      continue;
+    }
+    if (rune == 0x200D ||
+        rune == 0x20E3 ||
+        rune == 0xFE0E ||
+        rune == 0xFE0F ||
+        (rune >= 0x1F3FB && rune <= 0x1F3FF) ||
+        (rune >= 0xE0020 && rune <= 0xE007F)) {
+      continue;
+    }
+    return false;
+  }
+  return hasEmojiBase;
+}
+
+bool _isEmojiBase(int rune) =>
+    rune == 0x00A9 ||
+    rune == 0x00AE ||
+    rune == 0x203C ||
+    rune == 0x2049 ||
+    rune == 0x2122 ||
+    rune == 0x3030 ||
+    rune == 0x303D ||
+    rune == 0x3297 ||
+    rune == 0x3299 ||
+    (rune >= 0x2300 && rune <= 0x23FF) ||
+    (rune >= 0x2600 && rune <= 0x27BF) ||
+    (rune >= 0x2B00 && rune <= 0x2BFF) ||
+    (rune >= 0x1F000 && rune <= 0x1FAFF);
 
 class MessageBubble extends StatefulWidget {
   const MessageBubble({
@@ -69,6 +123,7 @@ class _MessageBubbleState extends State<MessageBubble> {
   Widget build(BuildContext context) {
     final message = widget.message;
     final isFromMe = message.isFromMe;
+    final emojiScale = emojiOnlyTextScale(message.text);
     final color = isFromMe
         ? MessagesPalette.sentBubble(context)
         : MessagesPalette.receivedBubble(context);
@@ -106,13 +161,13 @@ class _MessageBubbleState extends State<MessageBubble> {
                 ),
                 child: Container(
                   constraints: BoxConstraints(
-                    minHeight: 36,
+                    minHeight: 36 * emojiScale,
                     // 274 pt on the 375 pt-wide SVG artboard.
                     maxWidth: MediaQuery.sizeOf(context).width * (274 / 375),
                   ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 7,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 12 * emojiScale,
+                    vertical: 7 * emojiScale,
                   ),
                   child: Transform.translate(
                     offset: const Offset(0, .75),
@@ -120,8 +175,8 @@ class _MessageBubbleState extends State<MessageBubble> {
                       message.text,
                       textAlign: TextAlign.center,
                       style: MessagesText.body(context).copyWith(
-                        fontSize: 16,
-                        height: 1.18,
+                        fontSize: 16 * emojiScale,
+                        height: emojiScale > 1 ? 1.05 : 1.18,
                         letterSpacing: -.15,
                         color: isFromMe
                             ? CupertinoColors.white
