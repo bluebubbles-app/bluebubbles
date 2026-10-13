@@ -58,37 +58,36 @@ class _MessageComposerState extends State<MessageComposer> {
     return SafeArea(
       top: false,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
-        decoration: BoxDecoration(
-          color: MessagesPalette.background(context).withValues(alpha: .96),
-          border: Border(
-            top: BorderSide(
-              color: MessagesPalette.hairline(context).withValues(alpha: .55),
-              width: .4,
-            ),
-          ),
-        ),
+        padding: const EdgeInsets.fromLTRB(12, 6, 15, 5),
+        color: MessagesPalette.background(context).withValues(alpha: .97),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            CupertinoButton(
-              minSize: 34,
-              padding: const EdgeInsets.only(right: 8, bottom: 2),
-              onPressed: () => HapticFeedback.selectionClick(),
-              child: Container(
-                width: 31,
-                height: 31,
-                decoration: const BoxDecoration(
-                  color: MessagesPalette.blue,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  CupertinoIcons.plus,
-                  size: 21,
-                  color: CupertinoColors.white,
+            SizedBox(
+              width: 36,
+              height: 36,
+              child: CupertinoButton(
+                minSize: 36,
+                padding: EdgeInsets.zero,
+                onPressed: () => HapticFeedback.selectionClick(),
+                child: Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: MessagesPalette.isDark(context)
+                        ? const Color(0xFF2C2C2E)
+                        : const Color(0xFFE9E9EA),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    CupertinoIcons.plus,
+                    size: 21,
+                    color: MessagesPalette.secondaryLabel(context),
+                  ),
                 ),
               ),
             ),
+            const SizedBox(width: 10),
             Expanded(
               child: Container(
                 constraints: const BoxConstraints(minHeight: 36, maxHeight: 122),
@@ -107,8 +106,11 @@ class _MessageComposerState extends State<MessageComposer> {
                         controller: _controller,
                         focusNode: _focusNode,
                         placeholder: 'Message',
-                        placeholderStyle: MessagesText.body(context).copyWith(
-                          color: MessagesPalette.secondaryLabel(context),
+                        placeholderStyle: const TextStyle(
+                          fontFamily: 'SF Pro Text',
+                          color: Color(0xFFC7C7CC),
+                          fontSize: 17,
+                          height: 1.2,
                         ),
                         style: MessagesText.body(context),
                         minLines: 1,
@@ -116,7 +118,7 @@ class _MessageComposerState extends State<MessageComposer> {
                         textCapitalization: TextCapitalization.sentences,
                         keyboardType: TextInputType.multiline,
                         decoration: null,
-                        padding: const EdgeInsets.fromLTRB(11, 7, 6, 7),
+                        padding: const EdgeInsets.fromLTRB(12, 7, 6, 7),
                       ),
                     ),
                     Padding(
@@ -127,14 +129,17 @@ class _MessageComposerState extends State<MessageComposer> {
                           key: ValueKey(_hasText),
                           minSize: 30,
                           padding: EdgeInsets.zero,
-                          onPressed: _hasText ? _send : null,
+                          onPressed: _hasText
+                              ? _send
+                              : () => HapticFeedback.selectionClick(),
                           child: Icon(
-                            CupertinoIcons.arrow_up_circle_fill,
-                            size: 30,
+                            _hasText
+                                ? CupertinoIcons.arrow_up_circle_fill
+                                : CupertinoIcons.mic,
+                            size: _hasText ? 30 : 19,
                             color: _hasText
                                 ? MessagesPalette.blue
-                                : MessagesPalette.secondaryLabel(context)
-                                    .withValues(alpha: .45),
+                                : MessagesPalette.secondaryLabel(context),
                           ),
                         ),
                       ),

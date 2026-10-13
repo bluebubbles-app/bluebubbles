@@ -38,7 +38,14 @@ class IosSearchField extends StatelessWidget {
           ),
         ),
         suffix: controller.text.isEmpty
-            ? null
+            ? Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Icon(
+                  CupertinoIcons.mic,
+                  size: 18,
+                  color: MessagesPalette.secondaryLabel(context),
+                ),
+              )
             : CupertinoButton(
                 minSize: 28,
                 padding: const EdgeInsets.symmetric(horizontal: 7),

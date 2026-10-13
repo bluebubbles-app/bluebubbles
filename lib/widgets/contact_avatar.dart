@@ -16,27 +16,35 @@ class ContactAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final avatar = Container(
-      width: size,
-      height: size,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: conversation.avatarColors,
-        ),
-      ),
-      child: Text(
-        conversation.initials,
-        style: TextStyle(
-          color: CupertinoColors.white,
-          fontSize: size * .34,
-          fontWeight: FontWeight.w600,
-          letterSpacing: -.4,
-        ),
-      ),
+    final avatar = ClipOval(
+      child: conversation.avatarAsset == null
+          ? Container(
+              width: size,
+              height: size,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: conversation.avatarColors,
+                ),
+              ),
+              child: Text(
+                conversation.initials,
+                style: TextStyle(
+                  color: CupertinoColors.white,
+                  fontSize: size * .34,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -.4,
+                ),
+              ),
+            )
+          : Image.asset(
+              conversation.avatarAsset!,
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+            ),
     );
 
     if (!showUnreadBadge || conversation.unreadCount == 0) return avatar;

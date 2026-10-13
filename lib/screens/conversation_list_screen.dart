@@ -120,7 +120,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
               SliverToBoxAdapter(child: _buildHeader(context)),
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 7, 16, 9),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                   child: IosSearchField(
                     controller: _searchController,
                     onChanged: (value) => setState(() => _query = value),
@@ -166,26 +166,53 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
   }
 
   Widget _buildHeader(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 7, 13, 0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
+    return SizedBox(
+      height: 64,
+      child: Stack(
+        alignment: Alignment.center,
         children: [
-          Expanded(
-            child: Text('Messages', style: MessagesText.largeTitle(context)),
+          const Text(
+            'Messages',
+            style: TextStyle(
+              fontFamily: 'SF Pro Text',
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -.25,
+            ),
           ),
-          CupertinoButton(
-            minSize: 36,
-            padding: EdgeInsets.zero,
-            onPressed: () => HapticFeedback.selectionClick(),
-            child: const Icon(CupertinoIcons.ellipsis_circle, size: 25),
+          Positioned(
+            left: 8,
+            child: CupertinoButton(
+              minSize: 44,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              onPressed: () => HapticFeedback.selectionClick(),
+              child: const Text(
+                'Edit',
+                style: TextStyle(
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ),
           ),
-          const SizedBox(width: 10),
-          CupertinoButton(
-            minSize: 36,
-            padding: EdgeInsets.zero,
-            onPressed: () => HapticFeedback.selectionClick(),
-            child: const Icon(CupertinoIcons.square_pencil, size: 25),
+          Positioned(
+            right: 54,
+            child: CupertinoButton(
+              minSize: 44,
+              padding: EdgeInsets.zero,
+              onPressed: () => HapticFeedback.selectionClick(),
+              child: const Icon(CupertinoIcons.ellipsis_circle, size: 20),
+            ),
+          ),
+          Positioned(
+            right: 8,
+            child: CupertinoButton(
+              minSize: 44,
+              padding: EdgeInsets.zero,
+              onPressed: () => HapticFeedback.selectionClick(),
+              child: const Icon(CupertinoIcons.square_pencil, size: 20),
+            ),
           ),
         ],
       ),
@@ -201,33 +228,52 @@ class _PinnedGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final itemWidth = (MediaQuery.sizeOf(context).width - 20) / 3;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 10, 8, 16),
+      padding: const EdgeInsets.fromLTRB(10, 0, 10, 12),
       child: Wrap(
         alignment: WrapAlignment.start,
         runSpacing: 16,
         children: conversations.map((conversation) {
           return SizedBox(
-            width: MediaQuery.sizeOf(context).width / 3 - 6,
+            width: itemWidth,
             child: CupertinoButton(
               padding: EdgeInsets.zero,
               onPressed: () => onTap(conversation),
               child: Column(
                 children: [
                   ContactAvatar(
+                    key: ValueKey('pinned-avatar-${conversation.id}'),
                     conversation: conversation,
-                    size: 76,
-                    showUnreadBadge: true,
+                    size: 95,
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    conversation.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: MessagesText.secondary(context).copyWith(
-                      color: MessagesPalette.label(context),
-                      fontSize: 13,
-                    ),
+                  const SizedBox(height: 5),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (conversation.unreadCount > 0) ...[
+                        const DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: MessagesPalette.blue,
+                            shape: BoxShape.circle,
+                          ),
+                          child: SizedBox(width: 10, height: 10),
+                        ),
+                        const SizedBox(width: 3),
+                      ],
+                      Flexible(
+                        child: Text(
+                          conversation.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: MessagesText.secondary(context).copyWith(
+                            color: MessagesPalette.secondaryLabel(context),
+                            fontSize: 12.5,
+                            height: 1.2,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -430,13 +476,13 @@ class ConversationRow extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
-              child: ContactAvatar(conversation: conversation, size: 50),
+              padding: const EdgeInsets.fromLTRB(26, 10, 13, 10),
+              child: ContactAvatar(conversation: conversation, size: 44),
             ),
             Expanded(
               child: Container(
-                constraints: const BoxConstraints(minHeight: 70),
-                padding: const EdgeInsets.fromLTRB(0, 10, 10, 9),
+                constraints: const BoxConstraints(minHeight: 78),
+                padding: const EdgeInsets.fromLTRB(0, 9, 10, 8),
                 decoration: BoxDecoration(
                   border: Border(
                     top: BorderSide(
@@ -469,12 +515,14 @@ class ConversationRow extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: MessagesText.headline(context).copyWith(
+                              fontSize: 18,
+                              height: 1.08,
                               fontWeight: highlighted
                                   ? FontWeight.w700
                                   : FontWeight.w600,
                             ),
                           ),
-                          const SizedBox(height: 2),
+                          const SizedBox(height: 3),
                           Row(
                             children: [
                               if (conversation.isMuted)
@@ -495,6 +543,8 @@ class ConversationRow extends StatelessWidget {
                                   overflow: TextOverflow.ellipsis,
                                   style:
                                       MessagesText.secondary(context).copyWith(
+                                    fontSize: 15,
+                                    height: 1.15,
                                     fontWeight: highlighted
                                         ? FontWeight.w600
                                         : FontWeight.w400,

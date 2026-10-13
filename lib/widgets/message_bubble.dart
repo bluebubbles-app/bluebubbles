@@ -49,11 +49,11 @@ class MessageBubble extends StatelessWidget {
                 child: Container(
                   constraints: BoxConstraints(
                     minHeight: 36,
-                    maxWidth: MediaQuery.sizeOf(context).width * .77,
+                    maxWidth: MediaQuery.sizeOf(context).width * .78,
                   ),
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 13,
-                    vertical: 8,
+                    horizontal: 12,
+                    vertical: 7,
                   ),
                   child: Text(
                     message.text,
@@ -69,13 +69,13 @@ class MessageBubble extends StatelessWidget {
             ),
             if (showStatus && isFromMe)
               Padding(
-                padding: const EdgeInsets.only(top: 4, right: 8),
+                padding: const EdgeInsets.only(top: 4),
                 child: Text(
                   _statusLabel(message.deliveryState),
                   style: TextStyle(
                     color: MessagesPalette.secondaryLabel(context),
                     fontSize: 11,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
               ),
@@ -115,7 +115,7 @@ class MessageBubblePainter extends CustomPainter {
     final paint = Paint()..color = color;
     final body = Path()
       ..addRRect(
-        RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(18)),
+        RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(20)),
       );
     var bubble = body;
 

@@ -26,6 +26,7 @@ class Conversation {
     required this.updatedAt,
     required this.avatarColors,
     required this.messages,
+    this.avatarAsset,
     this.subtitle,
     this.unreadCount = 0,
     this.isPinned = false,
@@ -38,6 +39,7 @@ class Conversation {
   DateTime updatedAt;
   final List<Color> avatarColors;
   final List<ChatMessage> messages;
+  final String? avatarAsset;
   final String? subtitle;
   int unreadCount;
   bool isPinned;

@@ -305,14 +305,20 @@ class _ConversationScreenState extends State<ConversationScreen>
                   child: AnimatedList(
                     key: _messageListKey,
                     controller: _scrollController,
-                    padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
+                    padding: const EdgeInsets.fromLTRB(10, 12, 14, 10),
                     initialItemCount: widget.conversation.messages.length + 1,
                     itemBuilder: (context, index, animation) {
                       if (index == 0) {
-                        return _DateSeparator(
-                          value: widget.conversation.messages.isEmpty
-                              ? DateTime.now()
-                              : widget.conversation.messages.first.sentAt,
+                        return Column(
+                          children: [
+                            _DateSeparator(
+                              value: widget.conversation.messages.isEmpty
+                                  ? DateTime.now()
+                                  : widget.conversation.messages.first.sentAt,
+                            ),
+                            if (widget.conversation.id == 'tobias')
+                              const _PhotoStackMessage(),
+                          ],
                         );
                       }
 
@@ -412,11 +418,200 @@ class _ConversationScreenState extends State<ConversationScreen>
                       ? null
                       : () => _openForwardPicker(_selectedMessages),
                 )
-              else
+              else ...[
+                if (widget.conversation.isMuted)
+                  _MutedConversationNotice(
+                    contactName: widget.conversation.title,
+                  ),
                 MessageComposer(onSend: _send),
+              ],
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _PhotoStackMessage extends StatelessWidget {
+  const _PhotoStackMessage();
+
+  static const _photos = <String>[
+    'assets/photos/hike-1.jpg',
+    'assets/photos/hike-2.jpg',
+    'assets/photos/hike-3.jpg',
+    'assets/photos/hike-4.jpg',
+    'assets/photos/hike-5.jpg',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 17, bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              SizedBox(
+                width: 11,
+                height: 11,
+                child: Wrap(
+                  spacing: 1,
+                  runSpacing: 1,
+                  children: List.generate(
+                    4,
+                    (_) => const DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: MessagesPalette.blue,
+                        borderRadius: BorderRadius.all(Radius.circular(1)),
+                      ),
+                      child: SizedBox(width: 5, height: 5),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              const Text(
+                '5 photos',
+                style: TextStyle(
+                  color: MessagesPalette.blue,
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          SizedBox(
+            height: 282,
+            width: double.infinity,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                for (var index = 2; index >= 0; index--)
+                  Positioned(
+                    left: index * 10.0,
+                    top: index * 7.0,
+                    child: Transform.rotate(
+                      angle: index == 0 ? 0 : index * .018,
+                      alignment: Alignment.topLeft,
+                      child: _PhotoCard(
+                        asset: _photos[index],
+                        width: 214,
+                        height: 282.0 - index * 7.0,
+                      ),
+                    ),
+                  ),
+                Positioned(
+                  left: 252,
+                  top: 125,
+                  child: CupertinoButton(
+                    minSize: 36,
+                    padding: EdgeInsets.zero,
+                    onPressed: () => HapticFeedback.selectionClick(),
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: MessagesPalette.background(context),
+                        border: Border.all(
+                          color: MessagesPalette.hairline(context)
+                              .withValues(alpha: .55),
+                          width: .6,
+                        ),
+                      ),
+                      child: const Icon(
+                        CupertinoIcons.share,
+                        size: 18,
+                        color: MessagesPalette.blue,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PhotoCard extends StatelessWidget {
+  const _PhotoCard({
+    required this.asset,
+    required this.width,
+    required this.height,
+  });
+
+  final String asset;
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: Image.asset(
+        asset,
+        width: width,
+        height: height,
+        fit: BoxFit.cover,
+      ),
+    );
+  }
+}
+
+class _MutedConversationNotice extends StatelessWidget {
+  const _MutedConversationNotice({required this.contactName});
+
+  final String contactName;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 58,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                CupertinoIcons.moon_fill,
+                size: 13,
+                color: MessagesPalette.secondaryLabel(context),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '$contactName has notifications silenced',
+                style: TextStyle(
+                  color: MessagesPalette.secondaryLabel(context),
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          CupertinoButton(
+            minSize: 18,
+            padding: EdgeInsets.zero,
+            onPressed: () => HapticFeedback.selectionClick(),
+            child: const Text(
+              'Notify Anyway',
+              style: TextStyle(
+                fontFamily: 'SF Pro Text',
+                fontSize: 12,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -431,7 +626,7 @@ class _ConversationHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       key: const ValueKey('conversation-header'),
-      height: 84,
+      height: 72,
       decoration: BoxDecoration(
         color: MessagesPalette.isDark(context)
             ? const Color(0xFF1C1C1E)
@@ -448,7 +643,7 @@ class _ConversationHeader extends StatelessWidget {
         children: [
           Positioned(
             left: 8,
-            top: 7,
+            top: 4,
             child: _HeaderButton(
               key: const ValueKey('conversation-back-button'),
               onPressed: () => Navigator.of(context).maybePop(),
@@ -459,7 +654,7 @@ class _ConversationHeader extends StatelessWidget {
           Positioned(
             left: 0,
             right: 0,
-            top: 7,
+            top: 2,
             child: Center(
               child: CupertinoButton(
                 minSize: 0,
@@ -467,8 +662,8 @@ class _ConversationHeader extends StatelessWidget {
                 onPressed: () => HapticFeedback.selectionClick(),
                 child: Container(
                     key: const ValueKey('conversation-contact-avatar'),
-                    width: 44,
-                    height: 44,
+                    width: 48,
+                    height: 48,
                     padding: const EdgeInsets.all(2),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
@@ -478,7 +673,7 @@ class _ConversationHeader extends StatelessWidget {
                     ),
                     child: ContactAvatar(
                       conversation: conversation,
-                      size: 40,
+                      size: 44,
                     ),
                   ),
               ),
@@ -487,7 +682,7 @@ class _ConversationHeader extends StatelessWidget {
           Positioned(
             left: 0,
             right: 0,
-            top: 54,
+            top: 53,
             child: Center(
               child: CupertinoButton(
                 minSize: 0,
@@ -508,7 +703,7 @@ class _ConversationHeader extends StatelessWidget {
                           style: TextStyle(
                             color: MessagesPalette.label(context),
                             fontFamily: 'SF Pro Text',
-                            fontSize: 13,
+                            fontSize: 11,
                             height: 1,
                             fontWeight: FontWeight.w500,
                           ),
@@ -529,7 +724,7 @@ class _ConversationHeader extends StatelessWidget {
           ),
           Positioned(
             right: 8,
-            top: 7,
+            top: 4,
             child: _HeaderButton(
               key: const ValueKey('conversation-call-button'),
               onPressed: () => HapticFeedback.selectionClick(),

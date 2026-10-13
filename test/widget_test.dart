@@ -7,13 +7,18 @@ void main() {
   testWidgets('shows the list and opens a conversation', (tester) async {
     await tester.pumpWidget(const MessagesUiApp());
     expect(find.text('Messages'), findsOneWidget);
+    expect(find.text('Edit'), findsOneWidget);
     expect(find.text('Mia Parker'), findsOneWidget);
+    expect(
+      tester.getSize(find.byKey(const ValueKey('pinned-avatar-camille'))),
+      const Size(95, 95),
+    );
 
     await tester.tap(find.text('Mia Parker'));
     await tester.pumpAndSettle();
     expect(find.byType(CupertinoTextField), findsOneWidget);
     expect(find.text('Let me know when you leave'), findsOneWidget);
-    expect(find.byIcon(CupertinoIcons.arrow_up_circle_fill), findsOneWidget);
+    expect(find.byIcon(CupertinoIcons.mic), findsOneWidget);
     expect(find.byIcon(CupertinoIcons.phone), findsOneWidget);
     expect(find.byIcon(CupertinoIcons.video_camera), findsNothing);
 
@@ -34,7 +39,7 @@ void main() {
     final nameCenter = tester.getCenter(
       find.byKey(const ValueKey('conversation-contact-name')),
     );
-    expect(header.height, 84);
+    expect(header.height, 72);
     expect(avatarCenter.dx, moreOrLessEquals(headerCenter.dx));
     expect(nameCenter.dx, moreOrLessEquals(headerCenter.dx));
     expect(backCenter.dy, moreOrLessEquals(avatarCenter.dy));
@@ -47,7 +52,22 @@ void main() {
     expect(messageText.textAlign, TextAlign.center);
 
     final contactName = tester.widget<Text>(find.text('Mia Parker'));
-    expect(contactName.style?.fontSize, 13);
+    expect(contactName.style?.fontSize, 11);
+
+    await tester.enterText(find.byType(CupertinoTextField), 'Hello');
+    await tester.pump();
+    expect(find.byIcon(CupertinoIcons.arrow_up_circle_fill), findsOneWidget);
+  });
+
+  testWidgets('shows the SVG reference media and silenced state',
+      (tester) async {
+    await tester.pumpWidget(const MessagesUiApp());
+    await tester.tap(find.text('Tobias'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('5 photos'), findsOneWidget);
+    expect(find.text('Tobias has notifications silenced'), findsOneWidget);
+    expect(find.text('Notify Anyway'), findsOneWidget);
   });
 
   testWidgets('reveals mute and delete actions by swiping left',
