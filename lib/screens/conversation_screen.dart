@@ -659,6 +659,7 @@ class _ConversationHeader extends StatelessWidget {
       child: Align(
         alignment: Alignment.bottomCenter,
         child: SizedBox(
+          width: double.infinity,
           height: 72,
           child: Stack(
             alignment: Alignment.topCenter,
