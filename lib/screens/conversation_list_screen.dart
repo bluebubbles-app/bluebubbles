@@ -327,7 +327,7 @@ class _PinnedGrid extends StatelessWidget {
                                 width: 24,
                                 height: 24,
                                 decoration: BoxDecoration(
-                                  color: CupertinoColors.systemGray,
+                                  color: CupertinoColors.systemGrey,
                                   shape: BoxShape.circle,
                                   border: Border.all(
                                     color: MessagesPalette.background(context),
