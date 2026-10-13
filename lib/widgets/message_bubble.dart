@@ -46,7 +46,6 @@ class MessageBubble extends StatelessWidget {
                     minHeight: 36,
                     maxWidth: MediaQuery.sizeOf(context).width * .77,
                   ),
-                  alignment: Alignment.center,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 13,
                     vertical: 8,
