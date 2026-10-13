@@ -28,11 +28,13 @@ class ConversationScreen extends StatefulWidget {
 }
 
 class _ConversationScreenState extends State<ConversationScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   static const _timestampRevealDistance = 58.0;
   final _scrollController = ScrollController();
   GlobalKey<AnimatedListState> _messageListKey = GlobalKey<AnimatedListState>();
   late final AnimationController _timestampRevealController =
+      AnimationController.unbounded(vsync: this);
+  late final AnimationController _scrollElasticController =
       AnimationController.unbounded(vsync: this);
   final Set<String> _selectedMessageIds = <String>{};
   bool _selectionMode = false;
@@ -86,6 +88,33 @@ class _ConversationScreenState extends State<ConversationScreen>
         releaseVelocity,
       ),
     );
+  }
+
+  bool _handleScrollNotification(ScrollNotification notification) {
+    if (notification is ScrollStartNotification) {
+      _scrollElasticController.stop();
+    } else if (notification is ScrollUpdateNotification) {
+      final delta = notification.scrollDelta ?? 0;
+      _scrollElasticController.value =
+          (-delta * .16).clamp(-4.0, 4.0).toDouble();
+    } else if (notification is OverscrollNotification) {
+      _scrollElasticController.value =
+          (-notification.overscroll * .2).clamp(-5.0, 5.0).toDouble();
+    } else if (notification is ScrollEndNotification) {
+      _scrollElasticController.animateWith(
+        SpringSimulation(
+          SpringDescription.withDampingRatio(
+            mass: .45,
+            stiffness: 240,
+            ratio: .78,
+          ),
+          _scrollElasticController.value,
+          0,
+          0,
+        ),
+      );
+    }
+    return false;
   }
 
   Future<void> _showMessageActions(ChatMessage message) async {
@@ -273,6 +302,7 @@ class _ConversationScreenState extends State<ConversationScreen>
   @override
   void dispose() {
     _timestampRevealController.dispose();
+    _scrollElasticController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -309,110 +339,124 @@ class _ConversationScreenState extends State<ConversationScreen>
                       _selectionMode ? null : _handleHorizontalDragUpdate,
                   onHorizontalDragEnd:
                       _selectionMode ? null : _handleHorizontalDragEnd,
-                  child: AnimatedList(
-                    key: _messageListKey,
-                    controller: _scrollController,
-                    physics: const BouncingScrollPhysics(
-                      parent: AlwaysScrollableScrollPhysics(),
-                    ),
-                    padding: const EdgeInsets.fromLTRB(10, 12, 14, 10),
-                    initialItemCount: widget.conversation.messages.length + 1,
-                    itemBuilder: (context, index, animation) {
-                      if (index == 0) {
-                        return Column(
-                          children: [
-                            _DateSeparator(
-                              value: widget.conversation.messages.isEmpty
-                                  ? DateTime.now()
-                                  : widget.conversation.messages.first.sentAt,
-                            ),
-                            if (widget.conversation.id == 'tobias')
-                              const _PhotoStackMessage(),
-                          ],
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: _handleScrollNotification,
+                    child: AnimatedList(
+                      key: _messageListKey,
+                      controller: _scrollController,
+                      physics: const BouncingScrollPhysics(
+                        parent: AlwaysScrollableScrollPhysics(),
+                      ),
+                      padding: const EdgeInsets.fromLTRB(10, 12, 14, 10),
+                      initialItemCount:
+                          widget.conversation.messages.length + 1,
+                      itemBuilder: (context, index, animation) {
+                        if (index == 0) {
+                          return Column(
+                            children: [
+                              _DateSeparator(
+                                value: widget.conversation.messages.isEmpty
+                                    ? DateTime.now()
+                                    : widget
+                                        .conversation.messages.first.sentAt,
+                              ),
+                              if (widget.conversation.id == 'tobias')
+                                const _PhotoStackMessage(),
+                            ],
+                          );
+                        }
+
+                        final messageIndex = index - 1;
+                        final message =
+                            widget.conversation.messages[messageIndex];
+                        final next = messageIndex + 1 <
+                                widget.conversation.messages.length
+                            ? widget.conversation.messages[messageIndex + 1]
+                            : null;
+                        final previous = messageIndex > 0
+                            ? widget.conversation.messages[messageIndex - 1]
+                            : null;
+                        final showTail = next == null ||
+                            next.isFromMe != message.isFromMe ||
+                            next.sentAt.difference(message.sentAt).inMinutes >
+                                3;
+                        final compactTop = previous != null &&
+                            previous.isFromMe == message.isFromMe &&
+                            message.sentAt
+                                    .difference(previous.sentAt)
+                                    .inMinutes <=
+                                3;
+
+                        final messageBubble = _TimestampRevealMessage(
+                          revealAnimation: _timestampRevealController,
+                          sentAt: message.sentAt,
+                          child: MessageBubble(
+                            key: ValueKey(message.id),
+                            message: message,
+                            showTail: showTail,
+                            compactTop: compactTop,
+                            showStatus: !_selectionMode &&
+                                messageIndex ==
+                                    widget.conversation.messages.length - 1,
+                          ),
                         );
-                      }
+                        final interactiveMessage = _MessageHoldRegion(
+                          enabled: !_selectionMode,
+                          onHold: () => _showMessageActions(message),
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: _selectionMode
+                                ? () => _toggleSelection(message)
+                                : null,
+                            child: messageBubble,
+                          ),
+                        );
 
-                      final messageIndex = index - 1;
-                      final message = widget.conversation.messages[messageIndex];
-                      final next = messageIndex + 1 <
-                              widget.conversation.messages.length
-                          ? widget.conversation.messages[messageIndex + 1]
-                          : null;
-                      final previous = messageIndex > 0
-                          ? widget.conversation.messages[messageIndex - 1]
-                          : null;
-                      final showTail = next == null ||
-                          next.isFromMe != message.isFromMe ||
-                          next.sentAt.difference(message.sentAt).inMinutes > 3;
-                      final compactTop = previous != null &&
-                          previous.isFromMe == message.isFromMe &&
-                          message.sentAt.difference(previous.sentAt).inMinutes <=
-                              3;
-
-                      final messageBubble = _TimestampRevealMessage(
-                        revealAnimation: _timestampRevealController,
-                        sentAt: message.sentAt,
-                        child: MessageBubble(
-                          key: ValueKey(message.id),
-                          message: message,
-                          showTail: showTail,
-                          compactTop: compactTop,
-                          showStatus: !_selectionMode &&
-                              messageIndex ==
-                                  widget.conversation.messages.length - 1,
-                        ),
-                      );
-                      final interactiveMessage = _MessageHoldRegion(
-                        enabled: !_selectionMode,
-                        onHold: () => _showMessageActions(message),
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: _selectionMode
-                              ? () => _toggleSelection(message)
-                              : null,
-                          child: messageBubble,
-                        ),
-                      );
-
-                      final curvedAnimation = CurvedAnimation(
-                        parent: animation,
-                        curve: Curves.easeOutCubic,
-                      );
-                      return FadeTransition(
-                        opacity: curvedAnimation,
-                        child: SlideTransition(
-                          position: Tween<Offset>(
-                            begin: const Offset(.10, .10),
-                            end: Offset.zero,
-                          ).animate(curvedAnimation),
-                          child: _selectionMode
-                              ? Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.center,
-                                  children: [
-                                    Transform.translate(
-                                      // MessageBubble paints below its own top
-                                      // spacing. Compensate for half that
-                                      // spacing so the control is centered on
-                                      // the visible bubble, not its full box.
-                                      offset: Offset(
-                                        0,
-                                        compactTop ? 1 : 4,
+                        final curvedAnimation = CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeOutCubic,
+                        );
+                        final insertedMessage = FadeTransition(
+                          opacity: curvedAnimation,
+                          child: SlideTransition(
+                            position: Tween<Offset>(
+                              begin: const Offset(.10, .10),
+                              end: Offset.zero,
+                            ).animate(curvedAnimation),
+                            child: _selectionMode
+                                ? Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    children: [
+                                      Transform.translate(
+                                        // MessageBubble paints below its own
+                                        // top spacing. Compensate for half
+                                        // that spacing so the control is
+                                        // centered on the visible bubble.
+                                        offset: Offset(
+                                          0,
+                                          compactTop ? 1 : 4,
+                                        ),
+                                        child: _SelectionCircle(
+                                          selected: _selectedMessageIds
+                                              .contains(message.id),
+                                          onPressed: () =>
+                                              _toggleSelection(message),
+                                        ),
                                       ),
-                                      child: _SelectionCircle(
-                                        selected: _selectedMessageIds
-                                            .contains(message.id),
-                                        onPressed: () =>
-                                            _toggleSelection(message),
-                                      ),
-                                    ),
-                                    Expanded(child: interactiveMessage),
-                                  ],
-                                )
-                              : interactiveMessage,
-                        ),
-                      );
-                    },
+                                      Expanded(child: interactiveMessage),
+                                    ],
+                                  )
+                                : interactiveMessage,
+                          ),
+                        );
+                        return _ElasticMessageMotion(
+                          animation: _scrollElasticController,
+                          intensity: .78 + (messageIndex % 3) * .1,
+                          child: insertedMessage,
+                        );
+                      },
+                    ),
                   ),
                 ),
               ),
@@ -443,6 +487,36 @@ class _ConversationScreenState extends State<ConversationScreen>
   }
 }
 
+class _ElasticMessageMotion extends StatelessWidget {
+  const _ElasticMessageMotion({
+    required this.animation,
+    required this.intensity,
+    required this.child,
+  });
+
+  final Animation<double> animation;
+  final double intensity;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
+    return AnimatedBuilder(
+      animation: animation,
+      child: child,
+      builder: (context, child) {
+        final rawOffset = animation.value * intensity;
+        final snappedOffset =
+            (rawOffset * devicePixelRatio).roundToDouble() / devicePixelRatio;
+        return Transform.translate(
+          offset: Offset(0, snappedOffset),
+          child: child,
+        );
+      },
+    );
+  }
+}
+
 class _PhotoStackMessage extends StatelessWidget {
   const _PhotoStackMessage();
 
@@ -453,13 +527,17 @@ class _PhotoStackMessage extends StatelessWidget {
     'assets/photos/hike-4.jpg',
     'assets/photos/hike-5.jpg',
   ];
+  static const _photoQuarterTurns = <int>[1, 0, 1, 1, 1];
 
   void _openViewer(BuildContext context) {
     HapticFeedback.selectionClick();
     Navigator.of(context).push(
       CupertinoPageRoute<void>(
         fullscreenDialog: true,
-        builder: (_) => const _FullScreenPhotoViewer(photos: _photos),
+        builder: (_) => const _FullScreenPhotoViewer(
+          photos: _photos,
+          quarterTurns: _photoQuarterTurns,
+        ),
       ),
     );
   }
@@ -523,6 +601,7 @@ class _PhotoStackMessage extends StatelessWidget {
                       alignment: Alignment.topLeft,
                       child: _PhotoCard(
                         asset: _photos[index],
+                        quarterTurns: _photoQuarterTurns[index],
                         width: 214,
                         height: 282.0 - index * 7.0,
                       ),
@@ -566,9 +645,13 @@ class _PhotoStackMessage extends StatelessWidget {
 }
 
 class _FullScreenPhotoViewer extends StatefulWidget {
-  const _FullScreenPhotoViewer({required this.photos});
+  const _FullScreenPhotoViewer({
+    required this.photos,
+    required this.quarterTurns,
+  });
 
   final List<String> photos;
+  final List<int> quarterTurns;
 
   @override
   State<_FullScreenPhotoViewer> createState() =>
@@ -607,12 +690,14 @@ class _FullScreenPhotoViewerState extends State<_FullScreenPhotoViewer> {
                 minScale: 1,
                 maxScale: 4,
                 clipBehavior: Clip.none,
-                child: Center(
-                  child: Image.asset(
-                    widget.photos[index],
-                    key: ValueKey('full-screen-photo-$index'),
-                    width: double.infinity,
-                    fit: BoxFit.contain,
+                child: SizedBox.expand(
+                  child: RotatedBox(
+                    quarterTurns: widget.quarterTurns[index],
+                    child: Image.asset(
+                      widget.photos[index],
+                      key: ValueKey('full-screen-photo-$index'),
+                      fit: BoxFit.contain,
+                    ),
                   ),
                 ),
               ),
@@ -665,11 +750,13 @@ class _FullScreenPhotoViewerState extends State<_FullScreenPhotoViewer> {
 class _PhotoCard extends StatelessWidget {
   const _PhotoCard({
     required this.asset,
+    required this.quarterTurns,
     required this.width,
     required this.height,
   });
 
   final String asset;
+  final int quarterTurns;
   final double width;
   final double height;
 
@@ -677,11 +764,18 @@ class _PhotoCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(18),
-      child: Image.asset(
-        asset,
+      child: SizedBox(
         width: width,
         height: height,
-        fit: BoxFit.cover,
+        child: RotatedBox(
+          quarterTurns: quarterTurns,
+          child: Image.asset(
+            asset,
+            width: quarterTurns.isOdd ? height : width,
+            height: quarterTurns.isOdd ? width : height,
+            fit: BoxFit.cover,
+          ),
+        ),
       ),
     );
   }
@@ -752,7 +846,7 @@ class _ConversationHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       key: const ValueKey('conversation-header'),
-      height: 72 + topCompensation,
+      height: 80 + topCompensation,
       decoration: BoxDecoration(
         color: MessagesPalette.isDark(context)
             ? const Color(0xFF1C1C1E)
@@ -775,24 +869,24 @@ class _ConversationHeader extends StatelessWidget {
         alignment: Alignment.bottomCenter,
         child: SizedBox(
           width: double.infinity,
-          height: 72,
+          height: 80,
           child: Stack(
             alignment: Alignment.topCenter,
             children: [
               Positioned(
-                left: 8,
-                top: 3,
+                left: 7,
+                top: 6,
                 child: _HeaderButton(
                   key: const ValueKey('conversation-back-button'),
                   onPressed: () => Navigator.of(context).maybePop(),
                   icon: CupertinoIcons.back,
-                  iconSize: 28,
+                  iconSize: 30,
                 ),
               ),
               Positioned(
                 left: 0,
                 right: 0,
-                top: 1,
+                top: 4,
                 child: Center(
                   child: CupertinoButton(
                     minSize: 0,
@@ -800,11 +894,11 @@ class _ConversationHeader extends StatelessWidget {
                     onPressed: () => HapticFeedback.selectionClick(),
                     child: SizedBox(
                       key: const ValueKey('conversation-contact-avatar'),
-                      width: 48,
-                      height: 48,
+                      width: 52,
+                      height: 52,
                       child: ContactAvatar(
                         conversation: conversation,
-                        size: 48,
+                        size: 52,
                       ),
                     ),
                   ),
@@ -813,7 +907,7 @@ class _ConversationHeader extends StatelessWidget {
               Positioned(
                 left: 0,
                 right: 0,
-                top: 53,
+                top: 63,
                 child: Center(
                   child: CupertinoButton(
                     minSize: 0,
@@ -834,17 +928,17 @@ class _ConversationHeader extends StatelessWidget {
                             style: TextStyle(
                               color: MessagesPalette.label(context),
                               fontFamily: 'SF Pro Text',
-                              fontSize: 11,
+                              fontSize: 12,
                               height: 1,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
                         ),
                         Positioned(
-                          right: -13,
+                          right: -14,
                           child: Icon(
                             CupertinoIcons.chevron_right,
-                            size: 10,
+                            size: 11,
                             color: MessagesPalette.secondaryLabel(context),
                           ),
                         ),
@@ -854,13 +948,13 @@ class _ConversationHeader extends StatelessWidget {
                 ),
               ),
               Positioned(
-                right: 8,
-                top: 3,
+                right: 7,
+                top: 6,
                 child: _HeaderButton(
                   key: const ValueKey('conversation-call-button'),
                   onPressed: () => HapticFeedback.selectionClick(),
                   icon: CupertinoIcons.phone,
-                  iconSize: 23,
+                  iconSize: 25,
                 ),
               ),
             ],
@@ -886,10 +980,10 @@ class _HeaderButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 44,
-      height: 44,
+      width: 48,
+      height: 48,
       child: CupertinoButton(
-        minSize: 44,
+        minSize: 48,
         padding: EdgeInsets.zero,
         onPressed: onPressed,
         child: Icon(

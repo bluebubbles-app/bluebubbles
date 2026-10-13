@@ -114,16 +114,19 @@ class _MessageBubbleState extends State<MessageBubble> {
                     horizontal: 12,
                     vertical: 7,
                   ),
-                  child: Text(
-                    message.text,
-                    textAlign: TextAlign.center,
-                    style: MessagesText.body(context).copyWith(
-                      fontSize: 16,
-                      height: 1.18,
-                      letterSpacing: -.15,
-                      color: isFromMe
-                          ? CupertinoColors.white
-                          : MessagesPalette.label(context),
+                  child: Transform.translate(
+                    offset: const Offset(0, .75),
+                    child: Text(
+                      message.text,
+                      textAlign: TextAlign.center,
+                      style: MessagesText.body(context).copyWith(
+                        fontSize: 16,
+                        height: 1.18,
+                        letterSpacing: -.15,
+                        color: isFromMe
+                            ? CupertinoColors.white
+                            : MessagesPalette.label(context),
+                      ),
                     ),
                   ),
                 ),

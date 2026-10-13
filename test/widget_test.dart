@@ -40,7 +40,7 @@ void main() {
     final nameCenter = tester.getCenter(
       find.byKey(const ValueKey('conversation-contact-name')),
     );
-    expect(header.height, inInclusiveRange(72, 116));
+    expect(header.height, inInclusiveRange(80, 124));
     expect(avatarCenter.dx, moreOrLessEquals(headerCenter.dx));
     expect(nameCenter.dx, moreOrLessEquals(headerCenter.dx));
     expect(backCenter.dy, moreOrLessEquals(avatarCenter.dy));
@@ -53,7 +53,7 @@ void main() {
     expect(messageText.textAlign, TextAlign.center);
 
     final contactName = tester.widget<Text>(find.text('Mia Parker'));
-    expect(contactName.style?.fontSize, 11);
+    expect(contactName.style?.fontSize, 12);
 
     await tester.enterText(find.byType(CupertinoTextField), 'Hello');
     await tester.pump();
@@ -97,6 +97,14 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('1 of 5'), findsOneWidget);
+    final firstPhoto = find.byKey(const ValueKey('full-screen-photo-0'));
+    final photoRotation = tester.widget<RotatedBox>(
+      find.ancestor(
+        of: firstPhoto,
+        matching: find.byType(RotatedBox),
+      ).first,
+    );
+    expect(photoRotation.quarterTurns, 1);
   });
 
   testWidgets('shows a conversation preview and its three actions',
