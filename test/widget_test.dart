@@ -17,13 +17,29 @@ void main() {
     expect(find.byIcon(CupertinoIcons.phone), findsOneWidget);
     expect(find.byIcon(CupertinoIcons.video_camera), findsNothing);
 
+    final header = tester.getSize(
+      find.byKey(const ValueKey('conversation-header')),
+    );
+    final avatarCenter = tester.getCenter(
+      find.byKey(const ValueKey('conversation-contact-avatar')),
+    );
+    final backCenter = tester.getCenter(
+      find.byKey(const ValueKey('conversation-back-button')),
+    );
+    final callCenter = tester.getCenter(
+      find.byKey(const ValueKey('conversation-call-button')),
+    );
+    expect(header.height, 84);
+    expect(backCenter.dy, moreOrLessEquals(avatarCenter.dy));
+    expect(callCenter.dy, moreOrLessEquals(avatarCenter.dy));
+
     final messageText = tester.widget<Text>(
       find.text('Let me know when you leave'),
     );
     expect(messageText.textAlign, TextAlign.center);
 
     final contactName = tester.widget<Text>(find.text('Mia Parker'));
-    expect(contactName.style?.fontSize, 14);
+    expect(contactName.style?.fontSize, 13);
   });
 
   testWidgets('reveals mute and delete actions by swiping left',

@@ -430,14 +430,16 @@ class _ConversationHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 104,
+      key: const ValueKey('conversation-header'),
+      height: 84,
       decoration: BoxDecoration(
-        color: MessagesPalette.elevatedBackground(context)
-            .withValues(alpha: .96),
+        color: MessagesPalette.isDark(context)
+            ? const Color(0xFF1C1C1E)
+            : const Color(0xFFF9F9FB),
         border: Border(
           bottom: BorderSide(
-            color: MessagesPalette.hairline(context).withValues(alpha: .5),
-            width: .4,
+            color: MessagesPalette.hairline(context).withValues(alpha: .55),
+            width: .5,
           ),
         ),
       ),
@@ -446,58 +448,78 @@ class _ConversationHeader extends StatelessWidget {
         children: [
           Positioned(
             left: 8,
-            top: 16,
+            top: 7,
             child: _HeaderButton(
+              key: const ValueKey('conversation-back-button'),
               onPressed: () => Navigator.of(context).maybePop(),
               icon: CupertinoIcons.back,
-              iconSize: 30,
+              iconSize: 28,
             ),
           ),
-          CupertinoButton(
-            minSize: 96,
-            padding: const EdgeInsets.only(top: 8),
-            onPressed: () => HapticFeedback.selectionClick(),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ContactAvatar(conversation: conversation, size: 48),
-                const SizedBox(height: 4),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 150),
-                      child: Text(
-                        conversation.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: MessagesPalette.label(context),
-                          fontFamily: 'SF Pro Text',
-                          fontSize: 14,
-                          height: 1,
-                          fontWeight: FontWeight.w500,
+          Positioned(
+            top: 7,
+            child: CupertinoButton(
+              minSize: 0,
+              padding: EdgeInsets.zero,
+              onPressed: () => HapticFeedback.selectionClick(),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    key: const ValueKey('conversation-contact-avatar'),
+                    width: 44,
+                    height: 44,
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: MessagesPalette.isDark(context)
+                          ? const Color(0xFF48484A)
+                          : const Color(0xFFE5E5EA),
+                    ),
+                    child: ContactAvatar(
+                      conversation: conversation,
+                      size: 40,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 150),
+                        child: Text(
+                          conversation.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: MessagesPalette.label(context),
+                            fontFamily: 'SF Pro Text',
+                            fontSize: 13,
+                            height: 1,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 2),
-                    Icon(
-                      CupertinoIcons.chevron_right,
-                      size: 11,
-                      color: MessagesPalette.secondaryLabel(context),
-                    ),
-                  ],
-                ),
-              ],
+                      const SizedBox(width: 2),
+                      Icon(
+                        CupertinoIcons.chevron_right,
+                        size: 10,
+                        color: MessagesPalette.secondaryLabel(context),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
           Positioned(
             right: 8,
-            top: 16,
+            top: 7,
             child: _HeaderButton(
+              key: const ValueKey('conversation-call-button'),
               onPressed: () => HapticFeedback.selectionClick(),
               icon: CupertinoIcons.phone,
-              iconSize: 24,
+              iconSize: 23,
             ),
           ),
         ],
@@ -508,6 +530,7 @@ class _ConversationHeader extends StatelessWidget {
 
 class _HeaderButton extends StatelessWidget {
   const _HeaderButton({
+    super.key,
     required this.onPressed,
     required this.icon,
     required this.iconSize,
@@ -519,14 +542,18 @@ class _HeaderButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CupertinoButton(
-      minSize: 48,
-      padding: EdgeInsets.zero,
-      onPressed: onPressed,
-      child: Icon(
-        icon,
-        size: iconSize,
-        color: MessagesPalette.blue,
+    return SizedBox(
+      width: 44,
+      height: 44,
+      child: CupertinoButton(
+        minSize: 44,
+        padding: EdgeInsets.zero,
+        onPressed: onPressed,
+        child: Icon(
+          icon,
+          size: iconSize,
+          color: MessagesPalette.blue,
+        ),
       ),
     );
   }
