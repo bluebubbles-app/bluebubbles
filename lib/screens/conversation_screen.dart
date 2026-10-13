@@ -63,10 +63,10 @@ class _ConversationScreenState extends State<ConversationScreen> {
         backgroundColor: MessagesPalette.background(context),
         navigationBar: CupertinoNavigationBar(
           backgroundColor:
-              MessagesPalette.elevatedBackground(context).withOpacity(.88),
+              MessagesPalette.elevatedBackground(context).withValues(alpha: .88),
           border: Border(
             bottom: BorderSide(
-              color: MessagesPalette.hairline(context).withOpacity(.5),
+              color: MessagesPalette.hairline(context).withValues(alpha: .5),
               width: .4,
             ),
           ),

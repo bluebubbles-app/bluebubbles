@@ -226,7 +226,7 @@ class ConversationRow extends StatelessWidget {
               decoration: BoxDecoration(
                 border: Border(
                   top: BorderSide(
-                    color: MessagesPalette.hairline(context).withOpacity(.55),
+                    color: MessagesPalette.hairline(context).withValues(alpha: .55),
                     width: .45,
                   ),
                 ),

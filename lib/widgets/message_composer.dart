@@ -56,10 +56,10 @@ class _MessageComposerState extends State<MessageComposer> {
       child: Container(
         padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
         decoration: BoxDecoration(
-          color: MessagesPalette.background(context).withOpacity(.96),
+          color: MessagesPalette.background(context).withValues(alpha: .96),
           border: Border(
             top: BorderSide(
-              color: MessagesPalette.hairline(context).withOpacity(.55),
+              color: MessagesPalette.hairline(context).withValues(alpha: .55),
               width: .4,
             ),
           ),
