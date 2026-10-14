@@ -326,7 +326,10 @@ class _SliderSetting extends StatelessWidget {
             children: [
               Icon(leading, color: MessagesPalette.blue, size: 21),
               const SizedBox(width: 12),
-              Text(title),
+              Text(
+                title,
+                style: TextStyle(color: MessagesPalette.label(context)),
+              ),
               const Spacer(),
               Text(
                 '${((value - min) / (max - min) * 100).round()}%',
@@ -366,8 +369,14 @@ class _ChoiceRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return CupertinoListTile(
       leading: Icon(icon, color: MessagesPalette.blue, size: 21),
-      title: Text(title),
-      additionalInfo: Text(value),
+      title: Text(
+        title,
+        style: TextStyle(color: MessagesPalette.label(context)),
+      ),
+      additionalInfo: Text(
+        value,
+        style: TextStyle(color: MessagesPalette.secondaryLabel(context)),
+      ),
       trailing: const CupertinoListTileChevron(),
       onTap: onPressed,
     );

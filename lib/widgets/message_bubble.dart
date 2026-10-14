@@ -124,6 +124,7 @@ class _MessageBubbleState extends State<MessageBubble> {
     final message = widget.message;
     final isFromMe = message.isFromMe;
     final emojiScale = emojiOnlyTextScale(message.text);
+    final renderedTextScale = emojiScale == 2 ? 4.0 : emojiScale;
     final color = isFromMe
         ? MessagesPalette.sentBubble(context)
         : MessagesPalette.receivedBubble(context);
@@ -160,28 +161,31 @@ class _MessageBubbleState extends State<MessageBubble> {
                   shadowElevation: widget.shadowElevation,
                 ),
                 child: Container(
+                  alignment: Alignment.center,
                   constraints: BoxConstraints(
-                    minHeight: 36 * emojiScale,
+                    minHeight: 36,
                     // 274 pt on the 375 pt-wide SVG artboard.
                     maxWidth: MediaQuery.sizeOf(context).width * (274 / 375),
                   ),
-                  padding: EdgeInsets.symmetric(
-                    horizontal: 12 * emojiScale,
-                    vertical: 7 * emojiScale,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 7,
                   ),
-                  child: Transform.translate(
-                    offset: const Offset(0, .75),
-                    child: Text(
-                      message.text,
-                      textAlign: TextAlign.center,
-                      style: MessagesText.body(context).copyWith(
-                        fontSize: 16 * emojiScale,
-                        height: emojiScale > 1 ? 1.05 : 1.18,
-                        letterSpacing: -.15,
-                        color: isFromMe
-                            ? CupertinoColors.white
-                            : MessagesPalette.label(context),
-                      ),
+                  child: Text(
+                    message.text,
+                    textAlign: TextAlign.left,
+                    textWidthBasis: TextWidthBasis.longestLine,
+                    textHeightBehavior: const TextHeightBehavior(
+                      applyHeightToFirstAscent: false,
+                      applyHeightToLastDescent: false,
+                    ),
+                    style: MessagesText.body(context).copyWith(
+                      fontSize: 16 * renderedTextScale,
+                      height: renderedTextScale > 1 ? 1 : 1.18,
+                      letterSpacing: renderedTextScale > 1 ? 0 : -.15,
+                      color: isFromMe
+                          ? CupertinoColors.white
+                          : MessagesPalette.label(context),
                     ),
                   ),
                 ),
