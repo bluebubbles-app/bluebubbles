@@ -15,7 +15,8 @@
     <application
         android:label="BlueBubbles"
         android:name="${applicationName}"
-        android:icon="@mipmap/launcher_icon">
+        android:icon="@mipmap/launcher_icon"
+        android:enableOnBackInvokedCallback="true">
         <activity
             android:name="io.github.bluebubblesapp.bluebubbles.MainActivity"
             android:exported="true"

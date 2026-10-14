@@ -8,11 +8,14 @@ import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.database.ContentObserver
+import android.database.Cursor
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.CancellationSignal
 import android.os.Handler
 import android.os.Looper
+import android.os.OperationCanceledException
 import android.os.Process
 import android.provider.BaseColumns
 import android.provider.ContactsContract
@@ -29,6 +32,8 @@ class MainActivity : FlutterActivity() {
         private const val CHANNEL = "bluebubbles/sms"
         private const val ROLE_REQUEST = 4701
         private const val PERMISSION_REQUEST = 4702
+        private const val PROVIDER_PROBE_TIMEOUT_MS = 2_000L
+        private const val PROVIDER_LOAD_TIMEOUT_MS = 6_000L
     }
 
     private lateinit var channel: MethodChannel
@@ -242,37 +247,40 @@ class MainActivity : FlutterActivity() {
                 "READ_CONTACTS" to hasPermission(Manifest.permission.READ_CONTACTS),
                 "Notifications" to notificationsGranted(),
                 "READ_SMS AppOp" to readSmsAppOp(),
-                "SMS rows" to providerCount(Telephony.Sms.CONTENT_URI),
-                "MMS rows" to providerCount(Telephony.Mms.CONTENT_URI),
-                "Combined threads" to providerCount(
+                "SMS provider" to providerProbe(Telephony.Sms.CONTENT_URI),
+                "MMS provider" to providerProbe(Telephony.Mms.CONTENT_URI),
+                "Combined threads provider" to providerProbe(
                     Telephony.Threads.CONTENT_URI.buildUpon()
                         .appendQueryParameter("simple", "true")
                         .build(),
                 ),
             )
-            val loadResult = runCatching { querySmsConversations() }
-            diagnostics["Decoded conversations"] = loadResult
-                .getOrNull()
-                ?.size
-                ?: 0
-            diagnostics["Decode error"] = loadResult.exceptionOrNull()?.let {
-                "${it.javaClass.simpleName}: ${it.message}"
-            } ?: "none"
             runOnUiThread { result.success(diagnostics) }
         }.start()
     }
 
-    private fun providerCount(uri: Uri): String {
+    private fun providerProbe(uri: Uri): String {
+        val startedAt = System.currentTimeMillis()
+        val cancellationSignal = CancellationSignal()
+        val cancelQuery = Runnable { cancellationSignal.cancel() }
+        mainHandler.postDelayed(cancelQuery, PROVIDER_PROBE_TIMEOUT_MS)
         return try {
-            contentResolver.query(
+            val state = contentResolver.query(
                 uri,
                 arrayOf(BaseColumns._ID),
                 null,
                 null,
                 null,
-            )?.use { it.count.toString() } ?: "null cursor"
+                cancellationSignal,
+            )?.use { if (it.moveToFirst()) "has rows" else "empty" }
+                ?: "null cursor"
+            "$state (${System.currentTimeMillis() - startedAt} ms)"
+        } catch (_: OperationCanceledException) {
+            "timed out (${System.currentTimeMillis() - startedAt} ms)"
         } catch (error: Exception) {
             "${error.javaClass.simpleName}: ${error.message}"
+        } finally {
+            mainHandler.removeCallbacks(cancelQuery)
         }
     }
 
@@ -294,6 +302,31 @@ class MainActivity : FlutterActivity() {
                 else -> "unknown"
             }
         }.getOrElse { "${it.javaClass.simpleName}: ${it.message}" }
+    }
+
+    private fun <T> providerQuery(
+        uri: Uri,
+        projection: Array<String>,
+        selection: String? = null,
+        selectionArgs: Array<String>? = null,
+        sortOrder: String? = null,
+        block: (Cursor) -> T,
+    ): T? {
+        val cancellationSignal = CancellationSignal()
+        val cancelQuery = Runnable { cancellationSignal.cancel() }
+        mainHandler.postDelayed(cancelQuery, PROVIDER_LOAD_TIMEOUT_MS)
+        return try {
+            contentResolver.query(
+                uri,
+                projection,
+                selection,
+                selectionArgs,
+                sortOrder,
+                cancellationSignal,
+            )?.use { cursor -> block(cursor) }
+        } finally {
+            mainHandler.removeCallbacks(cancelQuery)
+        }
     }
 
     private fun sendSms(call: MethodCall, result: MethodChannel.Result) {
@@ -430,19 +463,15 @@ class MainActivity : FlutterActivity() {
             Telephony.Threads.SNIPPET,
             Telephony.Threads.READ,
         )
-        val conversations = mutableListOf<Map<String, Any?>>()
-        val canonicalCache = mutableMapOf<String, String?>()
-        val contactCache = mutableMapOf<String, ContactDetails>()
+        val summaries = mutableListOf<ThreadSummary>()
         val threadsUri = Telephony.Threads.CONTENT_URI.buildUpon()
             .appendQueryParameter("simple", "true")
             .build()
-        contentResolver.query(
+        providerQuery(
             threadsUri,
             projection,
-            null,
-            null,
-            "${Telephony.Threads.DATE} DESC",
-        )?.use { cursor ->
+            sortOrder = "${Telephony.Threads.DATE} DESC",
+        ) { cursor ->
             val idColumn = cursor.getColumnIndexOrThrow(BaseColumns._ID)
             val dateColumn = cursor.getColumnIndexOrThrow(Telephony.Threads.DATE)
             val recipientsColumn = cursor.getColumnIndexOrThrow(
@@ -450,45 +479,62 @@ class MainActivity : FlutterActivity() {
             )
             val snippetColumn = cursor.getColumnIndexOrThrow(Telephony.Threads.SNIPPET)
             val readColumn = cursor.getColumnIndexOrThrow(Telephony.Threads.READ)
-            while (cursor.moveToNext() && conversations.size < 500) {
-                val recipientIds = cursor.getString(recipientsColumn)
-                    .orEmpty()
-                    .trim()
-                    .split(Regex("\\s+"))
-                    .filter(String::isNotEmpty)
-                val addresses = recipientIds.mapNotNull { recipientId ->
-                    canonicalCache.getOrPut(recipientId) {
-                        canonicalAddress(recipientId)
-                    }
-                }.ifEmpty {
-                    listOfNotNull(latestSmsAddress(cursor.getLong(idColumn).toString()))
-                }
-                val contacts = addresses.map { address ->
-                    contactCache.getOrPut(address) { contactDetails(address) }
-                }
-                val title = contacts.mapIndexed { index, contact ->
-                    contact.name ?: addresses[index]
-                }.joinToString(", ")
-                val directAddress = addresses.singleOrNull().orEmpty()
-                val avatarBytes = contacts.singleOrNull()?.avatarBytes
+            while (cursor.moveToNext() && summaries.size < 200) {
                 val threadId = cursor.getLong(idColumn).toString()
-                conversations.add(
-                    hashMapOf(
-                        "id" to threadId,
-                        "address" to directAddress,
-                        "title" to title.ifEmpty { "Conversation $threadId" },
-                        "preview" to cursor.getString(snippetColumn).orEmpty(),
-                        "updatedAt" to normalizedTimestamp(
-                            cursor.getLong(dateColumn),
-                        ),
-                        "unreadCount" to if (cursor.getInt(readColumn) == 0) 1 else 0,
-                        "avatarBytes" to avatarBytes,
-                        "messages" to emptyList<HashMap<String, Any?>>(),
+                summaries.add(
+                    ThreadSummary(
+                        id = threadId,
+                        recipientIds = cursor.getString(recipientsColumn)
+                            .orEmpty()
+                            .trim()
+                            .split(Regex("\\s+"))
+                            .filter(String::isNotEmpty),
+                        preview = cursor.getString(snippetColumn).orEmpty(),
+                        updatedAt = normalizedTimestamp(cursor.getLong(dateColumn)),
+                        unreadCount = if (cursor.getInt(readColumn) == 0) 1 else 0,
                     ),
                 )
             }
         }
-        return conversations
+        val canonicalAddresses = canonicalAddresses(
+            summaries.flatMap { it.recipientIds }.toSet(),
+        )
+        val contactCache = mutableMapOf<String, ContactDetails>()
+        return summaries.mapIndexed { index, summary ->
+            val addresses = summary.recipientIds
+                .mapNotNull(canonicalAddresses::get)
+                .ifEmpty {
+                    if (index < 20) {
+                        listOfNotNull(latestSmsAddress(summary.id))
+                    } else {
+                        emptyList()
+                    }
+                }
+            val contacts = if (index < 20) {
+                addresses.map { address ->
+                    contactCache.getOrPut(address) { contactDetails(address) }
+                }
+            } else {
+                emptyList()
+            }
+            val title = if (contacts.size == addresses.size) {
+                contacts.mapIndexed { contactIndex, contact ->
+                    contact.name ?: addresses[contactIndex]
+                }.joinToString(", ")
+            } else {
+                addresses.joinToString(", ")
+            }
+            hashMapOf<String, Any?>(
+                "id" to summary.id,
+                "address" to addresses.singleOrNull().orEmpty(),
+                "title" to title.ifEmpty { "Conversation ${summary.id}" },
+                "preview" to summary.preview,
+                "updatedAt" to summary.updatedAt,
+                "unreadCount" to summary.unreadCount,
+                "avatarBytes" to contacts.singleOrNull()?.avatarBytes,
+                "messages" to emptyList<HashMap<String, Any?>>(),
+            )
+        }
     }
 
     private fun querySmsOnlyConversations(): List<Map<String, Any?>> {
@@ -500,15 +546,12 @@ class MainActivity : FlutterActivity() {
             Telephony.Sms.TYPE,
             Telephony.Sms.READ,
         )
-        val conversations = linkedMapOf<String, SmsConversationBuilder>()
-        val contactCache = mutableMapOf<String, ContactDetails>()
-        contentResolver.query(
+        val summaries = linkedMapOf<String, SmsConversationSummary>()
+        providerQuery(
             Telephony.Sms.CONTENT_URI,
             projection,
-            null,
-            null,
-            "${Telephony.Sms.DATE} DESC",
-        )?.use { cursor ->
+            sortOrder = "${Telephony.Sms.DATE} DESC",
+        ) { cursor ->
             val threadColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.THREAD_ID)
             val addressColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
             val bodyColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.BODY)
@@ -527,33 +570,36 @@ class MainActivity : FlutterActivity() {
                     type == Telephony.Sms.MESSAGE_TYPE_OUTBOX ||
                     type == Telephony.Sms.MESSAGE_TYPE_FAILED ||
                     type == Telephony.Sms.MESSAGE_TYPE_QUEUED
-                val builder = conversations.getOrPut(threadId) {
-                    val contact = contactCache.getOrPut(address) {
-                        contactDetails(address)
-                    }
-                    SmsConversationBuilder(
+                val summary = summaries.getOrPut(threadId) {
+                    SmsConversationSummary(
                         id = threadId,
                         address = address,
-                        title = contact.name ?: address,
                         preview = body,
                         updatedAt = date,
-                        avatarBytes = contact.avatarBytes,
                     )
                 }
                 if (!fromMe && cursor.getInt(readColumn) == 0) {
-                    builder.unreadCount += 1
+                    summary.unreadCount += 1
                 }
             }
         }
-        return conversations.values.map { builder ->
+        val contactCache = mutableMapOf<String, ContactDetails>()
+        return summaries.values.mapIndexed { index, summary ->
+            val contact = if (index < 20) {
+                contactCache.getOrPut(summary.address) {
+                    contactDetails(summary.address)
+                }
+            } else {
+                ContactDetails()
+            }
             hashMapOf<String, Any?>(
-                "id" to builder.id,
-                "address" to builder.address,
-                "title" to builder.title,
-                "preview" to builder.preview,
-                "updatedAt" to builder.updatedAt,
-                "unreadCount" to builder.unreadCount,
-                "avatarBytes" to builder.avatarBytes,
+                "id" to summary.id,
+                "address" to summary.address,
+                "title" to (contact.name ?: summary.address),
+                "preview" to summary.preview,
+                "updatedAt" to summary.updatedAt,
+                "unreadCount" to summary.unreadCount,
+                "avatarBytes" to contact.avatarBytes,
                 "messages" to emptyList<HashMap<String, Any?>>(),
             )
         }
@@ -706,22 +752,28 @@ class MainActivity : FlutterActivity() {
         return labels.joinToString("\n")
     }
 
-    private fun canonicalAddress(recipientId: String): String? {
-        val uri = Uri.withAppendedPath(
-            Uri.parse("content://mms-sms/canonical-addresses"),
-            recipientId,
-        )
+    private fun canonicalAddresses(recipientIds: Set<String>): Map<String, String> {
+        if (recipientIds.isEmpty()) return emptyMap()
+        val ids = recipientIds.toList()
+        val placeholders = List(ids.size) { "?" }.joinToString(",")
         return runCatching {
+            val addresses = mutableMapOf<String, String>()
             contentResolver.query(
-                uri,
-                arrayOf("address"),
-                null,
-                null,
+                Uri.parse("content://mms-sms/canonical-addresses"),
+                arrayOf(BaseColumns._ID, "address"),
+                "${BaseColumns._ID} IN ($placeholders)",
+                ids.toTypedArray(),
                 null,
             )?.use { cursor ->
-                if (cursor.moveToFirst()) cursor.getString(0) else null
+                val idColumn = cursor.getColumnIndexOrThrow(BaseColumns._ID)
+                val addressColumn = cursor.getColumnIndexOrThrow("address")
+                while (cursor.moveToNext()) {
+                    addresses[cursor.getLong(idColumn).toString()] =
+                        cursor.getString(addressColumn).orEmpty()
+                }
             }
-        }.getOrNull()
+            addresses
+        }.getOrDefault(emptyMap())
     }
 
     private fun latestSmsAddress(threadId: String): String? {
@@ -808,14 +860,20 @@ class MainActivity : FlutterActivity() {
     }
 }
 
-private data class SmsConversationBuilder(
+private data class SmsConversationSummary(
     val id: String,
     val address: String,
-    val title: String,
     val preview: String,
     val updatedAt: Long,
-    val avatarBytes: ByteArray? = null,
     var unreadCount: Int = 0,
+)
+
+private data class ThreadSummary(
+    val id: String,
+    val recipientIds: List<String>,
+    val preview: String,
+    val updatedAt: Long,
+    val unreadCount: Int,
 )
 
 private data class ContactDetails(

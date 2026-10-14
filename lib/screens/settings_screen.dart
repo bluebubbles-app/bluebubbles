@@ -46,6 +46,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           widget.smsController.lastError!,
         );
       }
+    } catch (error) {
+      if (mounted) await _showError('SMS Setup Failed', error);
     } finally {
       if (mounted) setState(() => _smsChanging = false);
     }

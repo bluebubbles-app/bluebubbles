@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -12,6 +13,8 @@ class AndroidSmsController extends ChangeNotifier {
   }
 
   static const _channel = MethodChannel('bluebubbles/sms');
+  static const _providerTimeout = Duration(seconds: 8);
+  static const _diagnosticsTimeout = Duration(seconds: 6);
 
   bool supported = false;
   bool isDefaultSmsApp = false;
@@ -77,23 +80,52 @@ class AndroidSmsController extends ChangeNotifier {
 
   Future<List<Conversation>> loadConversations() async {
     if (!isActive) return const [];
-    final raw = await _channel.invokeListMethod<Object?>('loadConversations');
-    return (raw ?? const [])
-        .whereType<Map>()
-        .map((item) => _conversationFromNative(Map<Object?, Object?>.from(item)))
-        .toList();
+    try {
+      final raw = await _channel
+          .invokeListMethod<Object?>('loadConversations')
+          .timeout(_providerTimeout);
+      lastError = null;
+      return (raw ?? const [])
+          .whereType<Map>()
+          .map(
+            (item) =>
+                _conversationFromNative(Map<Object?, Object?>.from(item)),
+          )
+          .toList();
+    } on TimeoutException {
+      lastError = 'Android did not answer the SMS provider query within '
+          '${_providerTimeout.inSeconds} seconds.';
+      notifyListeners();
+      rethrow;
+    } on PlatformException catch (error) {
+      lastError = error.message ?? error.code;
+      notifyListeners();
+      rethrow;
+    }
   }
 
   Future<List<ChatMessage>> loadThreadMessages(String threadId) async {
     if (!isActive) return const [];
-    final raw = await _channel.invokeListMethod<Object?>(
-      'loadThreadMessages',
-      {'threadId': threadId},
-    );
-    return (raw ?? const [])
-        .whereType<Map>()
-        .map((item) => _messageFromNative(Map<Object?, Object?>.from(item)))
-        .toList();
+    try {
+      final raw = await _channel.invokeListMethod<Object?>(
+        'loadThreadMessages',
+        {'threadId': threadId},
+      ).timeout(_providerTimeout);
+      lastError = null;
+      return (raw ?? const [])
+          .whereType<Map>()
+          .map((item) => _messageFromNative(Map<Object?, Object?>.from(item)))
+          .toList();
+    } on TimeoutException {
+      lastError = 'Android did not answer the message query within '
+          '${_providerTimeout.inSeconds} seconds.';
+      notifyListeners();
+      rethrow;
+    } on PlatformException catch (error) {
+      lastError = error.message ?? error.code;
+      notifyListeners();
+      rethrow;
+    }
   }
 
   Future<void> sendText(String address, String text) async {
@@ -134,13 +166,25 @@ class AndroidSmsController extends ChangeNotifier {
     if (kIsWeb || !Platform.isAndroid) {
       return const {'Platform': 'Android diagnostics unavailable'};
     }
-    final raw = await _channel.invokeMapMethod<Object?, Object?>(
-      'getDiagnostics',
-    );
-    return {
-      for (final entry in (raw ?? const {}).entries)
-        entry.key.toString(): entry.value,
-    };
+    try {
+      final raw = await _channel
+          .invokeMapMethod<Object?, Object?>('getDiagnostics')
+          .timeout(_diagnosticsTimeout);
+      lastError = null;
+      return {
+        for (final entry in (raw ?? const {}).entries)
+          entry.key.toString(): entry.value,
+      };
+    } on TimeoutException {
+      lastError = 'Android did not answer the diagnostics request within '
+          '${_diagnosticsTimeout.inSeconds} seconds.';
+      notifyListeners();
+      rethrow;
+    } on PlatformException catch (error) {
+      lastError = error.message ?? error.code;
+      notifyListeners();
+      rethrow;
+    }
   }
 
   Future<void> _handleNativeCall(MethodCall call) async {

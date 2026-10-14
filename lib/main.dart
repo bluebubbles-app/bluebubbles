@@ -32,14 +32,15 @@ class _MessagesUiAppState extends State<MessagesUiApp>
   final AppSettingsController _settings = AppSettingsController();
   final AndroidSmsController _smsController = AndroidSmsController();
   bool _usingPhoneMessages = false;
-  bool _loadingPhoneMessages = false;
+  Future<void>? _phoneLoadFuture;
   bool _phoneReloadRequested = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _smsController.onMessagesChanged = () => unawaited(_loadPhoneMessages());
+    _smsController.onMessagesChanged = () =>
+        unawaited(_reloadPhoneMessagesSilently());
     unawaited(_initializeApp());
   }
 
@@ -108,7 +109,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
     await _smsController.refreshState();
     if (!mounted) return;
     if (_smsController.isActive) {
-      await _loadPhoneMessages();
+      await _reloadPhoneMessagesSilently();
     } else if (_smsController.isDefaultSmsApp && !_usingPhoneMessages) {
       setState(() {
         _usingPhoneMessages = true;
@@ -128,13 +129,33 @@ class _MessagesUiAppState extends State<MessagesUiApp>
     return enabled;
   }
 
-  Future<void> _loadPhoneMessages() async {
-    if (!_smsController.isActive) return;
-    if (_loadingPhoneMessages) {
-      _phoneReloadRequested = true;
-      return;
+  Future<void> _reloadPhoneMessagesSilently() async {
+    try {
+      await _loadPhoneMessages();
+    } catch (error) {
+      debugPrint('Phone message reload failed: $error');
     }
-    _loadingPhoneMessages = true;
+  }
+
+  Future<void> _loadPhoneMessages() {
+    if (!_smsController.isActive) return Future<void>.value();
+    final activeLoad = _phoneLoadFuture;
+    if (activeLoad != null) {
+      _phoneReloadRequested = true;
+      return activeLoad;
+    }
+
+    late final Future<void> trackedLoad;
+    trackedLoad = _performPhoneMessageLoad().whenComplete(() {
+      if (identical(_phoneLoadFuture, trackedLoad)) {
+        _phoneLoadFuture = null;
+      }
+    });
+    _phoneLoadFuture = trackedLoad;
+    return trackedLoad;
+  }
+
+  Future<void> _performPhoneMessageLoad() async {
     try {
       do {
         _phoneReloadRequested = false;
@@ -164,7 +185,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
         setState(() => _messageRepository.replaceAll(merged));
       } while (_phoneReloadRequested && _smsController.isActive);
     } finally {
-      _loadingPhoneMessages = false;
+      _phoneReloadRequested = false;
     }
   }
 
