@@ -47,6 +47,7 @@ class MainActivity : FlutterActivity() {
     @Volatile private var lastLoadStage = "Not started"
     @Volatile private var lastLoadResult = "No load attempted"
     @Volatile private var lastLoadDurationMs = 0L
+    @Volatile private var lastThreadLoad = "Not started"
     private val enrichmentGeneration = AtomicInteger(0)
     private val mainHandler = Handler(Looper.getMainLooper())
     private val notifyMessagesChanged = Runnable {
@@ -312,6 +313,7 @@ class MainActivity : FlutterActivity() {
                 "Last load stage" to lastLoadStage,
                 "Last load result" to lastLoadResult,
                 "Last load duration" to "$lastLoadDurationMs ms",
+                "Last thread load" to lastThreadLoad,
             )
             runOnUiThread { result.success(diagnostics) }
         }.start()
@@ -410,13 +412,42 @@ class MainActivity : FlutterActivity() {
             result.error("invalid_thread", "A thread ID is required.", null)
             return
         }
+        val replied = AtomicBoolean(false)
+        val timeoutReply = Runnable {
+            if (replied.compareAndSet(false, true)) {
+                lastThreadLoad = "Timed out after $METHOD_REPLY_TIMEOUT_MS ms"
+                Log.e(TAG, "Thread $threadId: $lastThreadLoad")
+                result.error("thread_query_timeout", lastThreadLoad, null)
+            }
+        }
+        mainHandler.postDelayed(timeoutReply, METHOD_REPLY_TIMEOUT_MS)
         Thread {
+            val startedAt = SystemClock.elapsedRealtime()
             try {
                 val messages = queryThreadMessages(threadId)
-                runOnUiThread { result.success(messages) }
+                val duration = SystemClock.elapsedRealtime() - startedAt
+                runOnUiThread {
+                    if (replied.compareAndSet(false, true)) {
+                        mainHandler.removeCallbacks(timeoutReply)
+                        lastThreadLoad =
+                            "${messages.size} messages in $duration ms"
+                        Log.i(TAG, "Thread $threadId: $lastThreadLoad")
+                        result.success(messages)
+                    }
+                }
             } catch (error: Exception) {
                 runOnUiThread {
-                    result.error("sms_query_failed", error.message, null)
+                    if (replied.compareAndSet(false, true)) {
+                        mainHandler.removeCallbacks(timeoutReply)
+                        lastThreadLoad =
+                            "${error.javaClass.simpleName}: ${error.message}"
+                        Log.e(TAG, "Thread $threadId load failed", error)
+                        result.error(
+                            "sms_query_failed",
+                            lastThreadLoad,
+                            null,
+                        )
+                    }
                 }
             }
         }.start()
@@ -436,23 +467,29 @@ class MainActivity : FlutterActivity() {
             put(Telephony.Sms.READ, 1)
             put(Telephony.Sms.SEEN, 1)
         }
-        try {
-            contentResolver.update(
-                Telephony.Sms.CONTENT_URI,
-                values,
-                "${Telephony.Sms.THREAD_ID} = ?",
-                arrayOf(threadId),
-            )
-            contentResolver.update(
-                Telephony.Mms.CONTENT_URI,
-                values,
-                "${Telephony.Mms.THREAD_ID} = ?",
-                arrayOf(threadId),
-            )
-            result.success(null)
-        } catch (error: Exception) {
-            result.error("sms_update_failed", error.message, null)
-        }
+        Thread {
+            try {
+                contentResolver.update(
+                    Telephony.Sms.CONTENT_URI,
+                    values,
+                    "${Telephony.Sms.THREAD_ID} = ? AND " +
+                        "(${Telephony.Sms.READ} = 0 OR ${Telephony.Sms.SEEN} = 0)",
+                    arrayOf(threadId),
+                )
+                contentResolver.update(
+                    Telephony.Mms.CONTENT_URI,
+                    values,
+                    "${Telephony.Mms.THREAD_ID} = ? AND " +
+                        "(${Telephony.Mms.READ} = 0 OR ${Telephony.Mms.SEEN} = 0)",
+                    arrayOf(threadId),
+                )
+                runOnUiThread { result.success(null) }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    result.error("sms_update_failed", error.message, null)
+                }
+            }
+        }.start()
     }
 
     private fun deleteThread(call: MethodCall, result: MethodChannel.Result) {
@@ -465,21 +502,25 @@ class MainActivity : FlutterActivity() {
             result.error("invalid_thread", "A thread ID is required.", null)
             return
         }
-        try {
-            contentResolver.delete(
-                Telephony.Sms.CONTENT_URI,
-                "${Telephony.Sms.THREAD_ID} = ?",
-                arrayOf(threadId),
-            )
-            contentResolver.delete(
-                Telephony.Mms.CONTENT_URI,
-                "${Telephony.Mms.THREAD_ID} = ?",
-                arrayOf(threadId),
-            )
-            result.success(null)
-        } catch (error: Exception) {
-            result.error("sms_delete_failed", error.message, null)
-        }
+        Thread {
+            try {
+                contentResolver.delete(
+                    Telephony.Sms.CONTENT_URI,
+                    "${Telephony.Sms.THREAD_ID} = ?",
+                    arrayOf(threadId),
+                )
+                contentResolver.delete(
+                    Telephony.Mms.CONTENT_URI,
+                    "${Telephony.Mms.THREAD_ID} = ?",
+                    arrayOf(threadId),
+                )
+                runOnUiThread { result.success(null) }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    result.error("sms_delete_failed", error.message, null)
+                }
+            }
+        }.start()
     }
 
     private fun querySmsConversations(): ConversationPage {
@@ -589,19 +630,20 @@ class MainActivity : FlutterActivity() {
             Telephony.Sms.TYPE,
         )
         val messages = mutableListOf<HashMap<String, Any?>>()
-        contentResolver.query(
+        providerQuery(
             Telephony.Sms.CONTENT_URI,
             projection,
             "${Telephony.Sms.THREAD_ID} = ?",
             arrayOf(threadId),
-            "${Telephony.Sms.DATE} DESC LIMIT 120",
-        )?.use { cursor ->
+            "${Telephony.Sms.DATE} DESC LIMIT 80",
+            timeoutMs = 3_500L,
+        ) { cursor ->
             val idColumn = cursor.getColumnIndexOrThrow(BaseColumns._ID)
             val bodyColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.BODY)
             val dateColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.DATE)
             val typeColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.TYPE)
             var processed = 0
-            while (cursor.moveToNext() && processed < 120) {
+            while (cursor.moveToNext() && processed < 80) {
                 processed += 1
                 val type = cursor.getInt(typeColumn)
                 val fromMe = type == Telephony.Sms.MESSAGE_TYPE_SENT ||
@@ -630,25 +672,26 @@ class MainActivity : FlutterActivity() {
                 .getOrDefault(emptyList()),
         )
         messages.sortBy { (it["sentAt"] as? Long) ?: 0L }
-        return if (messages.size <= 180) messages else messages.takeLast(180)
+        return if (messages.size <= 100) messages else messages.takeLast(100)
     }
 
     private fun queryMmsThreadMessages(threadId: String): List<HashMap<String, Any?>> {
         val projection = arrayOf(BaseColumns._ID, "date", "msg_box", "sub")
         val messages = mutableListOf<HashMap<String, Any?>>()
-        contentResolver.query(
+        providerQuery(
             Telephony.Mms.CONTENT_URI,
             projection,
             "thread_id = ?",
             arrayOf(threadId),
-            "date DESC LIMIT 60",
-        )?.use { cursor ->
+            "date DESC LIMIT 20",
+            timeoutMs = 2_000L,
+        ) { cursor ->
             val idColumn = cursor.getColumnIndexOrThrow(BaseColumns._ID)
             val dateColumn = cursor.getColumnIndexOrThrow("date")
             val boxColumn = cursor.getColumnIndexOrThrow("msg_box")
             val subjectColumn = cursor.getColumnIndexOrThrow("sub")
             var processed = 0
-            while (cursor.moveToNext() && processed < 60) {
+            while (cursor.moveToNext() && processed < 20) {
                 processed += 1
                 val id = cursor.getLong(idColumn).toString()
                 val box = cursor.getInt(boxColumn)
@@ -661,12 +704,7 @@ class MainActivity : FlutterActivity() {
                     else -> "delivered"
                 }
                 val subject = cursor.getString(subjectColumn).orEmpty()
-                val partsText = mmsPartsText(id)
-                val text = listOf(subject, partsText)
-                    .filter(String::isNotBlank)
-                    .distinct()
-                    .joinToString("\n")
-                    .ifEmpty { "MMS" }
+                val text = subject.ifBlank { "MMS" }
                 messages.add(
                     hashMapOf(
                         "id" to "mms-$id",
@@ -679,53 +717,6 @@ class MainActivity : FlutterActivity() {
             }
         }
         return messages
-    }
-
-    private fun mmsPartsText(messageId: String): String {
-        val labels = mutableListOf<String>()
-        contentResolver.query(
-            Uri.parse("content://mms/part"),
-            arrayOf(BaseColumns._ID, "ct", "text", "name", "cl"),
-            "mid = ?",
-            arrayOf(messageId),
-            null,
-        )?.use { cursor ->
-            val idColumn = cursor.getColumnIndexOrThrow(BaseColumns._ID)
-            val typeColumn = cursor.getColumnIndexOrThrow("ct")
-            val textColumn = cursor.getColumnIndexOrThrow("text")
-            val nameColumn = cursor.getColumnIndexOrThrow("name")
-            val locationColumn = cursor.getColumnIndexOrThrow("cl")
-            while (cursor.moveToNext()) {
-                val contentType = cursor.getString(typeColumn).orEmpty()
-                if (contentType == "text/plain") {
-                    val inlineText = cursor.getString(textColumn).orEmpty()
-                    val text = if (inlineText.isNotEmpty()) {
-                        inlineText
-                    } else {
-                        val partId = cursor.getLong(idColumn)
-                        runCatching {
-                            contentResolver.openInputStream(
-                                Uri.parse("content://mms/part/$partId"),
-                            )?.bufferedReader()?.use { it.readText() }.orEmpty()
-                        }.getOrDefault("")
-                    }
-                    if (text.isNotBlank()) labels.add(text)
-                } else if (contentType.startsWith("image/")) {
-                    labels.add("Photo")
-                } else if (contentType.startsWith("video/")) {
-                    labels.add("Video")
-                } else if (contentType.startsWith("audio/")) {
-                    labels.add("Audio Message")
-                } else if (contentType.isNotEmpty() && contentType != "application/smil") {
-                    labels.add(
-                        cursor.getString(nameColumn)
-                            ?: cursor.getString(locationColumn)
-                            ?: "Attachment",
-                    )
-                }
-            }
-        }
-        return labels.joinToString("\n")
     }
 
     private fun canonicalAddresses(recipientIds: Set<String>): Map<String, String> {

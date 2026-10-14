@@ -70,14 +70,15 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
 
   Future<void> _openConversation(Conversation conversation) async {
     setState(() => conversation.unreadCount = 0);
-    widget.onMarkConversationRead(conversation);
-    await widget.onLoadConversation(conversation);
-    if (!mounted) return;
     await Navigator.of(context).push(
       CupertinoPageRoute<void>(
         builder: (_) => ConversationScreen(
           conversation: conversation,
           allConversations: widget.conversations,
+          onLoad: () async {
+            await widget.onLoadConversation(conversation);
+            widget.onMarkConversationRead(conversation);
+          },
           onSend: (text) {
             widget.onSend(conversation, text);
             setState(() {});

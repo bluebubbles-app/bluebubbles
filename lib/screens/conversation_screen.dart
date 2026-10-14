@@ -17,12 +17,14 @@ class ConversationScreen extends StatefulWidget {
     super.key,
     required this.conversation,
     required this.allConversations,
+    required this.onLoad,
     required this.onSend,
     required this.onCall,
   });
 
   final Conversation conversation;
   final List<Conversation> allConversations;
+  final Future<void> Function() onLoad;
   final ValueChanged<String> onSend;
   final VoidCallback onCall;
 
@@ -41,11 +43,39 @@ class _ConversationScreenState extends State<ConversationScreen>
       AnimationController.unbounded(vsync: this);
   final Set<String> _selectedMessageIds = <String>{};
   bool _selectionMode = false;
+  bool _loadingMessages = true;
+  Object? _loadError;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToBottom());
+    unawaited(_loadMessages());
+  }
+
+  Future<void> _loadMessages() async {
+    if (!_loadingMessages) {
+      setState(() {
+        _loadingMessages = true;
+        _loadError = null;
+      });
+    }
+    try {
+      await widget.onLoad();
+      if (!mounted) return;
+      setState(() {
+        _loadingMessages = false;
+        _loadError = null;
+        _messageListKey = GlobalKey<AnimatedListState>();
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToBottom());
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadingMessages = false;
+        _loadError = error;
+      });
+    }
   }
 
   void _jumpToBottom() {
@@ -469,6 +499,33 @@ class _ConversationScreenState extends State<ConversationScreen>
                         ),
                       ),
                     ),
+                    if (_loadingMessages)
+                      const Positioned.fill(
+                        child: Center(child: CupertinoActivityIndicator()),
+                      )
+                    else if (_loadError != null)
+                      Positioned.fill(
+                        child: Center(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 32),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Messages could not be loaded.',
+                                  textAlign: TextAlign.center,
+                                  style: MessagesText.secondary(context),
+                                ),
+                                const SizedBox(height: 8),
+                                CupertinoButton(
+                                  onPressed: _loadMessages,
+                                  child: const Text('Try Again'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
                     Align(
                       alignment: Alignment.topCenter,
                       child: _selectionMode
