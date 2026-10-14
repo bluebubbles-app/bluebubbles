@@ -73,9 +73,11 @@ requested in context when voice-message recording is implemented.
 
 Sample data remains in `lib/data/demo_data.dart` for Preview Mode. Once the SMS
 role and permissions are active, the UI reloads lightweight conversation
-summaries from Android's SMS provider. Message history is loaded on demand when
-a conversation is opened, and contact thumbnails are read from Android
-Contacts when permission is granted.
+summaries from Android's combined SMS/MMS thread provider, with an SMS-only
+fallback. Message history is loaded on demand when a conversation is opened,
+and contact thumbnails are read from Android Contacts when permission is
+granted. RCS-only history remains private to its provider and cannot be read
+through Android's public SMS/MMS database.
 See `SMS_MIGRATION.md` for the completed bridge and the remaining work before
 the demo data can be removed completely.
 

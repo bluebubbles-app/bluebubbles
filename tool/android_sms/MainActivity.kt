@@ -56,6 +56,11 @@ class MainActivity : FlutterActivity() {
             true,
             smsObserver,
         )
+        contentResolver.registerContentObserver(
+            Telephony.Mms.CONTENT_URI,
+            true,
+            smsObserver,
+        )
         observerRegistered = true
     }
 
@@ -299,6 +304,12 @@ class MainActivity : FlutterActivity() {
                 "${Telephony.Sms.THREAD_ID} = ?",
                 arrayOf(threadId),
             )
+            contentResolver.update(
+                Telephony.Mms.CONTENT_URI,
+                values,
+                "${Telephony.Mms.THREAD_ID} = ?",
+                arrayOf(threadId),
+            )
             result.success(null)
         } catch (error: Exception) {
             result.error("sms_update_failed", error.message, null)
@@ -321,6 +332,11 @@ class MainActivity : FlutterActivity() {
                 "${Telephony.Sms.THREAD_ID} = ?",
                 arrayOf(threadId),
             )
+            contentResolver.delete(
+                Telephony.Mms.CONTENT_URI,
+                "${Telephony.Mms.THREAD_ID} = ?",
+                arrayOf(threadId),
+            )
             result.success(null)
         } catch (error: Exception) {
             result.error("sms_delete_failed", error.message, null)
@@ -328,6 +344,82 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun querySmsConversations(): List<Map<String, Any?>> {
+        val combined = runCatching { queryCombinedConversations() }
+            .getOrDefault(emptyList())
+        if (combined.isNotEmpty()) return combined
+        return querySmsOnlyConversations()
+    }
+
+    private fun queryCombinedConversations(): List<Map<String, Any?>> {
+        val projection = arrayOf(
+            BaseColumns._ID,
+            Telephony.Threads.DATE,
+            Telephony.Threads.RECIPIENT_IDS,
+            Telephony.Threads.SNIPPET,
+            Telephony.Threads.READ,
+        )
+        val conversations = mutableListOf<Map<String, Any?>>()
+        val canonicalCache = mutableMapOf<String, String?>()
+        val contactCache = mutableMapOf<String, ContactDetails>()
+        val threadsUri = Telephony.Threads.CONTENT_URI.buildUpon()
+            .appendQueryParameter("simple", "true")
+            .build()
+        contentResolver.query(
+            threadsUri,
+            projection,
+            null,
+            null,
+            "${Telephony.Threads.DATE} DESC",
+        )?.use { cursor ->
+            val idColumn = cursor.getColumnIndexOrThrow(BaseColumns._ID)
+            val dateColumn = cursor.getColumnIndexOrThrow(Telephony.Threads.DATE)
+            val recipientsColumn = cursor.getColumnIndexOrThrow(
+                Telephony.Threads.RECIPIENT_IDS,
+            )
+            val snippetColumn = cursor.getColumnIndexOrThrow(Telephony.Threads.SNIPPET)
+            val readColumn = cursor.getColumnIndexOrThrow(Telephony.Threads.READ)
+            while (cursor.moveToNext() && conversations.size < 500) {
+                val recipientIds = cursor.getString(recipientsColumn)
+                    .orEmpty()
+                    .trim()
+                    .split(Regex("\\s+"))
+                    .filter(String::isNotEmpty)
+                val addresses = recipientIds.mapNotNull { recipientId ->
+                    canonicalCache.getOrPut(recipientId) {
+                        canonicalAddress(recipientId)
+                    }
+                }.ifEmpty {
+                    listOfNotNull(latestSmsAddress(cursor.getLong(idColumn).toString()))
+                }
+                val contacts = addresses.map { address ->
+                    contactCache.getOrPut(address) { contactDetails(address) }
+                }
+                val title = contacts.mapIndexed { index, contact ->
+                    contact.name ?: addresses[index]
+                }.joinToString(", ")
+                val directAddress = addresses.singleOrNull().orEmpty()
+                val avatarBytes = contacts.singleOrNull()?.avatarBytes
+                val threadId = cursor.getLong(idColumn).toString()
+                conversations.add(
+                    hashMapOf(
+                        "id" to threadId,
+                        "address" to directAddress,
+                        "title" to title.ifEmpty { "Conversation $threadId" },
+                        "preview" to cursor.getString(snippetColumn).orEmpty(),
+                        "updatedAt" to normalizedTimestamp(
+                            cursor.getLong(dateColumn),
+                        ),
+                        "unreadCount" to if (cursor.getInt(readColumn) == 0) 1 else 0,
+                        "avatarBytes" to avatarBytes,
+                        "messages" to emptyList<HashMap<String, Any?>>(),
+                    ),
+                )
+            }
+        }
+        return conversations
+    }
+
+    private fun querySmsOnlyConversations(): List<Map<String, Any?>> {
         val projection = arrayOf(
             Telephony.Sms.THREAD_ID,
             Telephony.Sms.ADDRESS,
@@ -439,9 +531,143 @@ class MainActivity : FlutterActivity() {
                 )
             }
         }
-        messages.reverse()
+        messages.addAll(
+            runCatching { queryMmsThreadMessages(threadId) }
+                .getOrDefault(emptyList()),
+        )
+        messages.sortBy { (it["sentAt"] as? Long) ?: 0L }
+        return if (messages.size <= 500) messages else messages.takeLast(500)
+    }
+
+    private fun queryMmsThreadMessages(threadId: String): List<HashMap<String, Any?>> {
+        val projection = arrayOf(BaseColumns._ID, "date", "msg_box", "sub")
+        val messages = mutableListOf<HashMap<String, Any?>>()
+        contentResolver.query(
+            Telephony.Mms.CONTENT_URI,
+            projection,
+            "thread_id = ?",
+            arrayOf(threadId),
+            "date DESC",
+        )?.use { cursor ->
+            val idColumn = cursor.getColumnIndexOrThrow(BaseColumns._ID)
+            val dateColumn = cursor.getColumnIndexOrThrow("date")
+            val boxColumn = cursor.getColumnIndexOrThrow("msg_box")
+            val subjectColumn = cursor.getColumnIndexOrThrow("sub")
+            var processed = 0
+            while (cursor.moveToNext() && processed < 250) {
+                processed += 1
+                val id = cursor.getLong(idColumn).toString()
+                val box = cursor.getInt(boxColumn)
+                val fromMe = box == Telephony.Mms.MESSAGE_BOX_SENT ||
+                    box == Telephony.Mms.MESSAGE_BOX_OUTBOX ||
+                    box == Telephony.Mms.MESSAGE_BOX_FAILED
+                val deliveryState = when (box) {
+                    Telephony.Mms.MESSAGE_BOX_OUTBOX -> "sending"
+                    Telephony.Mms.MESSAGE_BOX_FAILED -> "failed"
+                    else -> "delivered"
+                }
+                val subject = cursor.getString(subjectColumn).orEmpty()
+                val partsText = mmsPartsText(id)
+                val text = listOf(subject, partsText)
+                    .filter(String::isNotBlank)
+                    .distinct()
+                    .joinToString("\n")
+                    .ifEmpty { "MMS" }
+                messages.add(
+                    hashMapOf(
+                        "id" to "mms-$id",
+                        "text" to text,
+                        "sentAt" to cursor.getLong(dateColumn) * 1000L,
+                        "isFromMe" to fromMe,
+                        "deliveryState" to deliveryState,
+                    ),
+                )
+            }
+        }
         return messages
     }
+
+    private fun mmsPartsText(messageId: String): String {
+        val labels = mutableListOf<String>()
+        contentResolver.query(
+            Uri.parse("content://mms/part"),
+            arrayOf(BaseColumns._ID, "ct", "text", "name", "cl"),
+            "mid = ?",
+            arrayOf(messageId),
+            null,
+        )?.use { cursor ->
+            val idColumn = cursor.getColumnIndexOrThrow(BaseColumns._ID)
+            val typeColumn = cursor.getColumnIndexOrThrow("ct")
+            val textColumn = cursor.getColumnIndexOrThrow("text")
+            val nameColumn = cursor.getColumnIndexOrThrow("name")
+            val locationColumn = cursor.getColumnIndexOrThrow("cl")
+            while (cursor.moveToNext()) {
+                val contentType = cursor.getString(typeColumn).orEmpty()
+                if (contentType == "text/plain") {
+                    val inlineText = cursor.getString(textColumn).orEmpty()
+                    val text = if (inlineText.isNotEmpty()) {
+                        inlineText
+                    } else {
+                        val partId = cursor.getLong(idColumn)
+                        runCatching {
+                            contentResolver.openInputStream(
+                                Uri.parse("content://mms/part/$partId"),
+                            )?.bufferedReader()?.use { it.readText() }.orEmpty()
+                        }.getOrDefault("")
+                    }
+                    if (text.isNotBlank()) labels.add(text)
+                } else if (contentType.startsWith("image/")) {
+                    labels.add("Photo")
+                } else if (contentType.startsWith("video/")) {
+                    labels.add("Video")
+                } else if (contentType.startsWith("audio/")) {
+                    labels.add("Audio Message")
+                } else if (contentType.isNotEmpty() && contentType != "application/smil") {
+                    labels.add(
+                        cursor.getString(nameColumn)
+                            ?: cursor.getString(locationColumn)
+                            ?: "Attachment",
+                    )
+                }
+            }
+        }
+        return labels.joinToString("\n")
+    }
+
+    private fun canonicalAddress(recipientId: String): String? {
+        val uri = Uri.withAppendedPath(
+            Uri.parse("content://mms-sms/canonical-addresses"),
+            recipientId,
+        )
+        return runCatching {
+            contentResolver.query(
+                uri,
+                arrayOf("address"),
+                null,
+                null,
+                null,
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) cursor.getString(0) else null
+            }
+        }.getOrNull()
+    }
+
+    private fun latestSmsAddress(threadId: String): String? {
+        return runCatching {
+            contentResolver.query(
+                Telephony.Sms.CONTENT_URI,
+                arrayOf(Telephony.Sms.ADDRESS),
+                "${Telephony.Sms.THREAD_ID} = ?",
+                arrayOf(threadId),
+                "${Telephony.Sms.DATE} DESC",
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) cursor.getString(0) else null
+            }
+        }.getOrNull()
+    }
+
+    private fun normalizedTimestamp(value: Long): Long =
+        if (value in 1..999_999_999_999L) value * 1000L else value
 
     private fun contactDetails(address: String): ContactDetails {
         if (address.isEmpty() ||
