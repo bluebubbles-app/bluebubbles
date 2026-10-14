@@ -32,6 +32,8 @@ class _MessagesUiAppState extends State<MessagesUiApp>
   final AppSettingsController _settings = AppSettingsController();
   final AndroidSmsController _smsController = AndroidSmsController();
   bool _usingPhoneMessages = false;
+  bool _loadingPhoneMessages = false;
+  String? _phoneLoadError;
   Future<void>? _phoneLoadFuture;
   bool _phoneReloadRequested = false;
   final Map<String, ConversationEnrichment> _pendingEnrichments = {};
@@ -160,15 +162,19 @@ class _MessagesUiAppState extends State<MessagesUiApp>
   }
 
   Future<void> _performPhoneMessageLoad() async {
+    if (mounted) {
+      setState(() {
+        _loadingPhoneMessages = true;
+        _phoneLoadError = null;
+        if (!_usingPhoneMessages) {
+          _usingPhoneMessages = true;
+          _messageRepository.replaceAll(const []);
+        }
+      });
+    }
     try {
       do {
         _phoneReloadRequested = false;
-        if (!_usingPhoneMessages && mounted) {
-          setState(() {
-            _usingPhoneMessages = true;
-            _messageRepository.replaceAll(const []);
-          });
-        }
         final loaded = await _smsController.loadConversations();
         if (!mounted || !_smsController.isActive) return;
         final existing = {
@@ -184,10 +190,21 @@ class _MessagesUiAppState extends State<MessagesUiApp>
             ..unreadCount = incoming.unreadCount;
           return current;
         }).toList();
-        setState(() => _messageRepository.replaceAll(merged));
+        setState(() {
+          _phoneLoadError = null;
+          _messageRepository.replaceAll(merged);
+        });
       } while (_phoneReloadRequested && _smsController.isActive);
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _phoneLoadError = _smsController.lastError ?? error.toString();
+        });
+      }
+      rethrow;
     } finally {
       _phoneReloadRequested = false;
+      if (mounted) setState(() => _loadingPhoneMessages = false);
     }
   }
 
@@ -364,6 +381,8 @@ class _MessagesUiAppState extends State<MessagesUiApp>
           ),
           home: ConversationListScreen(
             conversations: _messageRepository.conversations,
+            loadingConversations: _loadingPhoneMessages,
+            loadError: _phoneLoadError,
             onSend: _sendMessage,
             onReplaceConversations: _replaceConversations,
             smsController: _smsController,

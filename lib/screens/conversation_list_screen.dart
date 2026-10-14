@@ -22,6 +22,8 @@ class ConversationListScreen extends StatefulWidget {
   const ConversationListScreen({
     super.key,
     required this.conversations,
+    required this.loadingConversations,
+    required this.loadError,
     required this.onSend,
     required this.onReplaceConversations,
     required this.smsController,
@@ -34,6 +36,8 @@ class ConversationListScreen extends StatefulWidget {
   });
 
   final List<Conversation> conversations;
+  final bool loadingConversations;
+  final String? loadError;
   final void Function(Conversation conversation, String text) onSend;
   final ValueChanged<List<Conversation>> onReplaceConversations;
   final AndroidSmsController smsController;
@@ -106,6 +110,14 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
       ),
     );
     if (mounted) setState(() {});
+  }
+
+  Future<void> _retryPhoneMessages() async {
+    try {
+      await widget.onReloadPhoneMessages();
+    } catch (_) {
+      // The parent keeps the error text visible and offers another retry.
+    }
   }
 
   Future<void> _pinConversation(Conversation conversation) async {
@@ -268,9 +280,36 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                 SliverFillRemaining(
                   hasScrollBody: false,
                   child: Center(
-                    child: Text(
-                      'No Conversations',
-                      style: MessagesText.secondary(context),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (widget.loadingConversations) ...[
+                            const CupertinoActivityIndicator(),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Loading Messages…',
+                              style: MessagesText.secondary(context),
+                            ),
+                          ] else ...[
+                            Text(
+                              widget.loadError == null
+                                  ? 'No Conversations'
+                                  : 'Messages could not be loaded.',
+                              textAlign: TextAlign.center,
+                              style: MessagesText.secondary(context),
+                            ),
+                            if (widget.loadError != null) ...[
+                              const SizedBox(height: 8),
+                              CupertinoButton(
+                                onPressed: _retryPhoneMessages,
+                                child: const Text('Try Again'),
+                              ),
+                            ],
+                          ],
+                        ],
+                      ),
                     ),
                   ),
                 )
