@@ -65,7 +65,10 @@ after the role is granted. You can switch back to the previous SMS app at any
 time in Android's default-app settings.
 
 Sample data remains in `lib/data/demo_data.dart` for Preview Mode. Once the SMS
-role and permissions are active, the UI reloads from Android's SMS provider.
+role and permissions are active, the UI reloads lightweight conversation
+summaries from Android's SMS provider. Message history is loaded on demand when
+a conversation is opened, and contact thumbnails are read from Android
+Contacts when permission is granted.
 See `SMS_MIGRATION.md` for the completed bridge and the remaining work before
 the demo data can be removed completely.
 

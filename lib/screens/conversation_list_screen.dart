@@ -29,6 +29,7 @@ class ConversationListScreen extends StatefulWidget {
     required this.onReloadPhoneMessages,
     required this.onMarkConversationRead,
     required this.onDeleteConversation,
+    required this.onLoadConversation,
   });
 
   final List<Conversation> conversations;
@@ -39,6 +40,7 @@ class ConversationListScreen extends StatefulWidget {
   final Future<void> Function() onReloadPhoneMessages;
   final ValueChanged<Conversation> onMarkConversationRead;
   final Future<void> Function(Conversation) onDeleteConversation;
+  final Future<void> Function(Conversation) onLoadConversation;
 
   @override
   State<ConversationListScreen> createState() =>
@@ -67,6 +69,8 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
   Future<void> _openConversation(Conversation conversation) async {
     setState(() => conversation.unreadCount = 0);
     widget.onMarkConversationRead(conversation);
+    await widget.onLoadConversation(conversation);
+    if (!mounted) return;
     await Navigator.of(context).push(
       CupertinoPageRoute<void>(
         builder: (_) => ConversationScreen(

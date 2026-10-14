@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/cupertino.dart';
 
 enum DeliveryState { sending, delivered, read, failed }
@@ -50,6 +52,7 @@ class Conversation {
     required this.avatarColors,
     required this.messages,
     this.address,
+    this.avatarBytes,
     this.avatarAsset,
     this.subtitle,
     this.unreadCount = 0,
@@ -64,6 +67,7 @@ class Conversation {
   final List<Color> avatarColors;
   final List<ChatMessage> messages;
   final String? address;
+  final Uint8List? avatarBytes;
   final String? avatarAsset;
   final String? subtitle;
   int unreadCount;

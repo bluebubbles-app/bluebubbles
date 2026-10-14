@@ -32,6 +32,8 @@ class _MessagesUiAppState extends State<MessagesUiApp>
   final AppSettingsController _settings = AppSettingsController();
   final AndroidSmsController _smsController = AndroidSmsController();
   bool _usingPhoneMessages = false;
+  bool _loadingPhoneMessages = false;
+  bool _phoneReloadRequested = false;
 
   @override
   void initState() {
@@ -60,7 +62,12 @@ class _MessagesUiAppState extends State<MessagesUiApp>
     if (!mounted) return;
     if (_smsController.isActive) {
       await _loadPhoneMessages();
-    } else if (_usingPhoneMessages) {
+    } else if (_smsController.isDefaultSmsApp && !_usingPhoneMessages) {
+      setState(() {
+        _usingPhoneMessages = true;
+        _messageRepository.replaceAll(const []);
+      });
+    } else if (!_smsController.isDefaultSmsApp && _usingPhoneMessages) {
       setState(() {
         _usingPhoneMessages = false;
         _messageRepository.replaceAll(demoConversations());
@@ -76,27 +83,52 @@ class _MessagesUiAppState extends State<MessagesUiApp>
 
   Future<void> _loadPhoneMessages() async {
     if (!_smsController.isActive) return;
-    final loaded = await _smsController.loadConversations();
+    if (_loadingPhoneMessages) {
+      _phoneReloadRequested = true;
+      return;
+    }
+    _loadingPhoneMessages = true;
+    try {
+      do {
+        _phoneReloadRequested = false;
+        if (!_usingPhoneMessages && mounted) {
+          setState(() {
+            _usingPhoneMessages = true;
+            _messageRepository.replaceAll(const []);
+          });
+        }
+        final loaded = await _smsController.loadConversations();
+        if (!mounted || !_smsController.isActive) return;
+        final existing = {
+          for (final conversation in _messageRepository.conversations)
+            conversation.id: conversation,
+        };
+        final merged = loaded.map((incoming) {
+          final current = existing[incoming.id];
+          if (current == null || current.address != incoming.address) {
+            return incoming;
+          }
+          current
+            ..preview = incoming.preview
+            ..updatedAt = incoming.updatedAt
+            ..unreadCount = incoming.unreadCount;
+          return current;
+        }).toList();
+        setState(() => _messageRepository.replaceAll(merged));
+      } while (_phoneReloadRequested && _smsController.isActive);
+    } finally {
+      _loadingPhoneMessages = false;
+    }
+  }
+
+  Future<void> _loadConversationMessages(Conversation conversation) async {
+    if (!_smsController.isActive) return;
+    final messages = await _smsController.loadThreadMessages(conversation.id);
     if (!mounted) return;
-    final existing = {
-      for (final conversation in _messageRepository.conversations)
-        conversation.id: conversation,
-    };
-    final merged = loaded.map((incoming) {
-      final current = existing[incoming.id];
-      if (current == null || current.address != incoming.address) return incoming;
-      current
-        ..preview = incoming.preview
-        ..updatedAt = incoming.updatedAt
-        ..unreadCount = incoming.unreadCount;
-      current.messages
-        ..clear()
-        ..addAll(incoming.messages);
-      return current;
-    }).toList();
     setState(() {
-      _usingPhoneMessages = true;
-      _messageRepository.replaceAll(merged);
+      conversation.messages
+        ..clear()
+        ..addAll(messages);
     });
   }
 
@@ -108,30 +140,56 @@ class _MessagesUiAppState extends State<MessagesUiApp>
     final address = conversation.address;
     final trimmed = text.trim();
     if (address == null || address.isEmpty || trimmed.isEmpty) return;
-    unawaited(_sendPhoneMessage(conversation, address, trimmed));
+    final now = DateTime.now();
+    final pendingId = 'sending-${now.microsecondsSinceEpoch}';
+    setState(() {
+      conversation.messages.add(
+        ChatMessage(
+          id: pendingId,
+          text: trimmed,
+          sentAt: now,
+          isFromMe: true,
+          deliveryState: DeliveryState.sending,
+        ),
+      );
+      conversation
+        ..preview = trimmed
+        ..updatedAt = now;
+    });
+    unawaited(
+      _sendPhoneMessage(conversation, address, trimmed, pendingId),
+    );
   }
 
   Future<void> _sendPhoneMessage(
     Conversation conversation,
     String address,
     String text,
+    String pendingId,
   ) async {
     try {
       await _smsController.sendText(address, text);
+      await _loadConversationMessages(conversation);
       await _loadPhoneMessages();
     } catch (_) {
       if (!mounted) return;
       final now = DateTime.now();
       setState(() {
-        conversation.messages.add(
-          ChatMessage(
-            id: 'failed-${now.microsecondsSinceEpoch}',
-            text: text,
-            sentAt: now,
-            isFromMe: true,
-            deliveryState: DeliveryState.failed,
-          ),
+        final pendingIndex = conversation.messages.indexWhere(
+          (message) => message.id == pendingId,
         );
+        final failedMessage = ChatMessage(
+          id: 'failed-${now.microsecondsSinceEpoch}',
+          text: text,
+          sentAt: now,
+          isFromMe: true,
+          deliveryState: DeliveryState.failed,
+        );
+        if (pendingIndex == -1) {
+          conversation.messages.add(failedMessage);
+        } else {
+          conversation.messages[pendingIndex] = failedMessage;
+        }
         conversation
           ..preview = text
           ..updatedAt = now;
@@ -204,6 +262,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
             onReloadPhoneMessages: _loadPhoneMessages,
             onMarkConversationRead: _markConversationRead,
             onDeleteConversation: _deleteConversation,
+            onLoadConversation: _loadConversationMessages,
           ),
         ),
       ),

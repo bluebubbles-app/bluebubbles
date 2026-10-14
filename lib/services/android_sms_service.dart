@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -15,6 +16,7 @@ class AndroidSmsController extends ChangeNotifier {
   bool supported = false;
   bool isDefaultSmsApp = false;
   bool permissionsGranted = false;
+  bool contactsGranted = false;
   bool busy = false;
   String? lastError;
   VoidCallback? onMessagesChanged;
@@ -37,6 +39,7 @@ class AndroidSmsController extends ChangeNotifier {
       supported = raw?['supported'] == true;
       isDefaultSmsApp = raw?['isDefaultSmsApp'] == true;
       permissionsGranted = raw?['permissionsGranted'] == true;
+      contactsGranted = raw?['contactsGranted'] == true;
       lastError = null;
     } on MissingPluginException {
       supported = false;
@@ -56,7 +59,7 @@ class AndroidSmsController extends ChangeNotifier {
         await _channel.invokeMethod<bool>('requestDefaultSmsRole');
         await refreshState();
       }
-      if (isDefaultSmsApp && !permissionsGranted) {
+      if (isDefaultSmsApp) {
         await _channel.invokeMethod<bool>('requestSmsPermissions');
         await refreshState();
       }
@@ -76,6 +79,18 @@ class AndroidSmsController extends ChangeNotifier {
     return (raw ?? const [])
         .whereType<Map>()
         .map((item) => _conversationFromNative(Map<Object?, Object?>.from(item)))
+        .toList();
+  }
+
+  Future<List<ChatMessage>> loadThreadMessages(String threadId) async {
+    if (!isActive) return const [];
+    final raw = await _channel.invokeListMethod<Object?>(
+      'loadThreadMessages',
+      {'threadId': threadId},
+    );
+    return (raw ?? const [])
+        .whereType<Map>()
+        .map((item) => _messageFromNative(Map<Object?, Object?>.from(item)))
         .toList();
   }
 
@@ -139,6 +154,9 @@ class AndroidSmsController extends ChangeNotifier {
       updatedAt: DateTime.fromMillisecondsSinceEpoch(updatedAtMillis),
       avatarColors: _avatarColors(id),
       messages: messages,
+      avatarBytes: raw['avatarBytes'] is Uint8List
+          ? raw['avatarBytes'] as Uint8List
+          : null,
       unreadCount: (raw['unreadCount'] as num?)?.toInt() ?? 0,
     );
   }

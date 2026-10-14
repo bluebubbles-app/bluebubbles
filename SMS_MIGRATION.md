@@ -9,8 +9,10 @@ required permissions.
 
 1. Android `ROLE_SMS` eligibility components and the system role request;
 2. runtime SMS, contacts, MMS-receive, and notification permission requests;
-3. native SMS provider reads mapped to `Conversation` and `ChatMessage`;
-4. a content observer that refreshes Flutter when SMS data changes;
+3. lightweight native conversation summaries plus message history loaded only
+   when a thread is opened;
+4. Android contact-name and thumbnail lookup, plus a content observer that
+   refreshes Flutter when SMS data changes;
 5. text-SMS sending, multipart text support, receiving, read-state updates,
    thread deletion, and incoming-message notifications;
 6. Preview Mode without changing the phone's current default SMS app.

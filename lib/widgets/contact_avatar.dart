@@ -16,36 +16,47 @@ class ContactAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final avatar = ClipOval(
-      child: conversation.avatarAsset == null
-          ? Container(
-              width: size,
-              height: size,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: conversation.avatarColors,
-                ),
-              ),
-              child: Text(
-                conversation.initials,
-                style: TextStyle(
-                  color: CupertinoColors.white,
-                  fontSize: size * .34,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -.4,
-                ),
-              ),
-            )
-          : Image.asset(
-              conversation.avatarAsset!,
-              width: size,
-              height: size,
-              fit: BoxFit.cover,
-            ),
-    );
+    final avatarBytes = conversation.avatarBytes;
+    final Widget avatarContent;
+    if (avatarBytes != null) {
+      avatarContent = Image.memory(
+        avatarBytes,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+      );
+    } else if (conversation.avatarAsset != null) {
+      avatarContent = Image.asset(
+        conversation.avatarAsset!,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+      );
+    } else {
+      avatarContent = Container(
+        width: size,
+        height: size,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: conversation.avatarColors,
+          ),
+        ),
+        child: Text(
+          conversation.initials,
+          style: TextStyle(
+            color: CupertinoColors.white,
+            fontSize: size * .34,
+            fontWeight: FontWeight.w600,
+            letterSpacing: -.4,
+          ),
+        ),
+      );
+    }
+    final avatar = ClipOval(child: avatarContent);
 
     if (!showUnreadBadge || conversation.unreadCount == 0) return avatar;
 

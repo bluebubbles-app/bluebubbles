@@ -193,15 +193,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 _ActionRow(
                   key: const ValueKey('sms-mode-action'),
-                  title: widget.smsController.isActive
-                      ? 'Reload Phone Messages'
-                      : 'Use as Default SMS App',
-                  icon: widget.smsController.isActive
-                      ? CupertinoIcons.refresh
-                      : CupertinoIcons.checkmark_circle,
+                  title: !widget.smsController.isActive
+                      ? 'Use as Default SMS App'
+                      : !widget.smsController.contactsGranted
+                          ? 'Allow Contact Photos'
+                          : 'Reload Phone Messages',
+                  icon: !widget.smsController.isActive
+                      ? CupertinoIcons.checkmark_circle
+                      : !widget.smsController.contactsGranted
+                          ? CupertinoIcons.person_crop_circle
+                          : CupertinoIcons.refresh,
                   onPressed: _smsChanging || !widget.smsController.supported
                       ? null
-                      : widget.smsController.isActive
+                      : widget.smsController.isActive &&
+                              widget.smsController.contactsGranted
                           ? _reloadPhoneMessages
                           : _changeSmsMode,
                 ),

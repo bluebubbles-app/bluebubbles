@@ -65,6 +65,7 @@ class MainActivity : FlutterActivity() {
             "requestDefaultSmsRole" -> requestDefaultSmsRole(result)
             "requestSmsPermissions" -> requestSmsPermissions(result)
             "loadConversations" -> loadConversations(result)
+            "loadThreadMessages" -> loadThreadMessages(call, result)
             "sendSms" -> sendSms(call, result)
             "markThreadRead" -> markThreadRead(call, result)
             "deleteThread" -> deleteThread(call, result)
@@ -85,7 +86,11 @@ class MainActivity : FlutterActivity() {
         "supported" to isSmsRoleAvailable(),
         "isDefaultSmsApp" to isDefaultSmsApp(),
         "permissionsGranted" to hasCoreSmsPermissions(),
+        "contactsGranted" to hasPermission(Manifest.permission.READ_CONTACTS),
     )
+
+    private fun hasPermission(permission: String): Boolean =
+        checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
 
     private fun isSmsRoleAvailable(): Boolean {
         if (!packageManager.hasSystemFeature(PackageManager.FEATURE_TELEPHONY)) {
@@ -110,9 +115,7 @@ class MainActivity : FlutterActivity() {
             Manifest.permission.SEND_SMS,
             Manifest.permission.RECEIVE_SMS,
         )
-        return permissions.all {
-            checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED
-        }
+        return permissions.all(::hasPermission)
     }
 
     private fun requestDefaultSmsRole(result: MethodChannel.Result) {
@@ -149,10 +152,6 @@ class MainActivity : FlutterActivity() {
             )
             return
         }
-        if (hasCoreSmsPermissions()) {
-            result.success(true)
-            return
-        }
         if (pendingPermissionResult != null) {
             result.error("request_active", "A permission request is already active.", null)
             return
@@ -168,8 +167,13 @@ class MainActivity : FlutterActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissions.add(Manifest.permission.POST_NOTIFICATIONS)
         }
+        val missingPermissions = permissions.filterNot(::hasPermission)
+        if (missingPermissions.isEmpty()) {
+            result.success(true)
+            return
+        }
         pendingPermissionResult = result
-        requestPermissions(permissions.toTypedArray(), PERMISSION_REQUEST)
+        requestPermissions(missingPermissions.toTypedArray(), PERMISSION_REQUEST)
     }
 
     private fun loadConversations(result: MethodChannel.Result) {
@@ -230,6 +234,28 @@ class MainActivity : FlutterActivity() {
         }.start()
     }
 
+    private fun loadThreadMessages(call: MethodCall, result: MethodChannel.Result) {
+        if (!isDefaultSmsApp() || !hasCoreSmsPermissions()) {
+            result.error("sms_access_denied", "SMS access is not active.", null)
+            return
+        }
+        val threadId = call.argument<String>("threadId").orEmpty()
+        if (threadId.isEmpty()) {
+            result.error("invalid_thread", "A thread ID is required.", null)
+            return
+        }
+        Thread {
+            try {
+                val messages = queryThreadMessages(threadId)
+                runOnUiThread { result.success(messages) }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    result.error("sms_query_failed", error.message, null)
+                }
+            }
+        }.start()
+    }
+
     private fun markThreadRead(call: MethodCall, result: MethodChannel.Result) {
         if (!isDefaultSmsApp() || !hasCoreSmsPermissions()) {
             result.error("sms_access_denied", "SMS access is not active.", null)
@@ -281,7 +307,6 @@ class MainActivity : FlutterActivity() {
 
     private fun querySmsConversations(): List<Map<String, Any?>> {
         val projection = arrayOf(
-            BaseColumns._ID,
             Telephony.Sms.THREAD_ID,
             Telephony.Sms.ADDRESS,
             Telephony.Sms.BODY,
@@ -290,6 +315,7 @@ class MainActivity : FlutterActivity() {
             Telephony.Sms.READ,
         )
         val conversations = linkedMapOf<String, SmsConversationBuilder>()
+        val contactCache = mutableMapOf<String, ContactDetails>()
         contentResolver.query(
             Telephony.Sms.CONTENT_URI,
             projection,
@@ -297,7 +323,6 @@ class MainActivity : FlutterActivity() {
             null,
             "${Telephony.Sms.DATE} DESC",
         )?.use { cursor ->
-            val idColumn = cursor.getColumnIndexOrThrow(BaseColumns._ID)
             val threadColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.THREAD_ID)
             val addressColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
             val bodyColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.BODY)
@@ -317,36 +342,24 @@ class MainActivity : FlutterActivity() {
                     type == Telephony.Sms.MESSAGE_TYPE_FAILED ||
                     type == Telephony.Sms.MESSAGE_TYPE_QUEUED
                 val builder = conversations.getOrPut(threadId) {
+                    val contact = contactCache.getOrPut(address) {
+                        contactDetails(address)
+                    }
                     SmsConversationBuilder(
                         id = threadId,
                         address = address,
-                        title = contactName(address) ?: address,
+                        title = contact.name ?: address,
                         preview = body,
                         updatedAt = date,
+                        avatarBytes = contact.avatarBytes,
                     )
                 }
                 if (!fromMe && cursor.getInt(readColumn) == 0) {
                     builder.unreadCount += 1
                 }
-                val deliveryState = when (type) {
-                    Telephony.Sms.MESSAGE_TYPE_OUTBOX,
-                    Telephony.Sms.MESSAGE_TYPE_QUEUED -> "sending"
-                    Telephony.Sms.MESSAGE_TYPE_FAILED -> "failed"
-                    else -> "delivered"
-                }
-                builder.messages.add(
-                    hashMapOf(
-                        "id" to cursor.getLong(idColumn).toString(),
-                        "text" to body,
-                        "sentAt" to date,
-                        "isFromMe" to fromMe,
-                        "deliveryState" to deliveryState,
-                    ),
-                )
             }
         }
         return conversations.values.map { builder ->
-            builder.messages.reverse()
             hashMapOf<String, Any?>(
                 "id" to builder.id,
                 "address" to builder.address,
@@ -354,17 +367,66 @@ class MainActivity : FlutterActivity() {
                 "preview" to builder.preview,
                 "updatedAt" to builder.updatedAt,
                 "unreadCount" to builder.unreadCount,
-                "messages" to builder.messages,
+                "avatarBytes" to builder.avatarBytes,
+                "messages" to emptyList<HashMap<String, Any?>>(),
             )
         }
     }
 
-    private fun contactName(address: String): String? {
+    private fun queryThreadMessages(threadId: String): List<HashMap<String, Any?>> {
+        val projection = arrayOf(
+            BaseColumns._ID,
+            Telephony.Sms.BODY,
+            Telephony.Sms.DATE,
+            Telephony.Sms.TYPE,
+        )
+        val messages = mutableListOf<HashMap<String, Any?>>()
+        contentResolver.query(
+            Telephony.Sms.CONTENT_URI,
+            projection,
+            "${Telephony.Sms.THREAD_ID} = ?",
+            arrayOf(threadId),
+            "${Telephony.Sms.DATE} DESC",
+        )?.use { cursor ->
+            val idColumn = cursor.getColumnIndexOrThrow(BaseColumns._ID)
+            val bodyColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.BODY)
+            val dateColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.DATE)
+            val typeColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.TYPE)
+            var processed = 0
+            while (cursor.moveToNext() && processed < 500) {
+                processed += 1
+                val type = cursor.getInt(typeColumn)
+                val fromMe = type == Telephony.Sms.MESSAGE_TYPE_SENT ||
+                    type == Telephony.Sms.MESSAGE_TYPE_OUTBOX ||
+                    type == Telephony.Sms.MESSAGE_TYPE_FAILED ||
+                    type == Telephony.Sms.MESSAGE_TYPE_QUEUED
+                val deliveryState = when (type) {
+                    Telephony.Sms.MESSAGE_TYPE_OUTBOX,
+                    Telephony.Sms.MESSAGE_TYPE_QUEUED -> "sending"
+                    Telephony.Sms.MESSAGE_TYPE_FAILED -> "failed"
+                    else -> "delivered"
+                }
+                messages.add(
+                    hashMapOf(
+                        "id" to cursor.getLong(idColumn).toString(),
+                        "text" to cursor.getString(bodyColumn).orEmpty(),
+                        "sentAt" to cursor.getLong(dateColumn),
+                        "isFromMe" to fromMe,
+                        "deliveryState" to deliveryState,
+                    ),
+                )
+            }
+        }
+        messages.reverse()
+        return messages
+    }
+
+    private fun contactDetails(address: String): ContactDetails {
         if (address.isEmpty() ||
             checkSelfPermission(Manifest.permission.READ_CONTACTS) !=
             PackageManager.PERMISSION_GRANTED
         ) {
-            return null
+            return ContactDetails()
         }
         val uri = Uri.withAppendedPath(
             ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
@@ -372,14 +434,29 @@ class MainActivity : FlutterActivity() {
         )
         contentResolver.query(
             uri,
-            arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME),
+            arrayOf(
+                ContactsContract.PhoneLookup.DISPLAY_NAME,
+                ContactsContract.PhoneLookup.PHOTO_THUMBNAIL_URI,
+            ),
             null,
             null,
             null,
         )?.use { cursor ->
-            if (cursor.moveToFirst()) return cursor.getString(0)
+            if (cursor.moveToFirst()) {
+                val photoUri = cursor.getString(1)
+                val avatarBytes = photoUri?.let { value ->
+                    runCatching {
+                        contentResolver.openInputStream(Uri.parse(value))
+                            ?.use { it.readBytes() }
+                    }.getOrNull()
+                }
+                return ContactDetails(
+                    name = cursor.getString(0),
+                    avatarBytes = avatarBytes,
+                )
+            }
         }
-        return null
+        return ContactDetails()
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -417,6 +494,11 @@ private data class SmsConversationBuilder(
     val title: String,
     val preview: String,
     val updatedAt: Long,
+    val avatarBytes: ByteArray? = null,
     var unreadCount: Int = 0,
-    val messages: MutableList<HashMap<String, Any?>> = mutableListOf(),
+)
+
+private data class ContactDetails(
+    val name: String? = null,
+    val avatarBytes: ByteArray? = null,
 )
