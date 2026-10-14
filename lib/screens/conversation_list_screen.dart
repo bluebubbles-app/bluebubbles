@@ -11,6 +11,12 @@ import '../widgets/ios_search_field.dart';
 import 'conversation_screen.dart';
 import 'settings_screen.dart';
 
+const maxPinnedConversations = 9;
+
+bool hasAvailablePinSlot(Iterable<Conversation> conversations) =>
+    conversations.where((conversation) => conversation.isPinned).length <
+    maxPinnedConversations;
+
 class ConversationListScreen extends StatefulWidget {
   const ConversationListScreen({
     super.key,
@@ -77,8 +83,27 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
     if (mounted) setState(() {});
   }
 
-  void _pinConversation(Conversation conversation) {
+  Future<void> _pinConversation(Conversation conversation) async {
+    if (conversation.isPinned) return;
+    if (!hasAvailablePinSlot(widget.conversations)) {
+      HapticFeedback.heavyImpact();
+      await showCupertinoDialog<void>(
+        context: context,
+        builder: (context) => CupertinoAlertDialog(
+          title: const Text('Pin Limit Reached'),
+          content: const Text('You can pin up to 9 conversations.'),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     HapticFeedback.mediumImpact();
+    if (!mounted) return;
     setState(() => conversation.isPinned = true);
   }
 
@@ -125,7 +150,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
         if (conversation.isPinned) {
           _unpinConversation(conversation);
         } else {
-          _pinConversation(conversation);
+          await _pinConversation(conversation);
         }
         break;
       case 'mute':
