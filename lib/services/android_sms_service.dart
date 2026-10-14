@@ -27,7 +27,7 @@ class AndroidSmsController extends ChangeNotifier {
   }
 
   static const _channel = MethodChannel('bluebubbles/sms');
-  static const _providerTimeout = Duration(seconds: 8);
+  static const _providerTimeout = Duration(seconds: 35);
   static const _diagnosticsTimeout = Duration(seconds: 6);
 
   bool supported = false;

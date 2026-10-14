@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'data/demo_data.dart';
 import 'data/message_repository.dart';
@@ -27,6 +29,7 @@ class MessagesUiApp extends StatefulWidget {
 
 class _MessagesUiAppState extends State<MessagesUiApp>
     with WidgetsBindingObserver {
+  static const _phoneConversationCacheKey = 'phone_conversation_headers_v1';
   late final MessageRepository _messageRepository =
       DemoMessageRepository(demoConversations());
   final AppSettingsController _settings = AppSettingsController();
@@ -35,7 +38,6 @@ class _MessagesUiAppState extends State<MessagesUiApp>
   bool _loadingPhoneMessages = false;
   String? _phoneLoadError;
   Future<void>? _phoneLoadFuture;
-  bool _phoneReloadRequested = false;
   final Map<String, ConversationEnrichment> _pendingEnrichments = {};
   Timer? _enrichmentTimer;
 
@@ -115,6 +117,9 @@ class _MessagesUiAppState extends State<MessagesUiApp>
     await _smsController.refreshState();
     if (!mounted) return;
     if (_smsController.isActive) {
+      if (!_usingPhoneMessages || _messageRepository.conversations.isEmpty) {
+        await _restorePhoneConversationCache();
+      }
       await _reloadPhoneMessagesSilently();
     } else if (_smsController.isDefaultSmsApp && !_usingPhoneMessages) {
       setState(() {
@@ -146,10 +151,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
   Future<void> _loadPhoneMessages() {
     if (!_smsController.isActive) return Future<void>.value();
     final activeLoad = _phoneLoadFuture;
-    if (activeLoad != null) {
-      _phoneReloadRequested = true;
-      return activeLoad;
-    }
+    if (activeLoad != null) return activeLoad;
 
     late final Future<void> trackedLoad;
     trackedLoad = _performPhoneMessageLoad().whenComplete(() {
@@ -173,28 +175,32 @@ class _MessagesUiAppState extends State<MessagesUiApp>
       });
     }
     try {
-      do {
-        _phoneReloadRequested = false;
-        final loaded = await _smsController.loadConversations();
-        if (!mounted || !_smsController.isActive) return;
-        final existing = {
-          for (final conversation in _messageRepository.conversations)
-            conversation.id: conversation,
-        };
-        final merged = loaded.map((incoming) {
-          final current = existing[incoming.id];
-          if (current == null) return incoming;
-          current
-            ..preview = incoming.preview
-            ..updatedAt = incoming.updatedAt
-            ..unreadCount = incoming.unreadCount;
-          return current;
-        }).toList();
-        setState(() {
-          _phoneLoadError = null;
-          _messageRepository.replaceAll(merged);
-        });
-      } while (_phoneReloadRequested && _smsController.isActive);
+      final loaded = await _smsController.loadConversations();
+      if (!mounted || !_smsController.isActive) return;
+      final existing = {
+        for (final conversation in _messageRepository.conversations)
+          conversation.id: conversation,
+      };
+      final merged = loaded.map((incoming) {
+        final current = existing[incoming.id];
+        if (current == null) return incoming;
+        if (incoming.address?.isNotEmpty == true) {
+          current.address = incoming.address;
+        }
+        if (incoming.title != 'Conversation') {
+          current.title = incoming.title;
+        }
+        current
+          ..preview = incoming.preview
+          ..updatedAt = incoming.updatedAt
+          ..unreadCount = incoming.unreadCount;
+        return current;
+      }).toList();
+      setState(() {
+        _phoneLoadError = null;
+        _messageRepository.replaceAll(merged);
+      });
+      unawaited(_savePhoneConversationCache(merged));
     } catch (error) {
       if (mounted) {
         setState(() {
@@ -203,8 +209,51 @@ class _MessagesUiAppState extends State<MessagesUiApp>
       }
       rethrow;
     } finally {
-      _phoneReloadRequested = false;
       if (mounted) setState(() => _loadingPhoneMessages = false);
+    }
+  }
+
+  Future<void> _restorePhoneConversationCache() async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      final encoded = preferences.getString(_phoneConversationCacheKey);
+      if (encoded == null || encoded.isEmpty || !mounted) return;
+      final decoded = jsonDecode(encoded);
+      if (decoded is! List) return;
+      final cached = decoded
+          .whereType<Map>()
+          .map(
+            (item) => Conversation.fromJson(
+              Map<String, Object?>.from(item),
+            ),
+          )
+          .toList();
+      if (cached.isEmpty || !mounted) return;
+      setState(() {
+        _usingPhoneMessages = true;
+        _messageRepository.replaceAll(cached);
+      });
+    } catch (error) {
+      debugPrint('Conversation cache restore failed: $error');
+    }
+  }
+
+  Future<void> _savePhoneConversationCache(
+    List<Conversation> conversations,
+  ) async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      final summaries = conversations.map((conversation) {
+        final json = conversation.toJson();
+        json['messages'] = const <Object?>[];
+        return json;
+      }).toList();
+      await preferences.setString(
+        _phoneConversationCacheKey,
+        jsonEncode(summaries),
+      );
+    } catch (error) {
+      debugPrint('Conversation cache save failed: $error');
     }
   }
 
@@ -250,6 +299,11 @@ class _MessagesUiAppState extends State<MessagesUiApp>
         }
       }
     });
+    if (_usingPhoneMessages) {
+      unawaited(
+        _savePhoneConversationCache(_messageRepository.conversations),
+      );
+    }
   }
 
   void _sendMessage(Conversation conversation, String text) {
@@ -321,12 +375,6 @@ class _MessagesUiAppState extends State<MessagesUiApp>
     setState(() => _messageRepository.replaceAll(conversations));
   }
 
-  void _markConversationRead(Conversation conversation) {
-    if (_smsController.isActive) {
-      unawaited(_smsController.markThreadRead(conversation.id));
-    }
-  }
-
   Future<void> _deleteConversation(Conversation conversation) async {
     if (_smsController.isActive) {
       await _smsController.deleteThread(conversation.id);
@@ -388,7 +436,6 @@ class _MessagesUiAppState extends State<MessagesUiApp>
             smsController: _smsController,
             onEnableSmsMode: _enableSmsMode,
             onReloadPhoneMessages: _loadPhoneMessages,
-            onMarkConversationRead: _markConversationRead,
             onDeleteConversation: _deleteConversation,
             onLoadConversation: _loadConversationMessages,
             onCallConversation: _callConversation,

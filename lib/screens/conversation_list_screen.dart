@@ -29,7 +29,6 @@ class ConversationListScreen extends StatefulWidget {
     required this.smsController,
     required this.onEnableSmsMode,
     required this.onReloadPhoneMessages,
-    required this.onMarkConversationRead,
     required this.onDeleteConversation,
     required this.onLoadConversation,
     required this.onCallConversation,
@@ -43,7 +42,6 @@ class ConversationListScreen extends StatefulWidget {
   final AndroidSmsController smsController;
   final Future<bool> Function() onEnableSmsMode;
   final Future<void> Function() onReloadPhoneMessages;
-  final ValueChanged<Conversation> onMarkConversationRead;
   final Future<void> Function(Conversation) onDeleteConversation;
   final Future<void> Function(Conversation) onLoadConversation;
   final ValueChanged<Conversation> onCallConversation;
@@ -81,7 +79,6 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
           allConversations: widget.conversations,
           onLoad: () async {
             await widget.onLoadConversation(conversation);
-            widget.onMarkConversationRead(conversation);
           },
           onSend: (text) {
             widget.onSend(conversation, text);

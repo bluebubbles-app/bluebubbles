@@ -34,10 +34,11 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val CHANNEL = "bluebubbles/sms"
         private const val TAG = "BlueBubblesSms"
+        private const val NATIVE_BUILD = "2026-10-15-paged-v1"
         private const val ROLE_REQUEST = 4701
         private const val PERMISSION_REQUEST = 4702
-        private const val PROVIDER_LOAD_TIMEOUT_MS = 6_000L
-        private const val METHOD_REPLY_TIMEOUT_MS = 7_000L
+        private const val PROVIDER_LOAD_TIMEOUT_MS = 20_000L
+        private const val METHOD_REPLY_TIMEOUT_MS = 30_000L
     }
 
     private lateinit var channel: MethodChannel
@@ -62,6 +63,7 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        Log.i(TAG, "Native SMS bridge $NATIVE_BUILD")
         channel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             CHANNEL,
@@ -232,7 +234,7 @@ class MainActivity : FlutterActivity() {
             try {
                 lastLoadStage = "Reading SMS provider"
                 lastLoadResult = "In progress"
-                Log.i(TAG, "Conversation load started")
+                Log.i(TAG, "Conversation load started ($NATIVE_BUILD)")
                 val page = querySmsConversations()
                 val conversations = page.items
                 val duration = SystemClock.elapsedRealtime() - startedAt
@@ -299,6 +301,7 @@ class MainActivity : FlutterActivity() {
         Thread {
             val diagnostics = linkedMapOf<String, Any?>(
                 "Package" to packageName,
+                "Native build" to NATIVE_BUILD,
                 "Android SDK" to Build.VERSION.SDK_INT,
                 "Default SMS role" to isDefaultSmsApp(),
                 "Default SMS package" to runCatching {
@@ -412,6 +415,9 @@ class MainActivity : FlutterActivity() {
             result.error("invalid_thread", "A thread ID is required.", null)
             return
         }
+        // Stop optional contact/avatar enrichment before the latency-sensitive
+        // message query. It can resume after the next conversation refresh.
+        enrichmentGeneration.incrementAndGet()
         val replied = AtomicBoolean(false)
         val timeoutReply = Runnable {
             if (replied.compareAndSet(false, true)) {
@@ -524,15 +530,55 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun querySmsConversations(): ConversationPage {
-        lastLoadStage = "Reading recent SMS rows"
-        val summaries = queryRecentSmsConversations()
+        lastLoadStage = "Reading thread summaries"
+        val projection = arrayOf(
+            BaseColumns._ID,
+            Telephony.Threads.DATE,
+            Telephony.Threads.RECIPIENT_IDS,
+            Telephony.Threads.SNIPPET,
+            Telephony.Threads.READ,
+        )
+        val summaries = mutableListOf<ThreadSummary>()
+        val threadsUri = Telephony.Threads.CONTENT_URI.buildUpon()
+            .appendQueryParameter("simple", "true")
+            .build()
+        providerQuery(
+            threadsUri,
+            projection,
+            sortOrder = "${Telephony.Threads.DATE} DESC LIMIT 40",
+            timeoutMs = 20_000L,
+        ) { cursor ->
+            val idColumn = cursor.getColumnIndexOrThrow(BaseColumns._ID)
+            val dateColumn = cursor.getColumnIndexOrThrow(Telephony.Threads.DATE)
+            val recipientsColumn = cursor.getColumnIndexOrThrow(
+                Telephony.Threads.RECIPIENT_IDS,
+            )
+            val snippetColumn = cursor.getColumnIndexOrThrow(
+                Telephony.Threads.SNIPPET,
+            )
+            val readColumn = cursor.getColumnIndexOrThrow(Telephony.Threads.READ)
+            while (cursor.moveToNext() && summaries.size < 40) {
+                summaries.add(
+                    ThreadSummary(
+                        id = cursor.getLong(idColumn).toString(),
+                        recipientIds = cursor.getString(recipientsColumn)
+                            .orEmpty()
+                            .trim()
+                            .split(Regex("\\s+"))
+                            .filter(String::isNotEmpty),
+                        preview = cursor.getString(snippetColumn).orEmpty(),
+                        updatedAt = normalizedTimestamp(cursor.getLong(dateColumn)),
+                        unreadCount = if (cursor.getInt(readColumn) == 0) 1 else 0,
+                    ),
+                )
+            }
+        }
         lastLoadStage = "Encoding ${summaries.size} conversation summaries"
         val items = summaries.map { summary ->
-            val directAddress = summary.addresses.singleOrNull().orEmpty()
             hashMapOf<String, Any?>(
                 "id" to summary.id,
-                "address" to directAddress,
-                "title" to directAddress.ifEmpty { "Conversation" },
+                "address" to "",
+                "title" to "Conversation",
                 "preview" to summary.preview,
                 "updatedAt" to summary.updatedAt,
                 "unreadCount" to summary.unreadCount,
@@ -541,49 +587,6 @@ class MainActivity : FlutterActivity() {
             )
         }
         return ConversationPage(items = items, summaries = summaries)
-    }
-
-    private fun queryRecentSmsConversations(): List<ThreadSummary> {
-        val projection = arrayOf(
-            Telephony.Sms.THREAD_ID,
-            Telephony.Sms.ADDRESS,
-            Telephony.Sms.DATE,
-            Telephony.Sms.BODY,
-            Telephony.Sms.READ,
-        )
-        val summaries = linkedMapOf<String, ThreadSummary>()
-        providerQuery(
-            Telephony.Sms.CONTENT_URI,
-            projection,
-            sortOrder = "${Telephony.Sms.DATE} DESC LIMIT 5000",
-            timeoutMs = 4_000L,
-        ) { cursor ->
-            val threadColumn = cursor.getColumnIndexOrThrow(
-                Telephony.Sms.THREAD_ID,
-            )
-            val addressColumn = cursor.getColumnIndexOrThrow(
-                Telephony.Sms.ADDRESS,
-            )
-            val dateColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.DATE)
-            val bodyColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.BODY)
-            val readColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.READ)
-            while (cursor.moveToNext() && summaries.size < 40) {
-                val threadId = cursor.getLong(threadColumn).toString()
-                if (summaries.containsKey(threadId)) continue
-                summaries[threadId] = ThreadSummary(
-                    id = threadId,
-                    recipientIds = emptyList(),
-                    addresses = listOfNotNull(
-                        cursor.getString(addressColumn)?.takeIf(String::isNotBlank),
-                    ),
-                    preview = cursor.getString(bodyColumn).orEmpty(),
-                    updatedAt = normalizedTimestamp(cursor.getLong(dateColumn)),
-                    unreadCount = if (cursor.getInt(readColumn) == 0) 1 else 0,
-                )
-            }
-        }
-        Log.i(TAG, "Recent SMS rows returned ${summaries.size} conversations")
-        return summaries.values.toList()
     }
 
     private fun enrichConversationSummaries(
@@ -643,15 +646,15 @@ class MainActivity : FlutterActivity() {
         providerQuery(
             threadUri,
             projection,
-            sortOrder = "${Telephony.Sms.DATE} DESC LIMIT 80",
-            timeoutMs = 3_500L,
+            sortOrder = "${Telephony.Sms.DATE} DESC LIMIT 40",
+            timeoutMs = 10_000L,
         ) { cursor ->
             val idColumn = cursor.getColumnIndexOrThrow(BaseColumns._ID)
             val bodyColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.BODY)
             val dateColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.DATE)
             val typeColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.TYPE)
             var processed = 0
-            while (cursor.moveToNext() && processed < 80) {
+            while (cursor.moveToNext() && processed < 40) {
                 processed += 1
                 val type = cursor.getInt(typeColumn)
                 val fromMe = type == Telephony.Sms.MESSAGE_TYPE_SENT ||
@@ -675,12 +678,8 @@ class MainActivity : FlutterActivity() {
                 )
             }
         }
-        messages.addAll(
-            runCatching { queryMmsThreadMessages(threadId) }
-                .getOrDefault(emptyList()),
-        )
         messages.sortBy { (it["sentAt"] as? Long) ?: 0L }
-        return if (messages.size <= 100) messages else messages.takeLast(100)
+        return messages
     }
 
     private fun queryMmsThreadMessages(threadId: String): List<HashMap<String, Any?>> {
