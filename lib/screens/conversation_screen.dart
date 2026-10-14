@@ -48,6 +48,8 @@ class _ConversationScreenState extends State<ConversationScreen>
   bool _loadingMessages = true;
   bool _loadingOlderMessages = false;
   bool _hasOlderMessages = true;
+  bool _programmaticScroll = false;
+  int _programmaticScrollGeneration = 0;
   Object? _loadError;
 
   @override
@@ -109,7 +111,7 @@ class _ConversationScreenState extends State<ConversationScreen>
           _scrollController.position.minScrollExtent,
           _scrollController.position.maxScrollExtent,
         );
-        _scrollController.jumpTo(target.toDouble());
+        _jumpWithoutBubbleMotion(target.toDouble());
       });
     } catch (_) {
       if (mounted) setState(() => _loadingOlderMessages = false);
@@ -118,15 +120,44 @@ class _ConversationScreenState extends State<ConversationScreen>
 
   void _jumpToBottom() {
     if (!_scrollController.hasClients) return;
-    _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+    _jumpWithoutBubbleMotion(_scrollController.position.maxScrollExtent);
+  }
+
+  int _beginProgrammaticScroll() {
+    final generation = ++_programmaticScrollGeneration;
+    _programmaticScroll = true;
+    _scrollElasticController
+      ..stop()
+      ..value = 0;
+    return generation;
+  }
+
+  void _finishProgrammaticScroll(int generation) {
+    if (!mounted || generation != _programmaticScrollGeneration) return;
+    _scrollElasticController.value = 0;
+    _programmaticScroll = false;
+  }
+
+  void _jumpWithoutBubbleMotion(double offset) {
+    if (!_scrollController.hasClients) return;
+    final generation = _beginProgrammaticScroll();
+    _scrollController.jumpTo(offset);
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _finishProgrammaticScroll(generation),
+    );
   }
 
   void _scrollToBottom() {
     if (!_scrollController.hasClients) return;
-    _scrollController.animateTo(
-      _scrollController.position.maxScrollExtent,
-      duration: const Duration(milliseconds: 260),
-      curve: Curves.easeOutCubic,
+    final generation = _beginProgrammaticScroll();
+    unawaited(
+      _scrollController
+          .animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+          )
+          .whenComplete(() => _finishProgrammaticScroll(generation)),
     );
   }
 
@@ -167,8 +198,14 @@ class _ConversationScreenState extends State<ConversationScreen>
   }
 
   bool _handleScrollNotification(ScrollNotification notification) {
-    if (notification.metrics.pixels <= 180) {
+    if (!_programmaticScroll && notification.metrics.pixels <= 180) {
       unawaited(_loadOlderMessages());
+    }
+    if (_programmaticScroll) {
+      if (_scrollElasticController.value != 0) {
+        _scrollElasticController.value = 0;
+      }
+      return false;
     }
     if (notification is ScrollStartNotification) {
       _scrollElasticController.stop();
