@@ -18,13 +18,15 @@ class ConversationScreen extends StatefulWidget {
     required this.conversation,
     required this.allConversations,
     required this.onLoad,
+    required this.onLoadOlder,
     required this.onSend,
     required this.onCall,
   });
 
   final Conversation conversation;
   final List<Conversation> allConversations;
-  final Future<void> Function() onLoad;
+  final Future<int> Function() onLoad;
+  final Future<int> Function() onLoadOlder;
   final ValueChanged<String> onSend;
   final VoidCallback onCall;
 
@@ -44,6 +46,8 @@ class _ConversationScreenState extends State<ConversationScreen>
   final Set<String> _selectedMessageIds = <String>{};
   bool _selectionMode = false;
   bool _loadingMessages = true;
+  bool _loadingOlderMessages = false;
+  bool _hasOlderMessages = true;
   Object? _loadError;
 
   @override
@@ -61,10 +65,11 @@ class _ConversationScreenState extends State<ConversationScreen>
       });
     }
     try {
-      await widget.onLoad();
+      final loadedCount = await widget.onLoad();
       if (!mounted) return;
       setState(() {
         _loadingMessages = false;
+        _hasOlderMessages = loadedCount >= 40;
         _loadError = null;
         _messageListKey = GlobalKey<AnimatedListState>();
       });
@@ -75,6 +80,39 @@ class _ConversationScreenState extends State<ConversationScreen>
         _loadingMessages = false;
         _loadError = error;
       });
+    }
+  }
+
+  Future<void> _loadOlderMessages() async {
+    if (_loadingMessages ||
+        _loadingOlderMessages ||
+        !_hasOlderMessages ||
+        !_scrollController.hasClients) {
+      return;
+    }
+    final oldOffset = _scrollController.offset;
+    final oldMaxExtent = _scrollController.position.maxScrollExtent;
+    setState(() => _loadingOlderMessages = true);
+    try {
+      final addedCount = await widget.onLoadOlder();
+      if (!mounted) return;
+      setState(() {
+        _loadingOlderMessages = false;
+        _hasOlderMessages = addedCount >= 40;
+        _messageListKey = GlobalKey<AnimatedListState>();
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scrollController.hasClients) return;
+        final addedExtent =
+            _scrollController.position.maxScrollExtent - oldMaxExtent;
+        final target = (oldOffset + addedExtent).clamp(
+          _scrollController.position.minScrollExtent,
+          _scrollController.position.maxScrollExtent,
+        );
+        _scrollController.jumpTo(target.toDouble());
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loadingOlderMessages = false);
     }
   }
 
@@ -129,6 +167,9 @@ class _ConversationScreenState extends State<ConversationScreen>
   }
 
   bool _handleScrollNotification(ScrollNotification notification) {
+    if (notification.metrics.pixels <= 180) {
+      unawaited(_loadOlderMessages());
+    }
     if (notification is ScrollStartNotification) {
       _scrollElasticController.stop();
     } else if (notification is ScrollUpdateNotification) {
@@ -393,6 +434,11 @@ class _ConversationScreenState extends State<ConversationScreen>
                         if (index == 0) {
                           return Column(
                             children: [
+                              if (_loadingOlderMessages)
+                                const Padding(
+                                  padding: EdgeInsets.only(bottom: 10),
+                                  child: CupertinoActivityIndicator(),
+                                ),
                               _DateSeparator(
                                 value: widget.conversation.messages.isEmpty
                                     ? DateTime.now()

@@ -31,6 +31,7 @@ class ConversationListScreen extends StatefulWidget {
     required this.onReloadPhoneMessages,
     required this.onDeleteConversation,
     required this.onLoadConversation,
+    required this.onLoadOlderConversation,
     required this.onCallConversation,
   });
 
@@ -43,7 +44,8 @@ class ConversationListScreen extends StatefulWidget {
   final Future<bool> Function() onEnableSmsMode;
   final Future<void> Function() onReloadPhoneMessages;
   final Future<void> Function(Conversation) onDeleteConversation;
-  final Future<void> Function(Conversation) onLoadConversation;
+  final Future<int> Function(Conversation) onLoadConversation;
+  final Future<int> Function(Conversation) onLoadOlderConversation;
   final ValueChanged<Conversation> onCallConversation;
 
   @override
@@ -77,9 +79,8 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
         builder: (_) => ConversationScreen(
           conversation: conversation,
           allConversations: widget.conversations,
-          onLoad: () async {
-            await widget.onLoadConversation(conversation);
-          },
+          onLoad: () => widget.onLoadConversation(conversation),
+          onLoadOlder: () => widget.onLoadOlderConversation(conversation),
           onSend: (text) {
             widget.onSend(conversation, text);
             setState(() {});

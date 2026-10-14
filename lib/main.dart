@@ -257,15 +257,38 @@ class _MessagesUiAppState extends State<MessagesUiApp>
     }
   }
 
-  Future<void> _loadConversationMessages(Conversation conversation) async {
-    if (!_smsController.isActive) return;
+  Future<int> _loadConversationMessages(Conversation conversation) async {
+    if (!_smsController.isActive) return conversation.messages.length;
     final messages = await _smsController.loadThreadMessages(conversation.id);
-    if (!mounted) return;
+    if (!mounted) return 0;
     setState(() {
       conversation.messages
         ..clear()
         ..addAll(messages);
     });
+    return messages.length;
+  }
+
+  Future<int> _loadOlderConversationMessages(
+    Conversation conversation,
+  ) async {
+    if (!_smsController.isActive || conversation.messages.isEmpty) return 0;
+    final oldest = conversation.messages.first;
+    final page = await _smsController.loadThreadMessages(
+      conversation.id,
+      before: oldest.sentAt,
+      beforeMessageId: oldest.id,
+    );
+    if (!mounted || page.isEmpty) return 0;
+    final existingIds = conversation.messages
+        .map((message) => message.id)
+        .toSet();
+    final older = page
+        .where((message) => existingIds.add(message.id))
+        .toList();
+    if (older.isEmpty) return 0;
+    conversation.messages.insertAll(0, older);
+    return older.length;
   }
 
   void _applyConversationEnrichment(ConversationEnrichment enrichment) {
@@ -438,6 +461,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
             onReloadPhoneMessages: _loadPhoneMessages,
             onDeleteConversation: _deleteConversation,
             onLoadConversation: _loadConversationMessages,
+            onLoadOlderConversation: _loadOlderConversationMessages,
             onCallConversation: _callConversation,
           ),
         ),

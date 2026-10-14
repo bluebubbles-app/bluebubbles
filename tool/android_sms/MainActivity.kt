@@ -34,7 +34,7 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val CHANNEL = "bluebubbles/sms"
         private const val TAG = "BlueBubblesSms"
-        private const val NATIVE_BUILD = "2026-10-15-paged-v1"
+        private const val NATIVE_BUILD = "2026-10-15-paged-v2"
         private const val ROLE_REQUEST = 4701
         private const val PERMISSION_REQUEST = 4702
         private const val PROVIDER_LOAD_TIMEOUT_MS = 20_000L
@@ -418,6 +418,9 @@ class MainActivity : FlutterActivity() {
         // Stop optional contact/avatar enrichment before the latency-sensitive
         // message query. It can resume after the next conversation refresh.
         enrichmentGeneration.incrementAndGet()
+        val beforeTimestamp = call.argument<Number>("beforeTimestamp")?.toLong()
+        val beforeMessageId = call.argument<String>("beforeMessageId")
+            ?.toLongOrNull()
         val replied = AtomicBoolean(false)
         val timeoutReply = Runnable {
             if (replied.compareAndSet(false, true)) {
@@ -430,7 +433,11 @@ class MainActivity : FlutterActivity() {
         Thread {
             val startedAt = SystemClock.elapsedRealtime()
             try {
-                val messages = queryThreadMessages(threadId)
+                val messages = queryThreadMessages(
+                    threadId,
+                    beforeTimestamp,
+                    beforeMessageId,
+                )
                 val duration = SystemClock.elapsedRealtime() - startedAt
                 runOnUiThread {
                     if (replied.compareAndSet(false, true)) {
@@ -632,7 +639,11 @@ class MainActivity : FlutterActivity() {
         }.start()
     }
 
-    private fun queryThreadMessages(threadId: String): List<HashMap<String, Any?>> {
+    private fun queryThreadMessages(
+        threadId: String,
+        beforeTimestamp: Long?,
+        beforeMessageId: Long?,
+    ): List<HashMap<String, Any?>> {
         val projection = arrayOf(
             BaseColumns._ID,
             Telephony.Sms.BODY,
@@ -643,10 +654,26 @@ class MainActivity : FlutterActivity() {
         val threadUri = Telephony.Sms.Conversations.CONTENT_URI.buildUpon()
             .appendPath(threadId)
             .build()
+        val selection = if (beforeTimestamp == null) {
+            null
+        } else {
+            "(${Telephony.Sms.DATE} < ? OR " +
+                "(${Telephony.Sms.DATE} = ? AND ${BaseColumns._ID} < ?))"
+        }
+        val selectionArgs = beforeTimestamp?.let { timestamp ->
+            arrayOf(
+                timestamp.toString(),
+                timestamp.toString(),
+                (beforeMessageId ?: Long.MAX_VALUE).toString(),
+            )
+        }
         providerQuery(
             threadUri,
             projection,
-            sortOrder = "${Telephony.Sms.DATE} DESC LIMIT 40",
+            selection = selection,
+            selectionArgs = selectionArgs,
+            sortOrder = "${Telephony.Sms.DATE} DESC, " +
+                "${BaseColumns._ID} DESC LIMIT 40",
             timeoutMs = 10_000L,
         ) { cursor ->
             val idColumn = cursor.getColumnIndexOrThrow(BaseColumns._ID)
@@ -678,7 +705,12 @@ class MainActivity : FlutterActivity() {
                 )
             }
         }
-        messages.sortBy { (it["sentAt"] as? Long) ?: 0L }
+        messages.sortWith(
+            compareBy<HashMap<String, Any?>>(
+                { (it["sentAt"] as? Long) ?: 0L },
+                { (it["id"] as? String)?.toLongOrNull() ?: 0L },
+            ),
+        )
         return messages
     }
 

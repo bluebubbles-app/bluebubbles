@@ -119,12 +119,21 @@ class AndroidSmsController extends ChangeNotifier {
     }
   }
 
-  Future<List<ChatMessage>> loadThreadMessages(String threadId) async {
+  Future<List<ChatMessage>> loadThreadMessages(
+    String threadId, {
+    DateTime? before,
+    String? beforeMessageId,
+  }) async {
     if (!isActive) return const [];
     try {
+      final arguments = <String, Object?>{'threadId': threadId};
+      if (before != null) {
+        arguments['beforeTimestamp'] = before.millisecondsSinceEpoch;
+        arguments['beforeMessageId'] = beforeMessageId;
+      }
       final raw = await _channel.invokeListMethod<Object?>(
         'loadThreadMessages',
-        {'threadId': threadId},
+        arguments,
       ).timeout(_providerTimeout);
       lastError = null;
       return (raw ?? const [])
