@@ -31,6 +31,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _transferService = MessageTransferService();
   bool _transferring = false;
   bool _smsChanging = false;
+  bool _diagnosing = false;
 
   Future<void> _changeSmsMode() async {
     if (_smsChanging) return;
@@ -55,10 +56,67 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _smsChanging = true);
     try {
       await widget.onReloadPhoneMessages();
+      if (mounted &&
+          widget.smsController.isActive &&
+          widget.conversations.isEmpty) {
+        await _showSmsDiagnostics();
+      }
     } catch (error) {
       if (mounted) await _showError('Reload Failed', error);
     } finally {
       if (mounted) setState(() => _smsChanging = false);
+    }
+  }
+
+  Future<void> _showSmsDiagnostics() async {
+    if (_diagnosing) return;
+    setState(() => _diagnosing = true);
+    try {
+      final diagnostics = await widget.smsController.getDiagnostics();
+      if (!mounted) return;
+      final report = diagnostics.entries
+          .map((entry) => '${entry.key}: ${entry.value}')
+          .join('\n');
+      await showCupertinoDialog<void>(
+        context: context,
+        builder: (context) => CupertinoAlertDialog(
+          title: const Text('SMS Diagnostics'),
+          content: Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 360),
+              child: SingleChildScrollView(
+                child: Text(
+                  report,
+                  textAlign: TextAlign.left,
+                  style: const TextStyle(
+                    fontFamily: 'SF Pro Text',
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: report));
+                if (context.mounted) Navigator.of(context).pop();
+              },
+              child: const Text('Copy'),
+            ),
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      );
+    } catch (error) {
+      if (mounted) await _showError('Diagnostics Failed', error);
+    } finally {
+      if (mounted) setState(() => _diagnosing = false);
     }
   }
 
@@ -214,6 +272,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               widget.smsController.notificationsGranted
                           ? _reloadPhoneMessages
                           : _changeSmsMode,
+                ),
+                _ActionRow(
+                  key: const ValueKey('sms-diagnostics-action'),
+                  title: 'SMS Diagnostics',
+                  icon: CupertinoIcons.info_circle,
+                  onPressed: _diagnosing || !widget.smsController.supported
+                      ? null
+                      : _showSmsDiagnostics,
                 ),
               ],
             ),

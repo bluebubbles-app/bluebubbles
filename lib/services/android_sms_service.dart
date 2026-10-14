@@ -130,6 +130,19 @@ class AndroidSmsController extends ChangeNotifier {
     await _channel.invokeMethod<void>('dialNumber', {'address': address});
   }
 
+  Future<Map<String, Object?>> getDiagnostics() async {
+    if (kIsWeb || !Platform.isAndroid) {
+      return const {'Platform': 'Android diagnostics unavailable'};
+    }
+    final raw = await _channel.invokeMapMethod<Object?, Object?>(
+      'getDiagnostics',
+    );
+    return {
+      for (final entry in (raw ?? const {}).entries)
+        entry.key.toString(): entry.value,
+    };
+  }
+
   Future<void> _handleNativeCall(MethodCall call) async {
     if (call.method == 'messagesChanged') onMessagesChanged?.call();
   }

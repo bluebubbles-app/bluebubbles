@@ -2,6 +2,7 @@ package io.github.bluebubblesapp.bluebubbles
 
 import android.Manifest
 import android.app.Activity
+import android.app.AppOpsManager
 import android.app.role.RoleManager
 import android.content.ContentValues
 import android.content.Intent
@@ -12,6 +13,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.Process
 import android.provider.BaseColumns
 import android.provider.ContactsContract
 import android.provider.Settings
@@ -75,6 +77,7 @@ class MainActivity : FlutterActivity() {
             "markThreadRead" -> markThreadRead(call, result)
             "deleteThread" -> deleteThread(call, result)
             "dialNumber" -> dialNumber(call, result)
+            "getDiagnostics" -> getDiagnostics(result)
             "openDefaultSmsSettings" -> {
                 val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                     Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
@@ -222,6 +225,75 @@ class MainActivity : FlutterActivity() {
         } catch (error: Exception) {
             result.error("dial_failed", error.message, null)
         }
+    }
+
+    private fun getDiagnostics(result: MethodChannel.Result) {
+        Thread {
+            val diagnostics = linkedMapOf<String, Any?>(
+                "Package" to packageName,
+                "Android SDK" to Build.VERSION.SDK_INT,
+                "Default SMS role" to isDefaultSmsApp(),
+                "Default SMS package" to runCatching {
+                    Telephony.Sms.getDefaultSmsPackage(this)
+                }.getOrNull(),
+                "READ_SMS" to hasPermission(Manifest.permission.READ_SMS),
+                "SEND_SMS" to hasPermission(Manifest.permission.SEND_SMS),
+                "RECEIVE_SMS" to hasPermission(Manifest.permission.RECEIVE_SMS),
+                "READ_CONTACTS" to hasPermission(Manifest.permission.READ_CONTACTS),
+                "Notifications" to notificationsGranted(),
+                "READ_SMS AppOp" to readSmsAppOp(),
+                "SMS rows" to providerCount(Telephony.Sms.CONTENT_URI),
+                "MMS rows" to providerCount(Telephony.Mms.CONTENT_URI),
+                "Combined threads" to providerCount(
+                    Telephony.Threads.CONTENT_URI.buildUpon()
+                        .appendQueryParameter("simple", "true")
+                        .build(),
+                ),
+            )
+            val loadResult = runCatching { querySmsConversations() }
+            diagnostics["Decoded conversations"] = loadResult
+                .getOrNull()
+                ?.size
+                ?: 0
+            diagnostics["Decode error"] = loadResult.exceptionOrNull()?.let {
+                "${it.javaClass.simpleName}: ${it.message}"
+            } ?: "none"
+            runOnUiThread { result.success(diagnostics) }
+        }.start()
+    }
+
+    private fun providerCount(uri: Uri): String {
+        return try {
+            contentResolver.query(
+                uri,
+                arrayOf(BaseColumns._ID),
+                null,
+                null,
+                null,
+            )?.use { it.count.toString() } ?: "null cursor"
+        } catch (error: Exception) {
+            "${error.javaClass.simpleName}: ${error.message}"
+        }
+    }
+
+    private fun readSmsAppOp(): String {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return "legacy"
+        return runCatching {
+            val manager = getSystemService(AppOpsManager::class.java)
+            when (
+                manager.unsafeCheckOpNoThrow(
+                    AppOpsManager.OPSTR_READ_SMS,
+                    Process.myUid(),
+                    packageName,
+                )
+            ) {
+                AppOpsManager.MODE_ALLOWED -> "allowed"
+                AppOpsManager.MODE_IGNORED -> "ignored"
+                AppOpsManager.MODE_ERRORED -> "errored"
+                AppOpsManager.MODE_DEFAULT -> "default"
+                else -> "unknown"
+            }
+        }.getOrElse { "${it.javaClass.simpleName}: ${it.message}" }
     }
 
     private fun sendSms(call: MethodCall, result: MethodChannel.Result) {
