@@ -83,7 +83,7 @@ void main() {
     final messageText = tester.widget<Text>(
       find.text('Let me know when you leave'),
     );
-    expect(messageText.textAlign, TextAlign.center);
+    expect(messageText.textAlign, TextAlign.left);
 
     final contactName = tester.widget<Text>(find.text('Mia Parker'));
     expect(contactName.style?.fontSize, 12);
