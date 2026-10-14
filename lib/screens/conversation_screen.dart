@@ -474,6 +474,7 @@ class _ConversationScreenState extends State<ConversationScreen>
                           : _ConversationHeader(
                               conversation: widget.conversation,
                               topCompensation: topCompensation,
+                              onCall: widget.onCall,
                             ),
                     ),
                   ],
@@ -856,10 +857,12 @@ class _ConversationHeader extends StatelessWidget {
   const _ConversationHeader({
     required this.conversation,
     required this.topCompensation,
+    required this.onCall,
   });
 
   final Conversation conversation;
   final double topCompensation;
+  final VoidCallback onCall;
 
   @override
   Widget build(BuildContext context) {
@@ -975,7 +978,7 @@ class _ConversationHeader extends StatelessWidget {
                   key: const ValueKey('conversation-call-button'),
                   onPressed: () {
                     HapticFeedback.selectionClick();
-                    widget.onCall();
+                    onCall();
                   },
                   icon: CupertinoIcons.phone,
                   iconSize: 25,
