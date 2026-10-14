@@ -50,12 +50,12 @@ class _ConversationScreenState extends State<ConversationScreen>
   bool _hasOlderMessages = true;
   bool _programmaticScroll = false;
   int _programmaticScrollGeneration = 0;
+  double _lastManualScrollDelta = 0;
   Object? _loadError;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToBottom());
     unawaited(_loadMessages());
   }
 
@@ -70,12 +70,11 @@ class _ConversationScreenState extends State<ConversationScreen>
       final loadedCount = await widget.onLoad();
       if (!mounted) return;
       setState(() {
-        _loadingMessages = false;
-        _hasOlderMessages = loadedCount >= 40;
+        _hasOlderMessages = loadedCount > 0;
         _loadError = null;
         _messageListKey = GlobalKey<AnimatedListState>();
       });
-      WidgetsBinding.instance.addPostFrameCallback((_) => _jumpToBottom());
+      _finishInitialLoadAtBottom();
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -100,7 +99,9 @@ class _ConversationScreenState extends State<ConversationScreen>
       if (!mounted) return;
       setState(() {
         _loadingOlderMessages = false;
-        _hasOlderMessages = addedCount >= 40;
+        // Some Android SMS providers apply their own page cap. Only an empty
+        // page proves that the beginning of the thread has been reached.
+        _hasOlderMessages = addedCount > 0;
         _messageListKey = GlobalKey<AnimatedListState>();
       });
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -121,6 +122,22 @@ class _ConversationScreenState extends State<ConversationScreen>
   void _jumpToBottom() {
     if (!_scrollController.hasClients) return;
     _jumpWithoutBubbleMotion(_scrollController.position.maxScrollExtent);
+  }
+
+  void _finishInitialLoadAtBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _jumpToBottom();
+      // AnimatedList can refine its total extent after its first layout.
+      // A second, hidden positioning pass guarantees the newest message is
+      // the one shown when the loading cover is removed.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _jumpToBottom();
+        setState(() => _loadingMessages = false);
+      });
+      WidgetsBinding.instance.scheduleFrame();
+    });
   }
 
   int _beginProgrammaticScroll() {
@@ -198,7 +215,7 @@ class _ConversationScreenState extends State<ConversationScreen>
   }
 
   bool _handleScrollNotification(ScrollNotification notification) {
-    if (!_programmaticScroll && notification.metrics.pixels <= 180) {
+    if (!_programmaticScroll && notification.metrics.extentBefore <= 700) {
       unawaited(_loadOlderMessages());
     }
     if (_programmaticScroll) {
@@ -207,16 +224,21 @@ class _ConversationScreenState extends State<ConversationScreen>
       }
       return false;
     }
-    if (notification is ScrollStartNotification) {
-      _scrollElasticController.stop();
-    } else if (notification is ScrollUpdateNotification) {
-      final delta = notification.scrollDelta ?? 0;
-      _scrollElasticController.value =
-          (-delta * .16).clamp(-4.0, 4.0).toDouble();
+    if (notification is ScrollStartNotification &&
+        notification.dragDetails != null) {
+      _lastManualScrollDelta = 0;
+      _scrollElasticController
+        ..stop()
+        ..value = 0;
+    } else if (notification is ScrollUpdateNotification &&
+        notification.dragDetails != null) {
+      _lastManualScrollDelta = notification.scrollDelta ?? 0;
     } else if (notification is OverscrollNotification) {
-      _scrollElasticController.value =
-          (-notification.overscroll * .2).clamp(-5.0, 5.0).toDouble();
+      _lastManualScrollDelta = notification.overscroll;
     } else if (notification is ScrollEndNotification) {
+      _scrollElasticController.value =
+          (-_lastManualScrollDelta * .06).clamp(-1.5, 1.5).toDouble();
+      _lastManualScrollDelta = 0;
       _scrollElasticController.animateWith(
         SpringSimulation(
           SpringDescription.withDampingRatio(
@@ -583,8 +605,13 @@ class _ConversationScreenState extends State<ConversationScreen>
                       ),
                     ),
                     if (_loadingMessages)
-                      const Positioned.fill(
-                        child: Center(child: CupertinoActivityIndicator()),
+                      Positioned.fill(
+                        child: ColoredBox(
+                          color: MessagesPalette.background(context),
+                          child: const Center(
+                            child: CupertinoActivityIndicator(),
+                          ),
+                        ),
                       )
                     else if (_loadError != null)
                       Positioned.fill(
