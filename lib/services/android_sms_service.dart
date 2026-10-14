@@ -7,6 +7,20 @@ import 'package:flutter/services.dart';
 
 import '../models/conversation.dart';
 
+class ConversationEnrichment {
+  const ConversationEnrichment({
+    required this.id,
+    required this.address,
+    required this.title,
+    this.avatarBytes,
+  });
+
+  final String id;
+  final String address;
+  final String title;
+  final Uint8List? avatarBytes;
+}
+
 class AndroidSmsController extends ChangeNotifier {
   AndroidSmsController() {
     _channel.setMethodCallHandler(_handleNativeCall);
@@ -24,6 +38,7 @@ class AndroidSmsController extends ChangeNotifier {
   bool busy = false;
   String? lastError;
   VoidCallback? onMessagesChanged;
+  ValueChanged<ConversationEnrichment>? onConversationEnriched;
 
   bool get isActive => supported && isDefaultSmsApp && permissionsGranted;
 
@@ -188,7 +203,23 @@ class AndroidSmsController extends ChangeNotifier {
   }
 
   Future<void> _handleNativeCall(MethodCall call) async {
-    if (call.method == 'messagesChanged') onMessagesChanged?.call();
+    if (call.method == 'messagesChanged') {
+      onMessagesChanged?.call();
+      return;
+    }
+    if (call.method == 'conversationEnriched' && call.arguments is Map) {
+      final raw = Map<Object?, Object?>.from(call.arguments as Map);
+      onConversationEnriched?.call(
+        ConversationEnrichment(
+          id: (raw['id'] ?? '').toString(),
+          address: (raw['address'] ?? '').toString(),
+          title: (raw['title'] ?? '').toString(),
+          avatarBytes: raw['avatarBytes'] is Uint8List
+              ? raw['avatarBytes'] as Uint8List
+              : null,
+        ),
+      );
+    }
   }
 
   Conversation _conversationFromNative(Map<Object?, Object?> raw) {

@@ -34,6 +34,8 @@ class _MessagesUiAppState extends State<MessagesUiApp>
   bool _usingPhoneMessages = false;
   Future<void>? _phoneLoadFuture;
   bool _phoneReloadRequested = false;
+  final Map<String, ConversationEnrichment> _pendingEnrichments = {};
+  Timer? _enrichmentTimer;
 
   @override
   void initState() {
@@ -41,12 +43,14 @@ class _MessagesUiAppState extends State<MessagesUiApp>
     WidgetsBinding.instance.addObserver(this);
     _smsController.onMessagesChanged = () =>
         unawaited(_reloadPhoneMessagesSilently());
+    _smsController.onConversationEnriched = _applyConversationEnrichment;
     unawaited(_initializeApp());
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _enrichmentTimer?.cancel();
     _smsController.dispose();
     _settings.dispose();
     super.dispose();
@@ -173,9 +177,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
         };
         final merged = loaded.map((incoming) {
           final current = existing[incoming.id];
-          if (current == null || current.address != incoming.address) {
-            return incoming;
-          }
+          if (current == null) return incoming;
           current
             ..preview = incoming.preview
             ..updatedAt = incoming.updatedAt
@@ -197,6 +199,39 @@ class _MessagesUiAppState extends State<MessagesUiApp>
       conversation.messages
         ..clear()
         ..addAll(messages);
+    });
+  }
+
+  void _applyConversationEnrichment(ConversationEnrichment enrichment) {
+    if (!mounted || enrichment.id.isEmpty) return;
+    _pendingEnrichments[enrichment.id] = enrichment;
+    _enrichmentTimer ??= Timer(
+      const Duration(milliseconds: 150),
+      _flushConversationEnrichments,
+    );
+  }
+
+  void _flushConversationEnrichments() {
+    _enrichmentTimer = null;
+    if (!mounted || _pendingEnrichments.isEmpty) return;
+    final enrichments = Map<String, ConversationEnrichment>.from(
+      _pendingEnrichments,
+    );
+    _pendingEnrichments.clear();
+    setState(() {
+      for (final conversation in _messageRepository.conversations) {
+        final enrichment = enrichments[conversation.id];
+        if (enrichment == null) continue;
+        if (enrichment.address.isNotEmpty) {
+          conversation.address = enrichment.address;
+        }
+        if (enrichment.title.isNotEmpty) {
+          conversation.title = enrichment.title;
+        }
+        if (enrichment.avatarBytes != null) {
+          conversation.avatarBytes = enrichment.avatarBytes;
+        }
+      }
     });
   }
 

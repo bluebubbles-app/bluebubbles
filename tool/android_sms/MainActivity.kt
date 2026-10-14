@@ -28,6 +28,7 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 class MainActivity : FlutterActivity() {
     companion object {
@@ -46,6 +47,7 @@ class MainActivity : FlutterActivity() {
     @Volatile private var lastLoadStage = "Not started"
     @Volatile private var lastLoadResult = "No load attempted"
     @Volatile private var lastLoadDurationMs = 0L
+    private val enrichmentGeneration = AtomicInteger(0)
     private val mainHandler = Handler(Looper.getMainLooper())
     private val notifyMessagesChanged = Runnable {
         if (::channel.isInitialized) channel.invokeMethod("messagesChanged", null)
@@ -230,7 +232,8 @@ class MainActivity : FlutterActivity() {
                 lastLoadStage = "Reading SMS provider"
                 lastLoadResult = "In progress"
                 Log.i(TAG, "Conversation load started")
-                val conversations = querySmsConversations()
+                val page = querySmsConversations()
+                val conversations = page.items
                 val duration = SystemClock.elapsedRealtime() - startedAt
                 runOnUiThread {
                     if (replied.compareAndSet(false, true)) {
@@ -244,6 +247,10 @@ class MainActivity : FlutterActivity() {
                                 "rows in $lastLoadDurationMs ms",
                         )
                         result.success(conversations)
+                        enrichConversationSummaries(
+                            page.summaries,
+                            enrichmentGeneration.incrementAndGet(),
+                        )
                     }
                 }
             } catch (error: Exception) {
@@ -336,11 +343,12 @@ class MainActivity : FlutterActivity() {
         selection: String? = null,
         selectionArgs: Array<String>? = null,
         sortOrder: String? = null,
+        timeoutMs: Long = PROVIDER_LOAD_TIMEOUT_MS,
         block: (Cursor) -> T,
     ): T? {
         val cancellationSignal = CancellationSignal()
         val cancelQuery = Runnable { cancellationSignal.cancel() }
-        mainHandler.postDelayed(cancelQuery, PROVIDER_LOAD_TIMEOUT_MS)
+        mainHandler.postDelayed(cancelQuery, timeoutMs)
         return try {
             contentResolver.query(
                 uri,
@@ -474,11 +482,7 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun querySmsConversations(): List<Map<String, Any?>> {
-        return querySmsOnlyConversations()
-    }
-
-    private fun queryCombinedConversations(): List<Map<String, Any?>> {
+    private fun querySmsConversations(): ConversationPage {
         val projection = arrayOf(
             BaseColumns._ID,
             Telephony.Threads.DATE,
@@ -493,7 +497,7 @@ class MainActivity : FlutterActivity() {
         providerQuery(
             threadsUri,
             projection,
-            sortOrder = "${Telephony.Threads.DATE} DESC",
+            sortOrder = "${Telephony.Threads.DATE} DESC LIMIT 40",
         ) { cursor ->
             val idColumn = cursor.getColumnIndexOrThrow(BaseColumns._ID)
             val dateColumn = cursor.getColumnIndexOrThrow(Telephony.Threads.DATE)
@@ -502,7 +506,7 @@ class MainActivity : FlutterActivity() {
             )
             val snippetColumn = cursor.getColumnIndexOrThrow(Telephony.Threads.SNIPPET)
             val readColumn = cursor.getColumnIndexOrThrow(Telephony.Threads.READ)
-            while (cursor.moveToNext() && summaries.size < 200) {
+            while (cursor.moveToNext() && summaries.size < 40) {
                 val threadId = cursor.getLong(idColumn).toString()
                 summaries.add(
                     ThreadSummary(
@@ -519,102 +523,12 @@ class MainActivity : FlutterActivity() {
                 )
             }
         }
-        val canonicalAddresses = canonicalAddresses(
-            summaries.flatMap { it.recipientIds }.toSet(),
-        )
-        val contactCache = mutableMapOf<String, ContactDetails>()
-        return summaries.mapIndexed { index, summary ->
-            val addresses = summary.recipientIds
-                .mapNotNull(canonicalAddresses::get)
-                .ifEmpty {
-                    if (index < 20) {
-                        listOfNotNull(latestSmsAddress(summary.id))
-                    } else {
-                        emptyList()
-                    }
-                }
-            val contacts = if (index < 20) {
-                addresses.map { address ->
-                    contactCache.getOrPut(address) { contactDetails(address) }
-                }
-            } else {
-                emptyList()
-            }
-            val title = if (contacts.size == addresses.size) {
-                contacts.mapIndexed { contactIndex, contact ->
-                    contact.name ?: addresses[contactIndex]
-                }.joinToString(", ")
-            } else {
-                addresses.joinToString(", ")
-            }
+        lastLoadStage = "Encoding ${summaries.size} conversation summaries"
+        val items = summaries.map { summary ->
             hashMapOf<String, Any?>(
                 "id" to summary.id,
-                "address" to addresses.singleOrNull().orEmpty(),
-                "title" to title.ifEmpty { "Conversation ${summary.id}" },
-                "preview" to summary.preview,
-                "updatedAt" to summary.updatedAt,
-                "unreadCount" to summary.unreadCount,
-                "avatarBytes" to contacts.singleOrNull()?.avatarBytes,
-                "messages" to emptyList<HashMap<String, Any?>>(),
-            )
-        }
-    }
-
-    private fun querySmsOnlyConversations(): List<Map<String, Any?>> {
-        val projection = arrayOf(
-            Telephony.Sms.THREAD_ID,
-            Telephony.Sms.ADDRESS,
-            Telephony.Sms.BODY,
-            Telephony.Sms.DATE,
-            Telephony.Sms.TYPE,
-            Telephony.Sms.READ,
-        )
-        val summaries = linkedMapOf<String, SmsConversationSummary>()
-        val smsUri = Telephony.Sms.CONTENT_URI.buildUpon()
-            .appendQueryParameter("limit", "2500")
-            .build()
-        providerQuery(
-            smsUri,
-            projection,
-            sortOrder = "${Telephony.Sms.DATE} DESC",
-        ) { cursor ->
-            val threadColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.THREAD_ID)
-            val addressColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
-            val bodyColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.BODY)
-            val dateColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.DATE)
-            val typeColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.TYPE)
-            val readColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.READ)
-            var processed = 0
-            while (cursor.moveToNext() && processed < 5000) {
-                processed += 1
-                val threadId = cursor.getLong(threadColumn).toString()
-                val address = cursor.getString(addressColumn).orEmpty()
-                val body = cursor.getString(bodyColumn).orEmpty()
-                val date = cursor.getLong(dateColumn)
-                val type = cursor.getInt(typeColumn)
-                val fromMe = type == Telephony.Sms.MESSAGE_TYPE_SENT ||
-                    type == Telephony.Sms.MESSAGE_TYPE_OUTBOX ||
-                    type == Telephony.Sms.MESSAGE_TYPE_FAILED ||
-                    type == Telephony.Sms.MESSAGE_TYPE_QUEUED
-                val summary = summaries.getOrPut(threadId) {
-                    SmsConversationSummary(
-                        id = threadId,
-                        address = address,
-                        preview = body,
-                        updatedAt = date,
-                    )
-                }
-                if (!fromMe && cursor.getInt(readColumn) == 0) {
-                    summary.unreadCount += 1
-                }
-            }
-        }
-        lastLoadStage = "Encoding ${summaries.size} SMS conversations"
-        return summaries.values.map { summary ->
-            hashMapOf<String, Any?>(
-                "id" to summary.id,
-                "address" to summary.address,
-                "title" to summary.address,
+                "address" to "",
+                "title" to "Conversation",
                 "preview" to summary.preview,
                 "updatedAt" to summary.updatedAt,
                 "unreadCount" to summary.unreadCount,
@@ -622,6 +536,49 @@ class MainActivity : FlutterActivity() {
                 "messages" to emptyList<HashMap<String, Any?>>(),
             )
         }
+        return ConversationPage(items = items, summaries = summaries)
+    }
+
+    private fun enrichConversationSummaries(
+        summaries: List<ThreadSummary>,
+        generation: Int,
+    ) {
+        Thread {
+            val addressBook = canonicalAddresses(
+                summaries.flatMap { it.recipientIds }.toSet(),
+            )
+            val contactCache = mutableMapOf<String, ContactDetails>()
+            for (summary in summaries) {
+                if (generation != enrichmentGeneration.get()) {
+                    break
+                }
+                val addresses = summary.recipientIds
+                    .mapNotNull(addressBook::get)
+                    .ifEmpty {
+                        listOfNotNull(latestSmsAddress(summary.id))
+                    }
+                val contacts = addresses.map { address ->
+                    contactCache.getOrPut(address) { contactDetails(address) }
+                }
+                val title = contacts.mapIndexed { index, contact ->
+                    contact.name ?: addresses[index]
+                }.joinToString(", ").ifEmpty { "Conversation" }
+                val update = hashMapOf<String, Any?>(
+                    "id" to summary.id,
+                    "address" to addresses.singleOrNull().orEmpty(),
+                    "title" to title,
+                    "avatarBytes" to contacts.singleOrNull()?.avatarBytes,
+                )
+                mainHandler.post {
+                    if (generation == enrichmentGeneration.get() &&
+                        ::channel.isInitialized
+                    ) {
+                        channel.invokeMethod("conversationEnriched", update)
+                    }
+                }
+            }
+            Log.i(TAG, "Conversation contact enrichment completed")
+        }.start()
     }
 
     private fun queryThreadMessages(threadId: String): List<HashMap<String, Any?>> {
@@ -637,14 +594,14 @@ class MainActivity : FlutterActivity() {
             projection,
             "${Telephony.Sms.THREAD_ID} = ?",
             arrayOf(threadId),
-            "${Telephony.Sms.DATE} DESC",
+            "${Telephony.Sms.DATE} DESC LIMIT 120",
         )?.use { cursor ->
             val idColumn = cursor.getColumnIndexOrThrow(BaseColumns._ID)
             val bodyColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.BODY)
             val dateColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.DATE)
             val typeColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.TYPE)
             var processed = 0
-            while (cursor.moveToNext() && processed < 500) {
+            while (cursor.moveToNext() && processed < 120) {
                 processed += 1
                 val type = cursor.getInt(typeColumn)
                 val fromMe = type == Telephony.Sms.MESSAGE_TYPE_SENT ||
@@ -673,7 +630,7 @@ class MainActivity : FlutterActivity() {
                 .getOrDefault(emptyList()),
         )
         messages.sortBy { (it["sentAt"] as? Long) ?: 0L }
-        return if (messages.size <= 500) messages else messages.takeLast(500)
+        return if (messages.size <= 180) messages else messages.takeLast(180)
     }
 
     private fun queryMmsThreadMessages(threadId: String): List<HashMap<String, Any?>> {
@@ -684,14 +641,14 @@ class MainActivity : FlutterActivity() {
             projection,
             "thread_id = ?",
             arrayOf(threadId),
-            "date DESC",
+            "date DESC LIMIT 60",
         )?.use { cursor ->
             val idColumn = cursor.getColumnIndexOrThrow(BaseColumns._ID)
             val dateColumn = cursor.getColumnIndexOrThrow("date")
             val boxColumn = cursor.getColumnIndexOrThrow("msg_box")
             val subjectColumn = cursor.getColumnIndexOrThrow("sub")
             var processed = 0
-            while (cursor.moveToNext() && processed < 250) {
+            while (cursor.moveToNext() && processed < 60) {
                 processed += 1
                 val id = cursor.getLong(idColumn).toString()
                 val box = cursor.getInt(boxColumn)
@@ -777,13 +734,13 @@ class MainActivity : FlutterActivity() {
         val placeholders = List(ids.size) { "?" }.joinToString(",")
         return runCatching {
             val addresses = mutableMapOf<String, String>()
-            contentResolver.query(
+            providerQuery(
                 Uri.parse("content://mms-sms/canonical-addresses"),
                 arrayOf(BaseColumns._ID, "address"),
                 "${BaseColumns._ID} IN ($placeholders)",
                 ids.toTypedArray(),
-                null,
-            )?.use { cursor ->
+                timeoutMs = 2_000L,
+            ) { cursor ->
                 val idColumn = cursor.getColumnIndexOrThrow(BaseColumns._ID)
                 val addressColumn = cursor.getColumnIndexOrThrow("address")
                 while (cursor.moveToNext()) {
@@ -797,13 +754,14 @@ class MainActivity : FlutterActivity() {
 
     private fun latestSmsAddress(threadId: String): String? {
         return runCatching {
-            contentResolver.query(
+            providerQuery(
                 Telephony.Sms.CONTENT_URI,
                 arrayOf(Telephony.Sms.ADDRESS),
                 "${Telephony.Sms.THREAD_ID} = ?",
                 arrayOf(threadId),
-                "${Telephony.Sms.DATE} DESC",
-            )?.use { cursor ->
+                "${Telephony.Sms.DATE} DESC LIMIT 1",
+                timeoutMs = 1_000L,
+            ) { cursor ->
                 if (cursor.moveToFirst()) cursor.getString(0) else null
             }
         }.getOrNull()
@@ -823,17 +781,16 @@ class MainActivity : FlutterActivity() {
             ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
             Uri.encode(address),
         )
-        contentResolver.query(
-            uri,
-            arrayOf(
-                ContactsContract.PhoneLookup.DISPLAY_NAME,
-                ContactsContract.PhoneLookup.PHOTO_THUMBNAIL_URI,
-            ),
-            null,
-            null,
-            null,
-        )?.use { cursor ->
-            if (cursor.moveToFirst()) {
+        return runCatching {
+            providerQuery(
+                uri,
+                arrayOf(
+                    ContactsContract.PhoneLookup.DISPLAY_NAME,
+                    ContactsContract.PhoneLookup.PHOTO_THUMBNAIL_URI,
+                ),
+                timeoutMs = 1_000L,
+            ) { cursor ->
+                if (!cursor.moveToFirst()) return@providerQuery ContactDetails()
                 val photoUri = cursor.getString(1)
                 val avatarBytes = photoUri?.let { value ->
                     runCatching {
@@ -841,13 +798,12 @@ class MainActivity : FlutterActivity() {
                             ?.use { it.readBytes() }
                     }.getOrNull()
                 }
-                return ContactDetails(
+                ContactDetails(
                     name = cursor.getString(0),
                     avatarBytes = avatarBytes,
                 )
-            }
-        }
-        return ContactDetails()
+            } ?: ContactDetails()
+        }.getOrDefault(ContactDetails())
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -879,12 +835,9 @@ class MainActivity : FlutterActivity() {
     }
 }
 
-private data class SmsConversationSummary(
-    val id: String,
-    val address: String,
-    val preview: String,
-    val updatedAt: Long,
-    var unreadCount: Int = 0,
+private data class ConversationPage(
+    val items: List<Map<String, Any?>>,
+    val summaries: List<ThreadSummary>,
 )
 
 private data class ThreadSummary(

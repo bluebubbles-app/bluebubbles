@@ -61,13 +61,13 @@ class Conversation {
   });
 
   final String id;
-  final String title;
+  String title;
   String preview;
   DateTime updatedAt;
   final List<Color> avatarColors;
   final List<ChatMessage> messages;
-  final String? address;
-  final Uint8List? avatarBytes;
+  String? address;
+  Uint8List? avatarBytes;
   final String? avatarAsset;
   final String? subtitle;
   int unreadCount;
