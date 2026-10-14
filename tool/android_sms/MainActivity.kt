@@ -15,31 +15,37 @@ import android.os.Bundle
 import android.os.CancellationSignal
 import android.os.Handler
 import android.os.Looper
-import android.os.OperationCanceledException
 import android.os.Process
+import android.os.SystemClock
 import android.provider.BaseColumns
 import android.provider.ContactsContract
 import android.provider.Settings
 import android.provider.Telephony
 import android.telephony.SmsManager
+import android.util.Log
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import java.util.concurrent.atomic.AtomicBoolean
 
 class MainActivity : FlutterActivity() {
     companion object {
         private const val CHANNEL = "bluebubbles/sms"
+        private const val TAG = "BlueBubblesSms"
         private const val ROLE_REQUEST = 4701
         private const val PERMISSION_REQUEST = 4702
-        private const val PROVIDER_PROBE_TIMEOUT_MS = 2_000L
         private const val PROVIDER_LOAD_TIMEOUT_MS = 6_000L
+        private const val METHOD_REPLY_TIMEOUT_MS = 7_000L
     }
 
     private lateinit var channel: MethodChannel
     private var pendingRoleResult: MethodChannel.Result? = null
     private var pendingPermissionResult: MethodChannel.Result? = null
     private var observerRegistered = false
+    @Volatile private var lastLoadStage = "Not started"
+    @Volatile private var lastLoadResult = "No load attempted"
+    @Volatile private var lastLoadDurationMs = 0L
     private val mainHandler = Handler(Looper.getMainLooper())
     private val notifyMessagesChanged = Runnable {
         if (::channel.isInitialized) channel.invokeMethod("messagesChanged", null)
@@ -204,13 +210,62 @@ class MainActivity : FlutterActivity() {
             )
             return
         }
+        val replied = AtomicBoolean(false)
+        val timeoutReply = Runnable {
+            if (replied.compareAndSet(false, true)) {
+                lastLoadDurationMs = METHOD_REPLY_TIMEOUT_MS
+                lastLoadResult = "Timed out while $lastLoadStage"
+                Log.e(TAG, lastLoadResult)
+                result.error(
+                    "sms_query_timeout",
+                    lastLoadResult,
+                    null,
+                )
+            }
+        }
+        mainHandler.postDelayed(timeoutReply, METHOD_REPLY_TIMEOUT_MS)
         Thread {
+            val startedAt = SystemClock.elapsedRealtime()
             try {
+                lastLoadStage = "Reading SMS provider"
+                lastLoadResult = "In progress"
+                Log.i(TAG, "Conversation load started")
                 val conversations = querySmsConversations()
-                runOnUiThread { result.success(conversations) }
-            } catch (error: Exception) {
+                val duration = SystemClock.elapsedRealtime() - startedAt
                 runOnUiThread {
-                    result.error("sms_query_failed", error.message, null)
+                    if (replied.compareAndSet(false, true)) {
+                        mainHandler.removeCallbacks(timeoutReply)
+                        lastLoadDurationMs = duration
+                        lastLoadStage = "Completed"
+                        lastLoadResult = "${conversations.size} conversations"
+                        Log.i(
+                            TAG,
+                            "Conversation load completed: ${conversations.size} " +
+                                "rows in $lastLoadDurationMs ms",
+                        )
+                        result.success(conversations)
+                    }
+                }
+            } catch (error: Exception) {
+                val duration = SystemClock.elapsedRealtime() - startedAt
+                runOnUiThread {
+                    if (replied.compareAndSet(false, true)) {
+                        mainHandler.removeCallbacks(timeoutReply)
+                        lastLoadDurationMs = duration
+                        lastLoadResult =
+                            "${error.javaClass.simpleName}: ${error.message}"
+                        Log.e(
+                            TAG,
+                            "Conversation load failed at $lastLoadStage after " +
+                                "$lastLoadDurationMs ms",
+                            error,
+                        )
+                        result.error(
+                            "sms_query_failed",
+                            "$lastLoadStage: $lastLoadResult",
+                            null,
+                        )
+                    }
                 }
             }
         }.start()
@@ -247,41 +302,12 @@ class MainActivity : FlutterActivity() {
                 "READ_CONTACTS" to hasPermission(Manifest.permission.READ_CONTACTS),
                 "Notifications" to notificationsGranted(),
                 "READ_SMS AppOp" to readSmsAppOp(),
-                "SMS provider" to providerProbe(Telephony.Sms.CONTENT_URI),
-                "MMS provider" to providerProbe(Telephony.Mms.CONTENT_URI),
-                "Combined threads provider" to providerProbe(
-                    Telephony.Threads.CONTENT_URI.buildUpon()
-                        .appendQueryParameter("simple", "true")
-                        .build(),
-                ),
+                "Last load stage" to lastLoadStage,
+                "Last load result" to lastLoadResult,
+                "Last load duration" to "$lastLoadDurationMs ms",
             )
             runOnUiThread { result.success(diagnostics) }
         }.start()
-    }
-
-    private fun providerProbe(uri: Uri): String {
-        val startedAt = System.currentTimeMillis()
-        val cancellationSignal = CancellationSignal()
-        val cancelQuery = Runnable { cancellationSignal.cancel() }
-        mainHandler.postDelayed(cancelQuery, PROVIDER_PROBE_TIMEOUT_MS)
-        return try {
-            val state = contentResolver.query(
-                uri,
-                arrayOf(BaseColumns._ID),
-                null,
-                null,
-                null,
-                cancellationSignal,
-            )?.use { if (it.moveToFirst()) "has rows" else "empty" }
-                ?: "null cursor"
-            "$state (${System.currentTimeMillis() - startedAt} ms)"
-        } catch (_: OperationCanceledException) {
-            "timed out (${System.currentTimeMillis() - startedAt} ms)"
-        } catch (error: Exception) {
-            "${error.javaClass.simpleName}: ${error.message}"
-        } finally {
-            mainHandler.removeCallbacks(cancelQuery)
-        }
     }
 
     private fun readSmsAppOp(): String {
@@ -449,9 +475,6 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun querySmsConversations(): List<Map<String, Any?>> {
-        val combined = runCatching { queryCombinedConversations() }
-            .getOrDefault(emptyList())
-        if (combined.isNotEmpty()) return combined
         return querySmsOnlyConversations()
     }
 
@@ -547,8 +570,11 @@ class MainActivity : FlutterActivity() {
             Telephony.Sms.READ,
         )
         val summaries = linkedMapOf<String, SmsConversationSummary>()
+        val smsUri = Telephony.Sms.CONTENT_URI.buildUpon()
+            .appendQueryParameter("limit", "2500")
+            .build()
         providerQuery(
-            Telephony.Sms.CONTENT_URI,
+            smsUri,
             projection,
             sortOrder = "${Telephony.Sms.DATE} DESC",
         ) { cursor ->
@@ -583,23 +609,16 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }
-        val contactCache = mutableMapOf<String, ContactDetails>()
-        return summaries.values.mapIndexed { index, summary ->
-            val contact = if (index < 20) {
-                contactCache.getOrPut(summary.address) {
-                    contactDetails(summary.address)
-                }
-            } else {
-                ContactDetails()
-            }
+        lastLoadStage = "Encoding ${summaries.size} SMS conversations"
+        return summaries.values.map { summary ->
             hashMapOf<String, Any?>(
                 "id" to summary.id,
                 "address" to summary.address,
-                "title" to (contact.name ?: summary.address),
+                "title" to summary.address,
                 "preview" to summary.preview,
                 "updatedAt" to summary.updatedAt,
                 "unreadCount" to summary.unreadCount,
-                "avatarBytes" to contact.avatarBytes,
+                "avatarBytes" to null,
                 "messages" to emptyList<HashMap<String, Any?>>(),
             )
         }

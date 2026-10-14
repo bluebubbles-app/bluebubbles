@@ -47,7 +47,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
       }
     } catch (error) {
-      if (mounted) await _showError('SMS Setup Failed', error);
+      if (mounted) {
+        await _showError(
+          'SMS Setup Failed',
+          widget.smsController.lastError ?? error,
+        );
+      }
     } finally {
       if (mounted) setState(() => _smsChanging = false);
     }
@@ -64,7 +69,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         await _showSmsDiagnostics();
       }
     } catch (error) {
-      if (mounted) await _showError('Reload Failed', error);
+      if (mounted) {
+        await _showError(
+          'Reload Failed',
+          widget.smsController.lastError ?? error,
+        );
+      }
     } finally {
       if (mounted) setState(() => _smsChanging = false);
     }
@@ -116,7 +126,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       );
     } catch (error) {
-      if (mounted) await _showError('Diagnostics Failed', error);
+      if (mounted) {
+        await _showError(
+          'Diagnostics Failed',
+          widget.smsController.lastError ?? error,
+        );
+      }
     } finally {
       if (mounted) setState(() => _diagnosing = false);
     }
