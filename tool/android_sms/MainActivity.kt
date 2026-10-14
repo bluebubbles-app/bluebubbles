@@ -524,68 +524,15 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun querySmsConversations(): ConversationPage {
-        val projection = arrayOf(
-            BaseColumns._ID,
-            Telephony.Threads.DATE,
-            Telephony.Threads.RECIPIENT_IDS,
-            Telephony.Threads.SNIPPET,
-            Telephony.Threads.READ,
-        )
-        val summaries = mutableListOf<ThreadSummary>()
-        val threadsUri = Telephony.Threads.CONTENT_URI.buildUpon()
-            .appendQueryParameter("simple", "true")
-            .build()
-        runCatching {
-            providerQuery(
-                threadsUri,
-                projection,
-                sortOrder = "${Telephony.Threads.DATE} DESC LIMIT 40",
-            ) { cursor ->
-                val idColumn = cursor.getColumnIndexOrThrow(BaseColumns._ID)
-                val dateColumn = cursor.getColumnIndexOrThrow(Telephony.Threads.DATE)
-                val recipientsColumn = cursor.getColumnIndexOrThrow(
-                    Telephony.Threads.RECIPIENT_IDS,
-                )
-                val snippetColumn = cursor.getColumnIndexOrThrow(
-                    Telephony.Threads.SNIPPET,
-                )
-                val readColumn = cursor.getColumnIndexOrThrow(Telephony.Threads.READ)
-                while (cursor.moveToNext() && summaries.size < 40) {
-                    val threadId = cursor.getLong(idColumn).toString()
-                    summaries.add(
-                        ThreadSummary(
-                            id = threadId,
-                            recipientIds = cursor.getString(recipientsColumn)
-                                .orEmpty()
-                                .trim()
-                                .split(Regex("\\s+"))
-                                .filter(String::isNotEmpty),
-                            preview = cursor.getString(snippetColumn).orEmpty(),
-                            updatedAt = normalizedTimestamp(
-                                cursor.getLong(dateColumn),
-                            ),
-                            unreadCount = if (cursor.getInt(readColumn) == 0) {
-                                1
-                            } else {
-                                0
-                            },
-                        ),
-                    )
-                }
-            }
-        }.onFailure { error ->
-            Log.w(TAG, "Conversation view query failed; using SMS fallback", error)
-        }
-        if (summaries.isEmpty()) {
-            lastLoadStage = "Reading SMS provider fallback"
-            summaries.addAll(querySmsConversationFallback())
-        }
+        lastLoadStage = "Reading recent SMS rows"
+        val summaries = queryRecentSmsConversations()
         lastLoadStage = "Encoding ${summaries.size} conversation summaries"
         val items = summaries.map { summary ->
+            val directAddress = summary.addresses.singleOrNull().orEmpty()
             hashMapOf<String, Any?>(
                 "id" to summary.id,
-                "address" to "",
-                "title" to "Conversation",
+                "address" to directAddress,
+                "title" to directAddress.ifEmpty { "Conversation" },
                 "preview" to summary.preview,
                 "updatedAt" to summary.updatedAt,
                 "unreadCount" to summary.unreadCount,
@@ -596,9 +543,10 @@ class MainActivity : FlutterActivity() {
         return ConversationPage(items = items, summaries = summaries)
     }
 
-    private fun querySmsConversationFallback(): List<ThreadSummary> {
+    private fun queryRecentSmsConversations(): List<ThreadSummary> {
         val projection = arrayOf(
             Telephony.Sms.THREAD_ID,
+            Telephony.Sms.ADDRESS,
             Telephony.Sms.DATE,
             Telephony.Sms.BODY,
             Telephony.Sms.READ,
@@ -607,11 +555,14 @@ class MainActivity : FlutterActivity() {
         providerQuery(
             Telephony.Sms.CONTENT_URI,
             projection,
-            sortOrder = "${Telephony.Sms.DATE} DESC LIMIT 400",
-            timeoutMs = 3_500L,
+            sortOrder = "${Telephony.Sms.DATE} DESC LIMIT 5000",
+            timeoutMs = 4_000L,
         ) { cursor ->
             val threadColumn = cursor.getColumnIndexOrThrow(
                 Telephony.Sms.THREAD_ID,
+            )
+            val addressColumn = cursor.getColumnIndexOrThrow(
+                Telephony.Sms.ADDRESS,
             )
             val dateColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.DATE)
             val bodyColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.BODY)
@@ -622,13 +573,16 @@ class MainActivity : FlutterActivity() {
                 summaries[threadId] = ThreadSummary(
                     id = threadId,
                     recipientIds = emptyList(),
+                    addresses = listOfNotNull(
+                        cursor.getString(addressColumn)?.takeIf(String::isNotBlank),
+                    ),
                     preview = cursor.getString(bodyColumn).orEmpty(),
                     updatedAt = normalizedTimestamp(cursor.getLong(dateColumn)),
                     unreadCount = if (cursor.getInt(readColumn) == 0) 1 else 0,
                 )
             }
         }
-        Log.i(TAG, "SMS fallback returned ${summaries.size} conversations")
+        Log.i(TAG, "Recent SMS rows returned ${summaries.size} conversations")
         return summaries.values.toList()
     }
 
@@ -645,8 +599,9 @@ class MainActivity : FlutterActivity() {
                 if (generation != enrichmentGeneration.get()) {
                     break
                 }
-                val addresses = summary.recipientIds
-                    .mapNotNull(addressBook::get)
+                val addresses = summary.addresses.ifEmpty {
+                    summary.recipientIds.mapNotNull(addressBook::get)
+                }
                     .ifEmpty {
                         listOfNotNull(latestSmsAddress(summary.id))
                     }
@@ -682,12 +637,13 @@ class MainActivity : FlutterActivity() {
             Telephony.Sms.TYPE,
         )
         val messages = mutableListOf<HashMap<String, Any?>>()
+        val threadUri = Telephony.Sms.Conversations.CONTENT_URI.buildUpon()
+            .appendPath(threadId)
+            .build()
         providerQuery(
-            Telephony.Sms.CONTENT_URI,
+            threadUri,
             projection,
-            "${Telephony.Sms.THREAD_ID} = ?",
-            arrayOf(threadId),
-            "${Telephony.Sms.DATE} DESC LIMIT 80",
+            sortOrder = "${Telephony.Sms.DATE} DESC LIMIT 80",
             timeoutMs = 3_500L,
         ) { cursor ->
             val idColumn = cursor.getColumnIndexOrThrow(BaseColumns._ID)
@@ -886,6 +842,7 @@ private data class ConversationPage(
 private data class ThreadSummary(
     val id: String,
     val recipientIds: List<String>,
+    val addresses: List<String> = emptyList(),
     val preview: String,
     val updatedAt: Long,
     val unreadCount: Int,
