@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 
 import '../models/conversation.dart';
+import '../services/android_sms_service.dart';
 import '../services/message_transfer_service.dart';
 import '../settings/app_settings.dart';
 import '../theme/messages_theme.dart';
@@ -11,10 +12,16 @@ class SettingsScreen extends StatefulWidget {
     super.key,
     required this.conversations,
     required this.onImported,
+    required this.smsController,
+    required this.onEnableSmsMode,
+    required this.onReloadPhoneMessages,
   });
 
   final List<Conversation> conversations;
   final ValueChanged<List<Conversation>> onImported;
+  final AndroidSmsController smsController;
+  final Future<bool> Function() onEnableSmsMode;
+  final Future<void> Function() onReloadPhoneMessages;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -23,6 +30,37 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final _transferService = MessageTransferService();
   bool _transferring = false;
+  bool _smsChanging = false;
+
+  Future<void> _changeSmsMode() async {
+    if (_smsChanging) return;
+    setState(() => _smsChanging = true);
+    try {
+      final enabled = await widget.onEnableSmsMode();
+      if (!enabled &&
+          mounted &&
+          widget.smsController.lastError != null) {
+        await _showError(
+          'SMS Setup Failed',
+          widget.smsController.lastError!,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _smsChanging = false);
+    }
+  }
+
+  Future<void> _reloadPhoneMessages() async {
+    if (_smsChanging) return;
+    setState(() => _smsChanging = true);
+    try {
+      await widget.onReloadPhoneMessages();
+    } catch (error) {
+      if (mounted) await _showError('Reload Failed', error);
+    } finally {
+      if (mounted) setState(() => _smsChanging = false);
+    }
+  }
 
   Future<void> _exportMessages() async {
     if (_transferring) return;
@@ -140,6 +178,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
       child: SafeArea(
         child: ListView(
           children: [
+            CupertinoListSection.insetGrouped(
+              header: const Text('MESSAGING MODE'),
+              footer: const Text(
+                'Preview Mode keeps your current SMS app unchanged. The first '
+                'native build handles text SMS; MMS display and RCS are not '
+                'available yet.',
+              ),
+              children: [
+                _StatusRow(
+                  title: 'BlueBubbles',
+                  value: widget.smsController.statusLabel,
+                  icon: CupertinoIcons.chat_bubble,
+                ),
+                _ActionRow(
+                  key: const ValueKey('sms-mode-action'),
+                  title: widget.smsController.isActive
+                      ? 'Reload Phone Messages'
+                      : 'Use as Default SMS App',
+                  icon: widget.smsController.isActive
+                      ? CupertinoIcons.refresh
+                      : CupertinoIcons.checkmark_circle,
+                  onPressed: _smsChanging || !widget.smsController.supported
+                      ? null
+                      : widget.smsController.isActive
+                          ? _reloadPhoneMessages
+                          : _changeSmsMode,
+                ),
+              ],
+            ),
             CupertinoListSection.insetGrouped(
               header: const Text('APPEARANCE'),
               footer: const Text(
@@ -347,6 +414,33 @@ class _SliderSetting extends StatelessWidget {
             onChanged: onChanged,
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _StatusRow extends StatelessWidget {
+  const _StatusRow({
+    required this.title,
+    required this.value,
+    required this.icon,
+  });
+
+  final String title;
+  final String value;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoListTile(
+      leading: Icon(icon, color: MessagesPalette.blue, size: 21),
+      title: Text(
+        title,
+        style: TextStyle(color: MessagesPalette.label(context)),
+      ),
+      additionalInfo: Text(
+        value,
+        style: TextStyle(color: MessagesPalette.secondaryLabel(context)),
       ),
     );
   }

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../models/conversation.dart';
 import '../settings/app_settings.dart';
+import '../services/android_sms_service.dart';
 import '../theme/messages_theme.dart';
 import '../widgets/contact_avatar.dart';
 import '../widgets/ios_search_field.dart';
@@ -23,11 +24,21 @@ class ConversationListScreen extends StatefulWidget {
     required this.conversations,
     required this.onSend,
     required this.onReplaceConversations,
+    required this.smsController,
+    required this.onEnableSmsMode,
+    required this.onReloadPhoneMessages,
+    required this.onMarkConversationRead,
+    required this.onDeleteConversation,
   });
 
   final List<Conversation> conversations;
   final void Function(Conversation conversation, String text) onSend;
   final ValueChanged<List<Conversation>> onReplaceConversations;
+  final AndroidSmsController smsController;
+  final Future<bool> Function() onEnableSmsMode;
+  final Future<void> Function() onReloadPhoneMessages;
+  final ValueChanged<Conversation> onMarkConversationRead;
+  final Future<void> Function(Conversation) onDeleteConversation;
 
   @override
   State<ConversationListScreen> createState() =>
@@ -55,6 +66,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
 
   Future<void> _openConversation(Conversation conversation) async {
     setState(() => conversation.unreadCount = 0);
+    widget.onMarkConversationRead(conversation);
     await Navigator.of(context).push(
       CupertinoPageRoute<void>(
         builder: (_) => ConversationScreen(
@@ -72,11 +84,16 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
 
   Future<void> _openSettings() async {
     HapticFeedback.selectionClick();
+    await widget.smsController.refreshState();
+    if (!mounted) return;
     await Navigator.of(context).push(
       CupertinoPageRoute<void>(
         builder: (_) => SettingsScreen(
           conversations: widget.conversations,
           onImported: widget.onReplaceConversations,
+          smsController: widget.smsController,
+          onEnableSmsMode: widget.onEnableSmsMode,
+          onReloadPhoneMessages: widget.onReloadPhoneMessages,
         ),
       ),
     );
@@ -189,6 +206,8 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
 
     if (shouldDelete == true && mounted) {
       HapticFeedback.mediumImpact();
+      await widget.onDeleteConversation(conversation);
+      if (!mounted) return;
       setState(() => widget.conversations.remove(conversation));
     }
   }

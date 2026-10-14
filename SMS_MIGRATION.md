@@ -1,26 +1,34 @@
 # Android SMS/MMS migration
 
-The current conversations are temporary demo data. The UI now reads them
-through `MessageRepository`, so the visual screens do not depend on
-`demo_data.dart`.
+BlueBubbles now has a first native Android SMS bridge. Preview Mode still uses
+`DemoMessageRepository`; real SMS mode replaces the visible list with data from
+Android's SMS provider only after the user grants the default-SMS role and the
+required permissions.
 
-The production migration should replace `DemoMessageRepository` with an
-Android implementation that:
+## Implemented
 
-1. requests the Android default SMS role (`ROLE_SMS`);
-2. reads conversation threads and messages through Android's SMS/MMS content
-   providers;
-3. maps native thread, participant, timestamp, direction, status, and media
-   fields to `Conversation` and `ChatMessage`;
-4. observes content-provider changes and refreshes only affected threads;
-5. sends SMS/MMS through the native Android telephony APIs;
-6. stores attachment references instead of loading full media into memory;
-7. removes `demo_data.dart` and `DemoMessageRepository` after the native
-   repository becomes the default source.
+1. Android `ROLE_SMS` eligibility components and the system role request;
+2. runtime SMS, contacts, MMS-receive, and notification permission requests;
+3. native SMS provider reads mapped to `Conversation` and `ChatMessage`;
+4. a content observer that refreshes Flutter when SMS data changes;
+5. text-SMS sending, multipart text support, receiving, read-state updates,
+   thread deletion, and incoming-message notifications;
+6. Preview Mode without changing the phone's current default SMS app.
 
-JSON import/export already uses the same Flutter conversation model. It is a
-portable BlueBubbles backup format, not an Android system SMS database dump.
-Importing currently replaces the temporary in-app list after confirmation.
+The generated Android wrapper is intentionally not committed. On each machine,
+`tool/setup_android.sh` copies the tracked manifest and Kotlin sources from
+`tool/android_sms/` into the wrapper created by Flutter.
 
-RCS is not exposed through the public Android SMS provider and must be treated
-as a separate integration from SMS/MMS.
+## Remaining before daily-driver use
+
+1. parse, store, display, and send MMS attachments instead of only preserving
+   incoming raw MMS payloads;
+2. support group threads and a complete new-conversation flow;
+3. persist pin/mute UI metadata independently of Android's SMS provider;
+4. add delivery broadcasts, SIM selection, failure recovery, and background
+   migration tests;
+5. remove demo data only when Preview Mode is intentionally retired.
+
+JSON import/export is a portable BlueBubbles backup format, not an Android
+system SMS database dump. RCS is not exposed through the public Android SMS
+provider and remains outside this bridge.

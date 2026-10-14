@@ -49,6 +49,7 @@ class Conversation {
     required this.updatedAt,
     required this.avatarColors,
     required this.messages,
+    this.address,
     this.avatarAsset,
     this.subtitle,
     this.unreadCount = 0,
@@ -62,6 +63,7 @@ class Conversation {
   DateTime updatedAt;
   final List<Color> avatarColors;
   final List<ChatMessage> messages;
+  final String? address;
   final String? avatarAsset;
   final String? subtitle;
   int unreadCount;
@@ -75,6 +77,7 @@ class Conversation {
         'updatedAt': updatedAt.toIso8601String(),
         'avatarColors': avatarColors.map((color) => color.value).toList(),
         'messages': messages.map((message) => message.toJson()).toList(),
+        'address': address,
         'subtitle': subtitle,
         'unreadCount': unreadCount,
         'isPinned': isPinned,
@@ -104,6 +107,7 @@ class Conversation {
           ? const [Color(0xFF8E8E93), Color(0xFF636366)]
           : colors,
       messages: messages,
+      address: json['address'] as String?,
       subtitle: json['subtitle'] as String?,
       unreadCount: json['unreadCount'] as int? ?? 0,
       isPinned: json['isPinned'] as bool? ?? false,

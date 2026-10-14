@@ -20,44 +20,54 @@ by the OpenBubbles Cupertino appearance and the iPhone Messages experience.
 - adjustable translucent/blurred conversation header;
 - settings for language, date/time formats, text size, and emoji fallback;
 - portable JSON message import/export;
-- local sample data with no backend.
+- preview mode with local sample data and no backend;
+- Android default-SMS role request from Settings;
+- native reading, receiving, sending, deleting, and read-state updates for
+  text SMS;
 - BlueBubbles launcher icon and application name.
 
-## Not included
+## Current native limitations
 
-- SMS, MMS, or RCS access;
+- MMS display and sending (incoming MMS payloads are only preserved locally and
+  reported by a notification in this first native build);
+- RCS access, because Android does not expose a general public RCS API to
+  third-party SMS applications;
+- group-message composition and full delivery/read receipts;
 - iMessage, Apple account, or OpenBubbles connectivity;
-- database, synchronization, notifications, or contacts access;
+- cloud synchronization.
 
 ## Run the prototype
 
 Flutter 3.24 or later is recommended.
 
 ```text
-flutter create --platforms=android .
+flutter create --platforms=android --project-name bluebubbles --org io.github.bluebubblesapp .
 bash tool/setup_android.sh
 flutter run
 ```
 
 The `flutter create` command adds the missing Android wrapper while preserving
 the prototype files under `lib/`. The setup script then sets the visible app
-name to `BlueBubbles` and generates all required Android launcher icon sizes
-from `assets/icon/bluebubbles-circle.png`, including Android adaptive icons.
+name to `BlueBubbles`, installs the native SMS-role components, and generates
+all required Android launcher icon sizes from
+`assets/icon/bluebubbles-circle.png`, including Android adaptive icons. Run the
+setup script again after each pull that changes files under `tool/android_sms/`.
 
 The square and circular source variants are also preserved under `assets/icon/`.
 
-## Connect a backend later
+## Preview mode and SMS mode
 
-Sample data is stored in `lib/data/demo_data.dart` and is exposed through a
-temporary `DemoMessageRepository`. Replace that repository with an Android SMS
-implementation while keeping the models in `lib/models/` as the interface
-contract. The screens no longer need to know whether their messages came from
-demo data, a JSON import, or Android's SMS/MMS provider.
+The app starts in Preview Mode, so installing it does not replace the phone's
+current SMS app. To test real text messages, open the three-dot menu, choose
+Settings, then **Use as Default SMS App**. Android shows its own confirmation
+dialog and BlueBubbles asks for the required SMS and contacts permissions only
+after the role is granted. You can switch back to the previous SMS app at any
+time in Android's default-app settings.
 
-To become the default Android SMS application, the native components required
-by `ROLE_SMS` must be added later. That functionality is intentionally outside
-the scope of this UI-only deliverable. See `SMS_MIGRATION.md` for the migration
-boundary and the steps required to remove the mockups completely.
+Sample data remains in `lib/data/demo_data.dart` for Preview Mode. Once the SMS
+role and permissions are active, the UI reloads from Android's SMS provider.
+See `SMS_MIGRATION.md` for the completed bridge and the remaining work before
+the demo data can be removed completely.
 
 ## License and attribution
 
