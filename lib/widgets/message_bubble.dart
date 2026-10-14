@@ -161,7 +161,6 @@ class _MessageBubbleState extends State<MessageBubble> {
                   shadowElevation: widget.shadowElevation,
                 ),
                 child: Container(
-                  alignment: Alignment.center,
                   constraints: BoxConstraints(
                     minHeight: 36,
                     // 274 pt on the 375 pt-wide SVG artboard.
@@ -171,21 +170,26 @@ class _MessageBubbleState extends State<MessageBubble> {
                     horizontal: 12,
                     vertical: 7,
                   ),
-                  child: Text(
-                    message.text,
-                    textAlign: TextAlign.left,
-                    textWidthBasis: TextWidthBasis.longestLine,
-                    textHeightBehavior: const TextHeightBehavior(
-                      applyHeightToFirstAscent: false,
-                      applyHeightToLastDescent: false,
-                    ),
-                    style: MessagesText.body(context).copyWith(
-                      fontSize: 16 * renderedTextScale,
-                      height: renderedTextScale > 1 ? 1 : 1.18,
-                      letterSpacing: renderedTextScale > 1 ? 0 : -.15,
-                      color: isFromMe
-                          ? CupertinoColors.white
-                          : MessagesPalette.label(context),
+                  child: Align(
+                    alignment: Alignment.center,
+                    widthFactor: 1,
+                    heightFactor: 1,
+                    child: Text(
+                      message.text,
+                      textAlign: TextAlign.left,
+                      textWidthBasis: TextWidthBasis.longestLine,
+                      textHeightBehavior: const TextHeightBehavior(
+                        applyHeightToFirstAscent: false,
+                        applyHeightToLastDescent: false,
+                      ),
+                      style: MessagesText.body(context).copyWith(
+                        fontSize: 16 * renderedTextScale,
+                        height: renderedTextScale > 1 ? 1 : 1.18,
+                        letterSpacing: renderedTextScale > 1 ? 0 : -.15,
+                        color: isFromMe
+                            ? CupertinoColors.white
+                            : MessagesPalette.label(context),
+                      ),
                     ),
                   ),
                 ),
