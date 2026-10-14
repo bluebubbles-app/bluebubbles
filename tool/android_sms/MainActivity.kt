@@ -69,6 +69,7 @@ class MainActivity : FlutterActivity() {
             "sendSms" -> sendSms(call, result)
             "markThreadRead" -> markThreadRead(call, result)
             "deleteThread" -> deleteThread(call, result)
+            "dialNumber" -> dialNumber(call, result)
             "openDefaultSmsSettings" -> {
                 val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                     Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
@@ -87,7 +88,12 @@ class MainActivity : FlutterActivity() {
         "isDefaultSmsApp" to isDefaultSmsApp(),
         "permissionsGranted" to hasCoreSmsPermissions(),
         "contactsGranted" to hasPermission(Manifest.permission.READ_CONTACTS),
+        "notificationsGranted" to notificationsGranted(),
     )
+
+    private fun notificationsGranted(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            hasPermission(Manifest.permission.POST_NOTIFICATIONS)
 
     private fun hasPermission(permission: String): Boolean =
         checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
@@ -195,6 +201,22 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }.start()
+    }
+
+    private fun dialNumber(call: MethodCall, result: MethodChannel.Result) {
+        val address = call.argument<String>("address")?.trim().orEmpty()
+        if (address.isEmpty()) {
+            result.error("invalid_number", "A phone number is required.", null)
+            return
+        }
+        try {
+            startActivity(
+                Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", address, null)),
+            )
+            result.success(null)
+        } catch (error: Exception) {
+            result.error("dial_failed", error.message, null)
+        }
     }
 
     private fun sendSms(call: MethodCall, result: MethodChannel.Result) {

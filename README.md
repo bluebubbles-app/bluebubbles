@@ -58,11 +58,18 @@ The square and circular source variants are also preserved under `assets/icon/`.
 ## Preview mode and SMS mode
 
 The app starts in Preview Mode, so installing it does not replace the phone's
-current SMS app. To test real text messages, open the three-dot menu, choose
-Settings, then **Use as Default SMS App**. Android shows its own confirmation
-dialog and BlueBubbles asks for the required SMS and contacts permissions only
-after the role is granted. You can switch back to the previous SMS app at any
-time in Android's default-app settings.
+current SMS app. On first launch, an explanation offers to start Android's
+default-SMS, messages, contacts, MMS-receive, and notification permission flow;
+choosing **Not Now** preserves Preview Mode. The same flow remains available
+from the three-dot menu under Settings. Android shows its own confirmation
+dialog and BlueBubbles asks for SMS permissions only after the role is granted.
+You can switch back to the previous SMS app at any time in Android's
+default-app settings.
+
+The conversation call button opens Android's dialer with the recipient filled
+in, which does not require direct-call permission. Future MMS attachments will
+use Android's permissionless system photo picker. Microphone access will be
+requested in context when voice-message recording is implemented.
 
 Sample data remains in `lib/data/demo_data.dart` for Preview Mode. Once the SMS
 role and permissions are active, the UI reloads lightweight conversation

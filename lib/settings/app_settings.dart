@@ -19,6 +19,8 @@ class AppSettingsController extends ChangeNotifier {
   static const _dateOrderKey = 'date_order';
   static const _clockFormatKey = 'clock_format';
   static const _emojiStyleKey = 'emoji_style';
+  static const _permissionsOnboardingShownKey =
+      'permissions_onboarding_shown';
 
   double headerTransparency = .28;
   double fontScale = 1;
@@ -26,6 +28,7 @@ class AppSettingsController extends ChangeNotifier {
   DateOrder dateOrder = DateOrder.system;
   ClockFormat clockFormat = ClockFormat.system;
   EmojiStyle emojiStyle = EmojiStyle.android;
+  bool permissionsOnboardingShown = false;
   bool _disposed = false;
   Timer? _headerSaveDebounce;
   Timer? _fontScaleSaveDebounce;
@@ -56,6 +59,8 @@ class AppSettingsController extends ChangeNotifier {
         preferences.getString(_emojiStyleKey),
         emojiStyle,
       );
+      permissionsOnboardingShown =
+          preferences.getBool(_permissionsOnboardingShownKey) ?? false;
     } on Exception {
       // Widget tests and preview hosts may not expose a preferences backend.
     }
@@ -116,6 +121,14 @@ class AppSettingsController extends ChangeNotifier {
     _notifyIfActive();
     await _persist(
       (preferences) => preferences.setString(_emojiStyleKey, value.name),
+    );
+  }
+
+  Future<void> markPermissionsOnboardingShown() async {
+    permissionsOnboardingShown = true;
+    await _persist(
+      (preferences) =>
+          preferences.setBool(_permissionsOnboardingShownKey, true),
     );
   }
 

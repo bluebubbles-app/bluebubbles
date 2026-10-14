@@ -17,6 +17,7 @@ class AndroidSmsController extends ChangeNotifier {
   bool isDefaultSmsApp = false;
   bool permissionsGranted = false;
   bool contactsGranted = false;
+  bool notificationsGranted = false;
   bool busy = false;
   String? lastError;
   VoidCallback? onMessagesChanged;
@@ -40,6 +41,7 @@ class AndroidSmsController extends ChangeNotifier {
       isDefaultSmsApp = raw?['isDefaultSmsApp'] == true;
       permissionsGranted = raw?['permissionsGranted'] == true;
       contactsGranted = raw?['contactsGranted'] == true;
+      notificationsGranted = raw?['notificationsGranted'] == true;
       lastError = null;
     } on MissingPluginException {
       supported = false;
@@ -121,6 +123,11 @@ class AndroidSmsController extends ChangeNotifier {
   Future<void> openDefaultSmsSettings() async {
     if (kIsWeb || !Platform.isAndroid) return;
     await _channel.invokeMethod<void>('openDefaultSmsSettings');
+  }
+
+  Future<void> dialNumber(String address) async {
+    if (kIsWeb || !Platform.isAndroid || address.trim().isEmpty) return;
+    await _channel.invokeMethod<void>('dialNumber', {'address': address});
   }
 
   Future<void> _handleNativeCall(MethodCall call) async {

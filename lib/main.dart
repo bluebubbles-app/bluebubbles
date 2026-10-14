@@ -39,9 +39,8 @@ class _MessagesUiAppState extends State<MessagesUiApp>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _settings.load();
     _smsController.onMessagesChanged = () => unawaited(_loadPhoneMessages());
-    unawaited(_refreshSmsMode());
+    unawaited(_initializeApp());
   }
 
   @override
@@ -55,6 +54,54 @@ class _MessagesUiAppState extends State<MessagesUiApp>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) unawaited(_refreshSmsMode());
+  }
+
+  Future<void> _initializeApp() async {
+    await _settings.load();
+    await _refreshSmsMode();
+    if (!mounted ||
+        !_smsController.supported ||
+        _settings.permissionsOnboardingShown) {
+      return;
+    }
+    final needsSetup = !_smsController.isDefaultSmsApp ||
+        !_smsController.contactsGranted ||
+        !_smsController.notificationsGranted;
+    if (!needsSetup) {
+      await _settings.markPermissionsOnboardingShown();
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_showPermissionsOnboarding());
+    });
+  }
+
+  Future<void> _showPermissionsOnboarding() async {
+    final shouldContinue = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('Set Up BlueBubbles'),
+        content: const Text(
+          'To use your real conversations, BlueBubbles needs to become your '
+          'default SMS app and access messages, contacts, MMS, and '
+          'notifications. You can stay in Preview Mode and enable this later '
+          'from Settings.',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Not Now'),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+    await _settings.markPermissionsOnboardingShown();
+    if (shouldContinue == true && mounted) await _enableSmsMode();
   }
 
   Future<void> _refreshSmsMode() async {
@@ -213,6 +260,12 @@ class _MessagesUiAppState extends State<MessagesUiApp>
     }
   }
 
+  void _callConversation(Conversation conversation) {
+    final address = conversation.address;
+    if (address == null || address.isEmpty) return;
+    unawaited(_smsController.dialNumber(address));
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -263,6 +316,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
             onMarkConversationRead: _markConversationRead,
             onDeleteConversation: _deleteConversation,
             onLoadConversation: _loadConversationMessages,
+            onCallConversation: _callConversation,
           ),
         ),
       ),

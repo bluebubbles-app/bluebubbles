@@ -18,11 +18,13 @@ class ConversationScreen extends StatefulWidget {
     required this.conversation,
     required this.allConversations,
     required this.onSend,
+    required this.onCall,
   });
 
   final Conversation conversation;
   final List<Conversation> allConversations;
   final ValueChanged<String> onSend;
+  final VoidCallback onCall;
 
   @override
   State<ConversationScreen> createState() => _ConversationScreenState();
@@ -971,7 +973,10 @@ class _ConversationHeader extends StatelessWidget {
                 top: 6,
                 child: _HeaderButton(
                   key: const ValueKey('conversation-call-button'),
-                  onPressed: () => HapticFeedback.selectionClick(),
+                  onPressed: () {
+                    HapticFeedback.selectionClick();
+                    widget.onCall();
+                  },
                   icon: CupertinoIcons.phone,
                   iconSize: 25,
                 ),

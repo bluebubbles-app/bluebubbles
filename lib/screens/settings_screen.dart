@@ -197,16 +197,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ? 'Use as Default SMS App'
                       : !widget.smsController.contactsGranted
                           ? 'Allow Contact Photos'
-                          : 'Reload Phone Messages',
+                          : !widget.smsController.notificationsGranted
+                              ? 'Allow Notifications'
+                              : 'Reload Phone Messages',
                   icon: !widget.smsController.isActive
                       ? CupertinoIcons.checkmark_circle
                       : !widget.smsController.contactsGranted
                           ? CupertinoIcons.person_crop_circle
-                          : CupertinoIcons.refresh,
+                          : !widget.smsController.notificationsGranted
+                              ? CupertinoIcons.bell
+                              : CupertinoIcons.refresh,
                   onPressed: _smsChanging || !widget.smsController.supported
                       ? null
                       : widget.smsController.isActive &&
-                              widget.smsController.contactsGranted
+                              widget.smsController.contactsGranted &&
+                              widget.smsController.notificationsGranted
                           ? _reloadPhoneMessages
                           : _changeSmsMode,
                 ),

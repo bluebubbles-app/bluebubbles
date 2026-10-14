@@ -16,6 +16,8 @@ required permissions.
 5. text-SMS sending, multipart text support, receiving, read-state updates,
    thread deletion, and incoming-message notifications;
 6. Preview Mode without changing the phone's current default SMS app.
+7. first-launch permission onboarding with a Preview Mode escape hatch, plus
+   permissionless handoff to Android's phone dialer.
 
 The generated Android wrapper is intentionally not committed. On each machine,
 `tool/setup_android.sh` copies the tracked manifest and Kotlin sources from

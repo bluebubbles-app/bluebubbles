@@ -30,6 +30,7 @@ class ConversationListScreen extends StatefulWidget {
     required this.onMarkConversationRead,
     required this.onDeleteConversation,
     required this.onLoadConversation,
+    required this.onCallConversation,
   });
 
   final List<Conversation> conversations;
@@ -41,6 +42,7 @@ class ConversationListScreen extends StatefulWidget {
   final ValueChanged<Conversation> onMarkConversationRead;
   final Future<void> Function(Conversation) onDeleteConversation;
   final Future<void> Function(Conversation) onLoadConversation;
+  final ValueChanged<Conversation> onCallConversation;
 
   @override
   State<ConversationListScreen> createState() =>
@@ -80,6 +82,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
             widget.onSend(conversation, text);
             setState(() {});
           },
+          onCall: () => widget.onCallConversation(conversation),
         ),
       ),
     );
