@@ -39,7 +39,7 @@ dart run flutter_launcher_icons
 cp "$native_source/AndroidManifest.xml" "$manifest"
 
 generated_icon="$(find "$project_root/android/app/src/main/res" -type f \
-  -name 'launcher_icon_v7*' -print -quit)"
+  -name 'launcher_icon_v8*' -print -quit)"
 if [[ -z "$generated_icon" ]]; then
   echo "BlueBubbles launcher icon generation failed." >&2
   exit 1
