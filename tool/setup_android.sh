@@ -33,7 +33,7 @@ find "$project_root/android/app/src/main/res" -type f \
   -delete
 
 dart run flutter_launcher_icons
-dart run flutter_launcher_icons -f flutter_launcher_icons-round.yaml
+dart run flutter_launcher_icons -f launcher_icon_round.yaml
 
 # Each generator updates android:icon. Restore the canonical manifest so
 # round launchers use the dedicated, already-circular artwork instead of
