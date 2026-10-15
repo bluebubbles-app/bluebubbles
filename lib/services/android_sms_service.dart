@@ -21,6 +21,18 @@ class ConversationEnrichment {
   final Uint8List? avatarBytes;
 }
 
+class SmsContact {
+  const SmsContact({
+    required this.name,
+    required this.address,
+    this.avatarBytes,
+  });
+
+  final String name;
+  final String address;
+  final Uint8List? avatarBytes;
+}
+
 class AndroidSmsController extends ChangeNotifier {
   AndroidSmsController() {
     _channel.setMethodCallHandler(_handleNativeCall);
@@ -189,6 +201,47 @@ class AndroidSmsController extends ChangeNotifier {
       'address': address,
       'text': text,
     });
+  }
+
+  Future<Conversation> resolveOrCreateConversation(String address) async {
+    final trimmed = address.trim();
+    if (!isActive) {
+      throw StateError('BlueBubbles is not the default SMS app.');
+    }
+    if (trimmed.isEmpty) {
+      throw ArgumentError.value(address, 'address', 'A recipient is required.');
+    }
+    final raw = await _channel.invokeMapMethod<Object?, Object?>(
+      'resolveOrCreateConversation',
+      {'address': trimmed},
+    ).timeout(_providerTimeout);
+    if (raw == null) {
+      throw StateError('Android did not return the new conversation.');
+    }
+    return _conversationFromNative(raw);
+  }
+
+  Future<List<SmsContact>> searchContacts(String query) async {
+    final trimmed = query.trim();
+    if (kIsWeb || !Platform.isAndroid || trimmed.isEmpty) return const [];
+    final raw = await _channel.invokeListMethod<Object?>(
+      'searchContacts',
+      {'query': trimmed},
+    ).timeout(_providerTimeout);
+    return (raw ?? const <Object?>[])
+        .whereType<Map>()
+        .map((item) {
+          final values = Map<Object?, Object?>.from(item);
+          return SmsContact(
+            name: (values['name'] ?? values['address'] ?? '').toString(),
+            address: (values['address'] ?? '').toString(),
+            avatarBytes: values['avatarBytes'] is Uint8List
+                ? values['avatarBytes'] as Uint8List
+                : null,
+          );
+        })
+        .where((contact) => contact.address.isNotEmpty)
+        .toList();
   }
 
   Future<void> markThreadRead(String threadId) async {

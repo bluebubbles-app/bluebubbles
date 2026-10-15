@@ -723,6 +723,22 @@ class _MessagesUiAppState extends State<MessagesUiApp>
     }
   }
 
+  Future<Conversation> _resolveOrCreateConversation(String address) async {
+    final normalized = address.replaceAll(RegExp(r'[^a-zA-Z0-9+]'), '');
+    for (final conversation in _messageRepository.conversations) {
+      final candidate = conversation.address
+          ?.replaceAll(RegExp(r'[^a-zA-Z0-9+]'), '');
+      if (candidate != null && candidate == normalized) return conversation;
+    }
+    final conversation = await _smsController.resolveOrCreateConversation(
+      address,
+    );
+    if (!mounted) return conversation;
+    setState(() => _messageRepository.conversations.insert(0, conversation));
+    await _localSmsStore.updateConversation(conversation);
+    return conversation;
+  }
+
   void _callConversation(Conversation conversation) {
     final address = conversation.address;
     if (address == null || address.isEmpty) return;
@@ -802,6 +818,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
             onEnableSmsMode: _enableSmsMode,
             onReloadPhoneMessages: _loadPhoneMessages,
             onDeleteConversation: _deleteConversation,
+            onResolveConversation: _resolveOrCreateConversation,
             onLoadConversation: _loadConversationMessages,
             onLoadMessageContext: _loadConversationMessageContext,
             onLoadOlderConversation: _loadOlderConversationMessages,

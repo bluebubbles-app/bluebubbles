@@ -34,7 +34,7 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val CHANNEL = "bluebubbles/sms"
         private const val TAG = "BlueBubblesSms"
-        private const val NATIVE_BUILD = "2026-10-15-notification-routing-v1"
+        private const val NATIVE_BUILD = "2026-10-16-compose-and-contacts-v1"
         private const val ROLE_REQUEST = 4701
         private const val PERMISSION_REQUEST = 4702
         private const val PROVIDER_LOAD_TIMEOUT_MS = 20_000L
@@ -118,6 +118,8 @@ class MainActivity : FlutterActivity() {
             "loadConversations" -> loadConversations(result)
             "loadThreadMessages" -> loadThreadMessages(call, result)
             "getSmsMessageCount" -> getSmsMessageCount(result)
+            "resolveOrCreateConversation" -> resolveOrCreateConversation(call, result)
+            "searchContacts" -> searchContacts(call, result)
             "sendSms" -> sendSms(call, result)
             "markThreadRead" -> markThreadRead(call, result)
             "deleteThread" -> deleteThread(call, result)
@@ -640,6 +642,114 @@ class MainActivity : FlutterActivity() {
             } catch (error: Exception) {
                 runOnUiThread {
                     result.error("sms_delete_failed", error.message, null)
+                }
+            }
+        }.start()
+    }
+
+    private fun resolveOrCreateConversation(
+        call: MethodCall,
+        result: MethodChannel.Result,
+    ) {
+        if (!isDefaultSmsApp() || !hasCoreSmsPermissions()) {
+            result.error("sms_access_denied", "SMS access is not active.", null)
+            return
+        }
+        val address = call.argument<String>("address").orEmpty().trim()
+        if (address.isEmpty()) {
+            result.error("invalid_address", "A recipient is required.", null)
+            return
+        }
+        Thread {
+            try {
+                val threadId = Telephony.Threads.getOrCreateThreadId(
+                    this,
+                    setOf(address),
+                )
+                val contact = contactDetails(address)
+                val conversation = mapOf(
+                    "id" to threadId.toString(),
+                    "address" to address,
+                    "title" to (contact.name?.takeIf { it.isNotBlank() } ?: address),
+                    "preview" to "",
+                    "updatedAt" to System.currentTimeMillis(),
+                    "unreadCount" to 0,
+                    "messages" to emptyList<Map<String, Any?>>(),
+                    "avatarBytes" to contact.avatarBytes,
+                )
+                runOnUiThread { result.success(conversation) }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    result.error(
+                        "thread_create_failed",
+                        error.message ?: "The conversation could not be created.",
+                        null,
+                    )
+                }
+            }
+        }.start()
+    }
+
+    private fun searchContacts(call: MethodCall, result: MethodChannel.Result) {
+        if (!hasPermission(Manifest.permission.READ_CONTACTS)) {
+            result.success(emptyList<Map<String, Any?>>())
+            return
+        }
+        val query = call.argument<String>("query").orEmpty().trim()
+        if (query.isEmpty()) {
+            result.success(emptyList<Map<String, Any?>>())
+            return
+        }
+        Thread {
+            try {
+                val uri = ContactsContract.CommonDataKinds.Phone.CONTENT_URI
+                    .buildUpon()
+                    .appendQueryParameter("limit", "30")
+                    .build()
+                val matches = providerQuery(
+                    uri,
+                    arrayOf(
+                        ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                        ContactsContract.CommonDataKinds.Phone.NUMBER,
+                        ContactsContract.CommonDataKinds.Phone.PHOTO_THUMBNAIL_URI,
+                    ),
+                    "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} LIKE ? OR " +
+                        "${ContactsContract.CommonDataKinds.Phone.NUMBER} LIKE ?",
+                    arrayOf("%$query%", "%$query%"),
+                    "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} " +
+                        "COLLATE NOCASE ASC",
+                    timeoutMs = 3_000L,
+                ) { cursor ->
+                    val contacts = mutableListOf<Map<String, Any?>>()
+                    val seenAddresses = mutableSetOf<String>()
+                    while (cursor.moveToNext() && contacts.size < 30) {
+                        val address = cursor.getString(1).orEmpty().trim()
+                        val normalized = address.filter { it.isDigit() || it == '+' }
+                        if (address.isEmpty() || !seenAddresses.add(normalized)) continue
+                        val avatarBytes = cursor.getString(2)?.let { value ->
+                            runCatching {
+                                contentResolver.openInputStream(Uri.parse(value))
+                                    ?.use { it.readBytes() }
+                            }.getOrNull()
+                        }
+                        contacts.add(
+                            mapOf(
+                                "name" to cursor.getString(0).orEmpty(),
+                                "address" to address,
+                                "avatarBytes" to avatarBytes,
+                            ),
+                        )
+                    }
+                    contacts
+                } ?: emptyList()
+                runOnUiThread { result.success(matches) }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    result.error(
+                        "contact_search_failed",
+                        error.message ?: "Contacts could not be searched.",
+                        null,
+                    )
                 }
             }
         }.start()

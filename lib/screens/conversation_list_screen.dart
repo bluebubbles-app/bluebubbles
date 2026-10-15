@@ -35,6 +35,7 @@ class ConversationListScreen extends StatefulWidget {
     required this.onEnableSmsMode,
     required this.onReloadPhoneMessages,
     required this.onDeleteConversation,
+    this.onResolveConversation,
     required this.onLoadConversation,
     this.onLoadMessageContext,
     required this.onLoadOlderConversation,
@@ -55,6 +56,7 @@ class ConversationListScreen extends StatefulWidget {
   final Future<bool> Function() onEnableSmsMode;
   final Future<void> Function() onReloadPhoneMessages;
   final Future<void> Function(Conversation) onDeleteConversation;
+  final Future<Conversation> Function(String address)? onResolveConversation;
   final Future<int> Function(Conversation) onLoadConversation;
   final Future<int> Function(Conversation, String)? onLoadMessageContext;
   final Future<int> Function(Conversation) onLoadOlderConversation;
@@ -74,6 +76,9 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
   final _searchController = TextEditingController();
   String _query = '';
   bool _editingFavorites = false;
+  bool _selectingConversations = false;
+  bool _deletingSelection = false;
+  final Set<String> _selectedConversationIds = <String>{};
   bool _searchingMessages = false;
   List<SmsSearchHit> _messageSearchResults = const <SmsSearchHit>[];
   Timer? _searchDebounce;
@@ -409,6 +414,110 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
     }
   }
 
+  void _toggleConversationSelectionMode() {
+    HapticFeedback.selectionClick();
+    _searchController.clear();
+    setState(() {
+      _selectingConversations = !_selectingConversations;
+      _editingFavorites = _selectingConversations;
+      _selectedConversationIds.clear();
+      _query = '';
+      _messageSearchResults = const <SmsSearchHit>[];
+      _searchingMessages = false;
+    });
+  }
+
+  void _toggleConversationSelection(Conversation conversation) {
+    HapticFeedback.selectionClick();
+    setState(() {
+      if (!_selectedConversationIds.add(conversation.id)) {
+        _selectedConversationIds.remove(conversation.id);
+      }
+    });
+  }
+
+  Future<void> _deleteSelectedConversations() async {
+    if (_selectedConversationIds.isEmpty || _deletingSelection) return;
+    final selected = widget.conversations
+        .where((item) => _selectedConversationIds.contains(item.id))
+        .toList();
+    final count = selected.length;
+    final confirmed = await showCupertinoModalPopup<bool>(
+      context: context,
+      builder: (context) => CupertinoActionSheet(
+        title: Text('Delete $count Conversation${count == 1 ? '' : 's'}?'),
+        message: const Text(
+          'Deleted conversations cannot be recovered.',
+        ),
+        actions: [
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text('Delete $count Conversation${count == 1 ? '' : 's'}'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _deletingSelection = true);
+    final deletedIds = <String>{};
+    Object? failure;
+    for (final conversation in selected) {
+      try {
+        await widget.onDeleteConversation(conversation);
+        deletedIds.add(conversation.id);
+      } catch (error) {
+        failure ??= error;
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      widget.conversations.removeWhere(
+        (conversation) => deletedIds.contains(conversation.id),
+      );
+      _selectedConversationIds.removeAll(deletedIds);
+      _deletingSelection = false;
+      if (_selectedConversationIds.isEmpty) {
+        _selectingConversations = false;
+      }
+    });
+    HapticFeedback.mediumImpact();
+    if (failure != null && mounted) {
+      await showCupertinoDialog<void>(
+        context: context,
+        builder: (context) => CupertinoAlertDialog(
+          title: const Text('Some Conversations Were Not Deleted'),
+          content: const Text('Please try again.'),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  Future<void> _composeNewMessage() async {
+    HapticFeedback.selectionClick();
+    final conversation = await Navigator.of(context).push<Conversation>(
+      CupertinoPageRoute<Conversation>(
+        builder: (_) => _NewMessageRecipientScreen(
+          conversations: widget.conversations,
+          onResolveConversation: widget.onResolveConversation,
+          smsController: widget.smsController,
+        ),
+      ),
+    );
+    if (!mounted || conversation == null) return;
+    await _openConversation(conversation);
+  }
+
   @override
   void dispose() {
     widget.syncProgress.removeListener(_handleSyncProgress);
@@ -456,10 +565,16 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                 SliverToBoxAdapter(
                   child: _PinnedGrid(
                     conversations: pinned,
-                    onTap: _openConversation,
+                    onTap: _selectingConversations
+                        ? _toggleConversationSelection
+                        : _openConversation,
                     editing: _editingFavorites,
+                    selecting: _selectingConversations,
+                    selectedIds: _selectedConversationIds,
                     onUnpin: _unpinConversation,
-                    onLongPress: _showConversationActions,
+                    onLongPress: _selectingConversations
+                        ? (_) {}
+                        : _showConversationActions,
                   ),
                 ),
               if (searchActive && _searchingMessages)
@@ -554,7 +669,13 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                   delegate: SliverChildBuilderDelegate(
                     (context, index) => SwipeableConversationRow(
                       conversation: regular[index],
-                      onTap: () => _openConversation(regular[index]),
+                      selectionMode: _selectingConversations,
+                      selected: _selectedConversationIds.contains(
+                        regular[index].id,
+                      ),
+                      onTap: () => _selectingConversations
+                          ? _toggleConversationSelection(regular[index])
+                          : _openConversation(regular[index]),
                       onPin: () => _pinConversation(regular[index]),
                       onToggleMute: () => _toggleMute(regular[index]),
                       onDelete: () => _confirmDelete(regular[index]),
@@ -564,7 +685,11 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                     childCount: regular.length,
                   ),
                 ),
-              const SliverPadding(padding: EdgeInsets.only(bottom: 28)),
+              SliverPadding(
+                padding: EdgeInsets.only(
+                  bottom: _selectingConversations ? 96 : 28,
+                ),
+              ),
             ],
               ),
             ),
@@ -577,7 +702,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                 builder: (context, progress, _) => IgnorePointer(
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 220),
-                    child: progress.active
+                    child: progress.active && !_selectingConversations
                         ? _SmsSyncProgressPill(
                             key: const ValueKey('sms-sync-progress'),
                             progress: progress,
@@ -589,6 +714,17 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                 ),
               ),
             ),
+            if (_selectingConversations)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: _ConversationSelectionToolbar(
+                  selectedCount: _selectedConversationIds.length,
+                  deleting: _deletingSelection,
+                  onDelete: _deleteSelectedConversations,
+                ),
+              ),
           ],
         ),
       ),
@@ -611,7 +747,9 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
             alignment: Alignment.center,
             children: [
               Text(
-                'Messages',
+                _selectingConversations
+                    ? '${_selectedConversationIds.length} Selected'
+                    : 'Messages',
                 key: const ValueKey('messages-title'),
                 style: TextStyle(
                   color: MessagesPalette.label(context),
@@ -624,14 +762,14 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
               Positioned(
                 left: 8,
                 child: CupertinoButton(
+                  key: const ValueKey('edit-conversations-button'),
                   minSize: 44,
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   onPressed: () {
-                    HapticFeedback.selectionClick();
-                    setState(() => _editingFavorites = !_editingFavorites);
+                    _toggleConversationSelectionMode();
                   },
                   child: Text(
-                    _editingFavorites ? 'Done' : 'Edit',
+                    _selectingConversations ? 'Done' : 'Edit',
                     style: const TextStyle(
                       color: MessagesPalette.blue,
                       fontFamily: 'SF Pro Text',
@@ -647,21 +785,513 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                   key: const ValueKey('open-settings-button'),
                   minSize: 44,
                   padding: EdgeInsets.zero,
-                  onPressed: _openSettings,
+                  onPressed: _selectingConversations ? null : _openSettings,
                   child: const Icon(CupertinoIcons.ellipsis_circle, size: 20),
                 ),
               ),
               Positioned(
                 right: 8,
                 child: CupertinoButton(
+                  key: const ValueKey('new-message-button'),
                   minSize: 44,
                   padding: EdgeInsets.zero,
-                  onPressed: () => HapticFeedback.selectionClick(),
+                  onPressed: _selectingConversations
+                      ? null
+                      : _composeNewMessage,
                   child: const Icon(CupertinoIcons.square_pencil, size: 20),
                 ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SelectionCircle extends StatelessWidget {
+  const _SelectionCircle({required this.selected});
+
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 140),
+      width: 24,
+      height: 24,
+      decoration: BoxDecoration(
+        color: selected ? MessagesPalette.blue : CupertinoColors.transparent,
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: selected
+              ? MessagesPalette.blue
+              : MessagesPalette.secondaryLabel(context),
+          width: 1.5,
+        ),
+      ),
+      child: selected
+          ? const Icon(
+              CupertinoIcons.check_mark,
+              size: 15,
+              color: CupertinoColors.white,
+            )
+          : null,
+    );
+  }
+}
+
+class _ConversationSelectionToolbar extends StatelessWidget {
+  const _ConversationSelectionToolbar({
+    required this.selectedCount,
+    required this.deleting,
+    required this.onDelete,
+  });
+
+  final int selectedCount;
+  final bool deleting;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = selectedCount > 0 && !deleting;
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: Container(
+          height: 58 + MediaQuery.paddingOf(context).bottom,
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            bottom: MediaQuery.paddingOf(context).bottom,
+          ),
+          decoration: BoxDecoration(
+            color: MessagesPalette.background(context).withValues(alpha: .86),
+            border: Border(
+              top: BorderSide(
+                color: MessagesPalette.hairline(context),
+                width: .5,
+              ),
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              CupertinoButton(
+                minSize: 44,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                onPressed: enabled ? onDelete : null,
+                child: deleting
+                    ? const CupertinoActivityIndicator(radius: 9)
+                    : Row(
+                        children: [
+                          Icon(
+                            CupertinoIcons.delete,
+                            size: 21,
+                            color: enabled
+                                ? CupertinoColors.systemRed
+                                : MessagesPalette.secondaryLabel(context),
+                          ),
+                          const SizedBox(width: 7),
+                          Text(
+                            selectedCount == 0
+                                ? 'Delete'
+                                : 'Delete ($selectedCount)',
+                            style: TextStyle(
+                              color: enabled
+                                  ? CupertinoColors.systemRed
+                                  : MessagesPalette.secondaryLabel(context),
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NewMessageRecipientScreen extends StatefulWidget {
+  const _NewMessageRecipientScreen({
+    required this.conversations,
+    this.onResolveConversation,
+    required this.smsController,
+  });
+
+  final List<Conversation> conversations;
+  final Future<Conversation> Function(String address)? onResolveConversation;
+  final AndroidSmsController smsController;
+
+  @override
+  State<_NewMessageRecipientScreen> createState() =>
+      _NewMessageRecipientScreenState();
+}
+
+class _NewMessageRecipientScreenState
+    extends State<_NewMessageRecipientScreen> {
+  final _recipientController = TextEditingController();
+  final _recipientFocus = FocusNode();
+  String _query = '';
+  bool _resolving = false;
+  Timer? _contactSearchDebounce;
+  int _contactSearchGeneration = 0;
+  List<SmsContact> _contactMatches = const <SmsContact>[];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _recipientFocus.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _contactSearchDebounce?.cancel();
+    _recipientController.dispose();
+    _recipientFocus.dispose();
+    super.dispose();
+  }
+
+  List<Conversation> get _matches {
+    final query = _query.trim().toLowerCase();
+    final conversations = [...widget.conversations]
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    if (query.isEmpty) return conversations.take(12).toList();
+    return conversations
+        .where(
+          (conversation) =>
+              conversation.title.toLowerCase().contains(query) ||
+              (conversation.address?.toLowerCase().contains(query) ?? false),
+        )
+        .take(20)
+        .toList();
+  }
+
+  Future<void> _useTypedRecipient() async {
+    final address = _recipientController.text.trim();
+    await _useRecipient(address);
+  }
+
+  Future<void> _useRecipient(String address) async {
+    if (_resolving) return;
+    if (address.isEmpty) return;
+    for (final conversation in widget.conversations) {
+      if (_sameAddress(conversation.address, address)) {
+        Navigator.of(context).pop(conversation);
+        return;
+      }
+    }
+    final resolver = widget.onResolveConversation;
+    if (resolver == null) {
+      await _showError('SMS mode must be enabled to start a new conversation.');
+      return;
+    }
+    setState(() => _resolving = true);
+    try {
+      final conversation = await resolver(address);
+      if (mounted) Navigator.of(context).pop(conversation);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _resolving = false);
+        await _showError('This conversation could not be created.');
+      }
+    }
+  }
+
+  void _onRecipientChanged(String value) {
+    setState(() {
+      _query = value;
+      if (value.trim().isEmpty) _contactMatches = const <SmsContact>[];
+    });
+    _contactSearchDebounce?.cancel();
+    final generation = ++_contactSearchGeneration;
+    final query = value.trim();
+    if (query.isEmpty) return;
+    _contactSearchDebounce = Timer(const Duration(milliseconds: 180), () async {
+      try {
+        final results = await widget.smsController.searchContacts(query);
+        if (!mounted || generation != _contactSearchGeneration) return;
+        setState(() => _contactMatches = results);
+      } catch (_) {
+        if (!mounted || generation != _contactSearchGeneration) return;
+        setState(() => _contactMatches = const <SmsContact>[]);
+      }
+    });
+  }
+
+  bool _sameAddress(String? first, String second) {
+    if (first == null) return false;
+    String normalize(String value) =>
+        value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9+]'), '');
+    return normalize(first) == normalize(second);
+  }
+
+  Future<void> _showError(String message) async {
+    await showCupertinoDialog<void>(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('New Message'),
+        content: Text(message),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final matches = _matches;
+    final typedRecipient = _query.trim();
+    return CupertinoPageScaffold(
+      backgroundColor: MessagesPalette.background(context),
+      navigationBar: CupertinoNavigationBar(
+        middle: const Text('New Message'),
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        border: Border(
+          bottom: BorderSide(
+            color: MessagesPalette.hairline(context),
+            width: .5,
+          ),
+        ),
+      ),
+      child: SafeArea(
+        child: Column(
+          children: [
+            Container(
+              minHeight: 50,
+              padding: const EdgeInsets.fromLTRB(16, 5, 12, 5),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: MessagesPalette.hairline(context),
+                    width: .5,
+                  ),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Text(
+                    'To:',
+                    style: MessagesText.body(context).copyWith(
+                      color: MessagesPalette.secondaryLabel(context),
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: CupertinoTextField.borderless(
+                      key: const ValueKey('new-message-recipient-field'),
+                      controller: _recipientController,
+                      focusNode: _recipientFocus,
+                      enabled: !_resolving,
+                      placeholder: 'Name or phone number',
+                      textInputAction: TextInputAction.done,
+                      keyboardType: TextInputType.text,
+                      style: MessagesText.body(context).copyWith(fontSize: 16),
+                      onChanged: _onRecipientChanged,
+                      onSubmitted: (_) => _useTypedRecipient(),
+                    ),
+                  ),
+                  if (_resolving)
+                    const Padding(
+                      padding: EdgeInsets.only(left: 8),
+                      child: CupertinoActivityIndicator(radius: 9),
+                    ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                children: [
+                  if (typedRecipient.isNotEmpty &&
+                      !matches.any(
+                        (item) => _sameAddress(item.address, typedRecipient),
+                      ))
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: _resolving ? null : _useTypedRecipient,
+                      child: Container(
+                        height: 58,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(
+                              color: MessagesPalette.hairline(context),
+                              width: .5,
+                            ),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              CupertinoIcons.arrow_up_circle_fill,
+                              color: MessagesPalette.blue,
+                              size: 31,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'Send to “$typedRecipient”',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: MessagesText.body(context).copyWith(
+                                  color: MessagesPalette.blue,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  for (final conversation in matches)
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: _resolving
+                          ? null
+                          : () => Navigator.of(context).pop(conversation),
+                      child: Container(
+                        height: 66,
+                        padding: const EdgeInsets.fromLTRB(16, 7, 12, 7),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(
+                              color: MessagesPalette.hairline(context),
+                              width: .5,
+                            ),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            ContactAvatar(
+                              conversation: conversation,
+                              size: 44,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    conversation.title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: MessagesText.headline(context)
+                                        .copyWith(fontSize: 16),
+                                  ),
+                                  if ((conversation.address ?? '').isNotEmpty)
+                                    Text(
+                                      conversation.address!,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: MessagesText.secondary(context)
+                                          .copyWith(fontSize: 13),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            Icon(
+                              CupertinoIcons.chevron_right,
+                              size: 15,
+                              color: MessagesPalette.secondaryLabel(context),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  for (final contact in _contactMatches.where(
+                    (contact) => !matches.any(
+                      (conversation) =>
+                          _sameAddress(conversation.address, contact.address),
+                    ),
+                  ))
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: _resolving
+                          ? null
+                          : () => _useRecipient(contact.address),
+                      child: Container(
+                        height: 66,
+                        padding: const EdgeInsets.fromLTRB(16, 7, 12, 7),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(
+                              color: MessagesPalette.hairline(context),
+                              width: .5,
+                            ),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            ContactAvatar(
+                              conversation: Conversation(
+                                id: 'contact-${contact.address}',
+                                address: contact.address,
+                                title: contact.name,
+                                preview: '',
+                                updatedAt: DateTime.now(),
+                                avatarColors: const [
+                                  Color(0xFF8E8E93),
+                                  Color(0xFF636366),
+                                ],
+                                avatarBytes: contact.avatarBytes,
+                                messages: <ChatMessage>[],
+                              ),
+                              size: 44,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    contact.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: MessagesText.headline(context)
+                                        .copyWith(fontSize: 16),
+                                  ),
+                                  Text(
+                                    contact.address,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: MessagesText.secondary(context)
+                                        .copyWith(fontSize: 13),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Icon(
+                              CupertinoIcons.chevron_right,
+                              size: 15,
+                              color: MessagesPalette.secondaryLabel(context),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -943,6 +1573,8 @@ class _PinnedGrid extends StatelessWidget {
     required this.conversations,
     required this.onTap,
     required this.editing,
+    this.selecting = false,
+    this.selectedIds = const <String>{},
     required this.onUnpin,
     required this.onLongPress,
   });
@@ -950,6 +1582,8 @@ class _PinnedGrid extends StatelessWidget {
   final List<Conversation> conversations;
   final ValueChanged<Conversation> onTap;
   final bool editing;
+  final bool selecting;
+  final Set<String> selectedIds;
   final ValueChanged<Conversation> onUnpin;
   final ValueChanged<Conversation> onLongPress;
 
@@ -966,10 +1600,14 @@ class _PinnedGrid extends StatelessWidget {
             width: itemWidth,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onLongPress: editing ? null : () => onLongPress(conversation),
+              onLongPress: editing || selecting
+                  ? null
+                  : () => onLongPress(conversation),
               child: CupertinoButton(
                 padding: EdgeInsets.zero,
-                onPressed: editing ? () {} : () => onTap(conversation),
+                onPressed: editing && !selecting
+                    ? () {}
+                    : () => onTap(conversation),
                 child: Column(
                   children: [
                     Stack(
@@ -1008,6 +1646,14 @@ class _PinnedGrid extends StatelessWidget {
                                   color: CupertinoColors.white,
                                 ),
                               ),
+                            ),
+                          ),
+                        if (selecting)
+                          Positioned(
+                            left: -1,
+                            bottom: -1,
+                            child: _SelectionCircle(
+                              selected: selectedIds.contains(conversation.id),
                             ),
                           ),
                       ],
@@ -1315,6 +1961,8 @@ class SwipeableConversationRow extends StatefulWidget {
     required this.onToggleMute,
     required this.onDelete,
     required this.onLongPress,
+    this.selectionMode = false,
+    this.selected = false,
   });
 
   final Conversation conversation;
@@ -1323,6 +1971,8 @@ class SwipeableConversationRow extends StatefulWidget {
   final VoidCallback onToggleMute;
   final VoidCallback onDelete;
   final VoidCallback onLongPress;
+  final bool selectionMode;
+  final bool selected;
 
   @override
   State<SwipeableConversationRow> createState() =>
@@ -1379,12 +2029,15 @@ class _SwipeableConversationRowState extends State<SwipeableConversationRow>
       animation: _offsetController,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onHorizontalDragUpdate: _handleDragUpdate,
-        onHorizontalDragEnd: _handleDragEnd,
-        onLongPress: widget.onLongPress,
+        onHorizontalDragUpdate:
+            widget.selectionMode ? null : _handleDragUpdate,
+        onHorizontalDragEnd: widget.selectionMode ? null : _handleDragEnd,
+        onLongPress: widget.selectionMode ? null : widget.onLongPress,
         child: ConversationRow(
           conversation: widget.conversation,
           onTap: widget.onTap,
+          selectionMode: widget.selectionMode,
+          selected: widget.selected,
         ),
       ),
       builder: (context, child) {
@@ -1488,10 +2141,14 @@ class ConversationRow extends StatelessWidget {
     super.key,
     required this.conversation,
     required this.onTap,
+    this.selectionMode = false,
+    this.selected = false,
   });
 
   final Conversation conversation;
   final VoidCallback onTap;
+  final bool selectionMode;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
@@ -1505,8 +2162,18 @@ class ConversationRow extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (selectionMode)
+              Padding(
+                padding: const EdgeInsets.only(left: 12, top: 27),
+                child: _SelectionCircle(selected: selected),
+              ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(26, 10, 13, 10),
+              padding: EdgeInsets.fromLTRB(
+                selectionMode ? 10 : 26,
+                10,
+                13,
+                10,
+              ),
               child: ContactAvatar(conversation: conversation, size: 44),
             ),
             Expanded(
