@@ -34,12 +34,12 @@ find "$project_root/android/app/src/main/res" -type f \
 
 dart run flutter_launcher_icons
 
-# Restore the canonical manifest so both launcher attributes resolve to the
-# complete supplied artwork, with no additional inner mask or reconstruction.
+# Restore the canonical manifest so the launcher resolves to the complete
+# supplied artwork, with no additional inner mask or reconstruction.
 cp "$native_source/AndroidManifest.xml" "$manifest"
 
 generated_icon="$(find "$project_root/android/app/src/main/res" -type f \
-  -name 'launcher_icon_v6*' -print -quit)"
+  -name 'launcher_icon_v7*' -print -quit)"
 if [[ -z "$generated_icon" ]]; then
   echo "BlueBubbles launcher icon generation failed." >&2
   exit 1
