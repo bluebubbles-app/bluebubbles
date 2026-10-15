@@ -186,6 +186,11 @@ class AndroidSmsController extends ChangeNotifier {
     await _channel.invokeMethod<void>('dialNumber', {'address': address});
   }
 
+  Future<void> openContact(String address) async {
+    if (kIsWeb || !Platform.isAndroid || address.trim().isEmpty) return;
+    await _channel.invokeMethod<void>('openContact', {'address': address});
+  }
+
   Future<Map<String, Object?>> getDiagnostics() async {
     if (kIsWeb || !Platform.isAndroid) {
       return const {'Platform': 'Android diagnostics unavailable'};

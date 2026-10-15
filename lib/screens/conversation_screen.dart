@@ -17,18 +17,22 @@ class ConversationScreen extends StatefulWidget {
     super.key,
     required this.conversation,
     required this.allConversations,
+    required this.messagesPreloaded,
     required this.onLoad,
     required this.onLoadOlder,
     required this.onSend,
     required this.onCall,
+    required this.onOpenContact,
   });
 
   final Conversation conversation;
   final List<Conversation> allConversations;
+  final bool messagesPreloaded;
   final Future<int> Function() onLoad;
   final Future<int> Function() onLoadOlder;
   final ValueChanged<String> onSend;
   final VoidCallback onCall;
+  final VoidCallback onOpenContact;
 
   @override
   State<ConversationScreen> createState() => _ConversationScreenState();
@@ -56,7 +60,12 @@ class _ConversationScreenState extends State<ConversationScreen>
   @override
   void initState() {
     super.initState();
-    unawaited(_loadMessages());
+    if (widget.messagesPreloaded) {
+      _loadingMessages = false;
+      _hasOlderMessages = widget.conversation.messages.isNotEmpty;
+    } else {
+      unawaited(_loadMessages());
+    }
   }
 
   Future<void> _loadMessages() async {
@@ -70,11 +79,11 @@ class _ConversationScreenState extends State<ConversationScreen>
       final loadedCount = await widget.onLoad();
       if (!mounted) return;
       setState(() {
+        _loadingMessages = false;
         _hasOlderMessages = loadedCount > 0;
         _loadError = null;
         _messageListKey = GlobalKey<AnimatedListState>();
       });
-      _finishInitialLoadAtBottom();
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -91,8 +100,6 @@ class _ConversationScreenState extends State<ConversationScreen>
         !_scrollController.hasClients) {
       return;
     }
-    final oldOffset = _scrollController.offset;
-    final oldMaxExtent = _scrollController.position.maxScrollExtent;
     setState(() => _loadingOlderMessages = true);
     try {
       final addedCount = await widget.onLoadOlder();
@@ -104,40 +111,9 @@ class _ConversationScreenState extends State<ConversationScreen>
         _hasOlderMessages = addedCount > 0;
         _messageListKey = GlobalKey<AnimatedListState>();
       });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_scrollController.hasClients) return;
-        final addedExtent =
-            _scrollController.position.maxScrollExtent - oldMaxExtent;
-        final target = (oldOffset + addedExtent).clamp(
-          _scrollController.position.minScrollExtent,
-          _scrollController.position.maxScrollExtent,
-        );
-        _jumpWithoutBubbleMotion(target.toDouble());
-      });
     } catch (_) {
       if (mounted) setState(() => _loadingOlderMessages = false);
     }
-  }
-
-  void _jumpToBottom() {
-    if (!_scrollController.hasClients) return;
-    _jumpWithoutBubbleMotion(_scrollController.position.maxScrollExtent);
-  }
-
-  void _finishInitialLoadAtBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _jumpToBottom();
-      // AnimatedList can refine its total extent after its first layout.
-      // A second, hidden positioning pass guarantees the newest message is
-      // the one shown when the loading cover is removed.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _jumpToBottom();
-        setState(() => _loadingMessages = false);
-      });
-      WidgetsBinding.instance.scheduleFrame();
-    });
   }
 
   int _beginProgrammaticScroll() {
@@ -155,22 +131,13 @@ class _ConversationScreenState extends State<ConversationScreen>
     _programmaticScroll = false;
   }
 
-  void _jumpWithoutBubbleMotion(double offset) {
-    if (!_scrollController.hasClients) return;
-    final generation = _beginProgrammaticScroll();
-    _scrollController.jumpTo(offset);
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _finishProgrammaticScroll(generation),
-    );
-  }
-
   void _scrollToBottom() {
     if (!_scrollController.hasClients) return;
     final generation = _beginProgrammaticScroll();
     unawaited(
       _scrollController
           .animateTo(
-            _scrollController.position.maxScrollExtent,
+            _scrollController.position.minScrollExtent,
             duration: const Duration(milliseconds: 260),
             curve: Curves.easeOutCubic,
           )
@@ -183,7 +150,7 @@ class _ConversationScreenState extends State<ConversationScreen>
     widget.onSend(text);
     if (widget.conversation.messages.length <= previousLength) return;
     _messageListKey.currentState?.insertItem(
-      previousLength + 1,
+      0,
       duration: const Duration(milliseconds: 280),
     );
     Timer(const Duration(milliseconds: 40), _scrollToBottom);
@@ -216,7 +183,7 @@ class _ConversationScreenState extends State<ConversationScreen>
   }
 
   bool _handleScrollNotification(ScrollNotification notification) {
-    if (!_programmaticScroll && notification.metrics.extentBefore <= 700) {
+    if (!_programmaticScroll && notification.metrics.extentAfter <= 700) {
       unawaited(_loadOlderMessages());
     }
     if (_programmaticScroll) {
@@ -477,6 +444,7 @@ class _ConversationScreenState extends State<ConversationScreen>
                           child: AnimatedList(
                             key: _messageListKey,
                             controller: _scrollController,
+                            reverse: true,
                             physics: const BouncingScrollPhysics(
                               parent: AlwaysScrollableScrollPhysics(),
                             ),
@@ -488,123 +456,133 @@ class _ConversationScreenState extends State<ConversationScreen>
                               14,
                               10,
                             ),
-                      initialItemCount:
-                          widget.conversation.messages.length + 1,
-                      itemBuilder: (context, index, animation) {
-                        if (index == 0) {
-                          return Column(
-                            children: [
-                              if (_loadingOlderMessages)
-                                const Padding(
-                                  padding: EdgeInsets.only(bottom: 10),
-                                  child: CupertinoActivityIndicator(),
-                                ),
-                              _DateSeparator(
-                                value: widget.conversation.messages.isEmpty
-                                    ? DateTime.now()
-                                    : widget
-                                        .conversation.messages.first.sentAt,
-                              ),
-                              if (widget.conversation.id == 'tobias')
-                                const _PhotoStackMessage(),
-                            ],
-                          );
-                        }
-
-                        final messageIndex = index - 1;
-                        if (messageIndex >=
-                            widget.conversation.messages.length) {
-                          return const SizedBox.shrink();
-                        }
-                        final message =
-                            widget.conversation.messages[messageIndex];
-                        final next = messageIndex + 1 <
-                                widget.conversation.messages.length
-                            ? widget.conversation.messages[messageIndex + 1]
-                            : null;
-                        final previous = messageIndex > 0
-                            ? widget.conversation.messages[messageIndex - 1]
-                            : null;
-                        final showTail = next == null ||
-                            next.isFromMe != message.isFromMe ||
-                            next.sentAt.difference(message.sentAt).inMinutes >
-                                3;
-                        final compactTop = previous != null &&
-                            previous.isFromMe == message.isFromMe &&
-                            message.sentAt
-                                    .difference(previous.sentAt)
-                                    .inMinutes <=
-                                3;
-
-                        final messageBubble = _TimestampRevealMessage(
-                          revealAnimation: _timestampRevealController,
-                          sentAt: message.sentAt,
-                          child: MessageBubble(
-                            key: ValueKey(message.id),
-                            message: message,
-                            showTail: showTail,
-                            compactTop: compactTop,
-                            showStatus: !_selectionMode &&
-                                messageIndex ==
-                                    widget.conversation.messages.length - 1,
-                          ),
-                        );
-                        final interactiveMessage = _MessageHoldRegion(
-                          enabled: !_selectionMode,
-                          onHold: () => _showMessageActions(message),
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: _selectionMode
-                                ? () => _toggleSelection(message)
-                                : null,
-                            child: messageBubble,
-                          ),
-                        );
-
-                        final curvedAnimation = CurvedAnimation(
-                          parent: animation,
-                          curve: Curves.easeOutCubic,
-                        );
-                        final insertedMessage = FadeTransition(
-                          opacity: curvedAnimation,
-                          child: SlideTransition(
-                            position: Tween<Offset>(
-                              begin: const Offset(.10, .10),
-                              end: Offset.zero,
-                            ).animate(curvedAnimation),
-                            child: _selectionMode
-                                ? Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.center,
-                                    children: [
-                                      Transform.translate(
-                                        // MessageBubble paints below its own
-                                        // top spacing. Compensate for half
-                                        // that spacing so the control is
-                                        // centered on the visible bubble.
-                                        offset: Offset(
-                                          0,
-                                          compactTop ? 1 : 4,
-                                        ),
-                                        child: _SelectionCircle(
-                                          selected: _selectedMessageIds
-                                              .contains(message.id),
-                                          onPressed: () =>
-                                              _toggleSelection(message),
-                                        ),
+                            initialItemCount:
+                                widget.conversation.messages.length + 1,
+                            itemBuilder: (context, index, animation) {
+                              final messageCount =
+                                  widget.conversation.messages.length;
+                              if (index == messageCount) {
+                                return Column(
+                                  children: [
+                                    if (_loadingOlderMessages)
+                                      const Padding(
+                                        padding: EdgeInsets.only(bottom: 10),
+                                        child: CupertinoActivityIndicator(),
                                       ),
-                                      Expanded(child: interactiveMessage),
-                                    ],
-                                  )
-                                : interactiveMessage,
-                          ),
-                        );
-                        return _ElasticMessageMotion(
-                          animation: _scrollElasticController,
-                          intensity: .78 + (messageIndex % 3) * .1,
-                          child: insertedMessage,
-                        );
-                      },
+                                    _DateSeparator(
+                                      value: widget
+                                              .conversation.messages.isEmpty
+                                          ? DateTime.now()
+                                          : widget.conversation.messages.first
+                                              .sentAt,
+                                    ),
+                                    if (widget.conversation.id == 'tobias')
+                                      const _PhotoStackMessage(),
+                                  ],
+                                );
+                              }
+
+                              final messageIndex = messageCount - 1 - index;
+                              if (messageIndex < 0 ||
+                                  messageIndex >= messageCount) {
+                                return const SizedBox.shrink();
+                              }
+                              final message = widget
+                                  .conversation.messages[messageIndex];
+                              final next = messageIndex + 1 <
+                                      widget.conversation.messages.length
+                                  ? widget.conversation
+                                      .messages[messageIndex + 1]
+                                  : null;
+                              final previous = messageIndex > 0
+                                  ? widget.conversation
+                                      .messages[messageIndex - 1]
+                                  : null;
+                              final showTail = next == null ||
+                                  next.isFromMe != message.isFromMe ||
+                                  next.sentAt
+                                          .difference(message.sentAt)
+                                          .inMinutes >
+                                      3;
+                              final compactTop = previous != null &&
+                                  previous.isFromMe == message.isFromMe &&
+                                  message.sentAt
+                                          .difference(previous.sentAt)
+                                          .inMinutes <=
+                                      3;
+
+                              final messageBubble = _TimestampRevealMessage(
+                                revealAnimation: _timestampRevealController,
+                                sentAt: message.sentAt,
+                                child: MessageBubble(
+                                  key: ValueKey(message.id),
+                                  message: message,
+                                  showTail: showTail,
+                                  compactTop: compactTop,
+                                  showStatus: !_selectionMode &&
+                                      messageIndex ==
+                                          widget.conversation.messages.length -
+                                              1,
+                                ),
+                              );
+                              final interactiveMessage = _MessageHoldRegion(
+                                enabled: !_selectionMode,
+                                onHold: () => _showMessageActions(message),
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: _selectionMode
+                                      ? () => _toggleSelection(message)
+                                      : null,
+                                  child: messageBubble,
+                                ),
+                              );
+
+                              final curvedAnimation = CurvedAnimation(
+                                parent: animation,
+                                curve: Curves.easeOutCubic,
+                              );
+                              final insertedMessage = FadeTransition(
+                                opacity: curvedAnimation,
+                                child: SlideTransition(
+                                  position: Tween<Offset>(
+                                    begin: const Offset(.10, .10),
+                                    end: Offset.zero,
+                                  ).animate(curvedAnimation),
+                                  child: _selectionMode
+                                      ? Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.center,
+                                          children: [
+                                            Transform.translate(
+                                              // MessageBubble paints below its
+                                              // own top spacing. Compensate
+                                              // so the control is centered on
+                                              // the visible bubble.
+                                              offset: Offset(
+                                                0,
+                                                compactTop ? 1 : 4,
+                                              ),
+                                              child: _SelectionCircle(
+                                                selected: _selectedMessageIds
+                                                    .contains(message.id),
+                                                onPressed: () =>
+                                                    _toggleSelection(message),
+                                              ),
+                                            ),
+                                            Expanded(
+                                              child: interactiveMessage,
+                                            ),
+                                          ],
+                                        )
+                                      : interactiveMessage,
+                                ),
+                              );
+                              return _ElasticMessageMotion(
+                                animation: _scrollElasticController,
+                                intensity: .78 + (messageIndex % 3) * .1,
+                                child: insertedMessage,
+                              );
+                            },
                           ),
                         ),
                       ),
@@ -652,6 +630,7 @@ class _ConversationScreenState extends State<ConversationScreen>
                               conversation: widget.conversation,
                               topCompensation: topCompensation,
                               onCall: widget.onCall,
+                              onOpenContact: widget.onOpenContact,
                             ),
                     ),
                   ],
@@ -1035,11 +1014,13 @@ class _ConversationHeader extends StatelessWidget {
     required this.conversation,
     required this.topCompensation,
     required this.onCall,
+    required this.onOpenContact,
   });
 
   final Conversation conversation;
   final double topCompensation;
   final VoidCallback onCall;
+  final VoidCallback onOpenContact;
 
   @override
   Widget build(BuildContext context) {
@@ -1092,7 +1073,10 @@ class _ConversationHeader extends StatelessWidget {
                   child: CupertinoButton(
                     minSize: 0,
                     padding: EdgeInsets.zero,
-                    onPressed: () => HapticFeedback.selectionClick(),
+                    onPressed: () {
+                      HapticFeedback.selectionClick();
+                      onOpenContact();
+                    },
                     child: SizedBox(
                       key: const ValueKey('conversation-contact-avatar'),
                       width: 52,
@@ -1113,7 +1097,10 @@ class _ConversationHeader extends StatelessWidget {
                   child: CupertinoButton(
                     minSize: 0,
                     padding: EdgeInsets.zero,
-                    onPressed: () => HapticFeedback.selectionClick(),
+                    onPressed: () {
+                      HapticFeedback.selectionClick();
+                      onOpenContact();
+                    },
                     child: Stack(
                       clipBehavior: Clip.none,
                       alignment: Alignment.center,
@@ -1167,15 +1154,25 @@ class _ConversationHeader extends StatelessWidget {
       ),
     );
     if (settings.headerBlurSigma < .1) return header;
-    return ClipRect(
-      key: const ValueKey('conversation-header-glass'),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(
-          sigmaX: settings.headerBlurSigma,
-          sigmaY: settings.headerBlurSigma,
-        ),
-        child: header,
-      ),
+    Widget addGlass(Widget child) => ClipRect(
+          key: const ValueKey('conversation-header-glass'),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(
+              sigmaX: settings.headerBlurSigma,
+              sigmaY: settings.headerBlurSigma,
+            ),
+            child: child,
+          ),
+        );
+    final routeAnimation = ModalRoute.of(context)?.animation;
+    if (routeAnimation == null) return addGlass(header);
+    return AnimatedBuilder(
+      animation: routeAnimation,
+      child: header,
+      builder: (context, child) => routeAnimation.status ==
+              AnimationStatus.completed
+          ? addGlass(child!)
+          : child!,
     );
   }
 }

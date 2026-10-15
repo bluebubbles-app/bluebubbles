@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
@@ -33,6 +34,7 @@ class ConversationListScreen extends StatefulWidget {
     required this.onLoadConversation,
     required this.onLoadOlderConversation,
     required this.onCallConversation,
+    required this.onOpenConversationContact,
   });
 
   final List<Conversation> conversations;
@@ -47,6 +49,7 @@ class ConversationListScreen extends StatefulWidget {
   final Future<int> Function(Conversation) onLoadConversation;
   final Future<int> Function(Conversation) onLoadOlderConversation;
   final ValueChanged<Conversation> onCallConversation;
+  final ValueChanged<Conversation> onOpenConversationContact;
 
   @override
   State<ConversationListScreen> createState() =>
@@ -74,11 +77,23 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
 
   Future<void> _openConversation(Conversation conversation) async {
     setState(() => conversation.unreadCount = 0);
+    unawaited(_markConversationRead(conversation));
+    var messagesPreloaded = false;
+    try {
+      await widget.onLoadConversation(conversation);
+      messagesPreloaded = true;
+    } catch (_) {
+      // The conversation screen retains its own retry state.
+    }
+    if (!mounted) return;
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
     await Navigator.of(context).push(
       CupertinoPageRoute<void>(
         builder: (_) => ConversationScreen(
           conversation: conversation,
           allConversations: widget.conversations,
+          messagesPreloaded: messagesPreloaded,
           onLoad: () => widget.onLoadConversation(conversation),
           onLoadOlder: () => widget.onLoadOlderConversation(conversation),
           onSend: (text) {
@@ -86,10 +101,22 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
             setState(() {});
           },
           onCall: () => widget.onCallConversation(conversation),
+          onOpenContact: () =>
+              widget.onOpenConversationContact(conversation),
         ),
       ),
     );
-    setState(() {});
+    await _markConversationRead(conversation);
+    if (!mounted) return;
+    setState(() => conversation.unreadCount = 0);
+  }
+
+  Future<void> _markConversationRead(Conversation conversation) async {
+    try {
+      await widget.smsController.markThreadRead(conversation.id);
+    } catch (_) {
+      // Keep navigation responsive if the provider changes state mid-route.
+    }
   }
 
   Future<void> _openSettings() async {

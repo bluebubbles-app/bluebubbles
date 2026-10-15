@@ -34,7 +34,7 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val CHANNEL = "bluebubbles/sms"
         private const val TAG = "BlueBubblesSms"
-        private const val NATIVE_BUILD = "2026-10-15-paged-v3"
+        private const val NATIVE_BUILD = "2026-10-15-all-threads-v1"
         private const val ROLE_REQUEST = 4701
         private const val PERMISSION_REQUEST = 4702
         private const val PROVIDER_LOAD_TIMEOUT_MS = 20_000L
@@ -49,6 +49,7 @@ class MainActivity : FlutterActivity() {
     @Volatile private var lastLoadResult = "No load attempted"
     @Volatile private var lastLoadDurationMs = 0L
     @Volatile private var lastThreadLoad = "Not started"
+    @Volatile private var suppressProviderReloadUntil = 0L
     private val enrichmentGeneration = AtomicInteger(0)
     private val mainHandler = Handler(Looper.getMainLooper())
     private val notifyMessagesChanged = Runnable {
@@ -56,6 +57,9 @@ class MainActivity : FlutterActivity() {
     }
     private val smsObserver = object : ContentObserver(mainHandler) {
         override fun onChange(selfChange: Boolean) {
+            if (SystemClock.elapsedRealtime() < suppressProviderReloadUntil) {
+                return
+            }
             mainHandler.removeCallbacks(notifyMessagesChanged)
             mainHandler.postDelayed(notifyMessagesChanged, 250)
         }
@@ -93,6 +97,7 @@ class MainActivity : FlutterActivity() {
             "markThreadRead" -> markThreadRead(call, result)
             "deleteThread" -> deleteThread(call, result)
             "dialNumber" -> dialNumber(call, result)
+            "openContact" -> openContact(call, result)
             "getDiagnostics" -> getDiagnostics(result)
             "openDefaultSmsSettings" -> {
                 val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -297,6 +302,56 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun openContact(call: MethodCall, result: MethodChannel.Result) {
+        val address = call.argument<String>("address")?.trim().orEmpty()
+        if (address.isEmpty()) {
+            result.error("invalid_number", "A phone number is required.", null)
+            return
+        }
+        Thread {
+            try {
+                val filterUri = Uri.withAppendedPath(
+                    ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
+                    Uri.encode(address),
+                )
+                var contactUri: Uri? = null
+                contentResolver.query(
+                    filterUri,
+                    arrayOf(
+                        ContactsContract.PhoneLookup._ID,
+                        ContactsContract.PhoneLookup.LOOKUP_KEY,
+                    ),
+                    null,
+                    null,
+                    null,
+                )?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        contactUri = ContactsContract.Contacts.getLookupUri(
+                            cursor.getLong(0),
+                            cursor.getString(1),
+                        )
+                    }
+                }
+                val intent = if (contactUri != null) {
+                    Intent(Intent.ACTION_VIEW, contactUri)
+                } else {
+                    Intent(ContactsContract.Intents.Insert.ACTION).apply {
+                        type = ContactsContract.RawContacts.CONTENT_TYPE
+                        putExtra(ContactsContract.Intents.Insert.PHONE, address)
+                    }
+                }
+                runOnUiThread {
+                    startActivity(intent)
+                    result.success(null)
+                }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    result.error("contact_open_failed", error.message, null)
+                }
+            }
+        }.start()
+    }
+
     private fun getDiagnostics(result: MethodChannel.Result) {
         Thread {
             val diagnostics = linkedMapOf<String, Any?>(
@@ -415,9 +470,6 @@ class MainActivity : FlutterActivity() {
             result.error("invalid_thread", "A thread ID is required.", null)
             return
         }
-        // Stop optional contact/avatar enrichment before the latency-sensitive
-        // message query. It can resume after the next conversation refresh.
-        enrichmentGeneration.incrementAndGet()
         val beforeTimestamp = call.argument<Number>("beforeTimestamp")?.toLong()
         val beforeMessageId = call.argument<String>("beforeMessageId")
             ?.toLongOrNull()
@@ -482,6 +534,8 @@ class MainActivity : FlutterActivity() {
         }
         Thread {
             try {
+                suppressProviderReloadUntil =
+                    SystemClock.elapsedRealtime() + 500L
                 contentResolver.update(
                     Telephony.Sms.CONTENT_URI,
                     values,
@@ -552,7 +606,7 @@ class MainActivity : FlutterActivity() {
         providerQuery(
             threadsUri,
             projection,
-            sortOrder = "${Telephony.Threads.DATE} DESC LIMIT 40",
+            sortOrder = "${Telephony.Threads.DATE} DESC",
             timeoutMs = 20_000L,
         ) { cursor ->
             val idColumn = cursor.getColumnIndexOrThrow(BaseColumns._ID)
@@ -564,7 +618,7 @@ class MainActivity : FlutterActivity() {
                 Telephony.Threads.SNIPPET,
             )
             val readColumn = cursor.getColumnIndexOrThrow(Telephony.Threads.READ)
-            while (cursor.moveToNext() && summaries.size < 40) {
+            while (cursor.moveToNext()) {
                 summaries.add(
                     ThreadSummary(
                         id = cursor.getLong(idColumn).toString(),
@@ -580,12 +634,25 @@ class MainActivity : FlutterActivity() {
                 )
             }
         }
-        lastLoadStage = "Encoding ${summaries.size} conversation summaries"
-        val items = summaries.map { summary ->
+        lastLoadStage = "Resolving conversation recipients"
+        val addressBook = canonicalAddresses(
+            summaries.flatMap { it.recipientIds }.toSet(),
+        )
+        val resolvedSummaries = summaries.map { summary ->
+            val addresses = summary.recipientIds.mapNotNull(addressBook::get)
+                .ifEmpty {
+                    listOfNotNull(latestSmsAddress(summary.id))
+                }
+            summary.copy(addresses = addresses)
+        }
+        lastLoadStage =
+            "Encoding ${resolvedSummaries.size} conversation summaries"
+        val items = resolvedSummaries.map { summary ->
+            val initialTitle = summary.addresses.joinToString(", ")
             hashMapOf<String, Any?>(
                 "id" to summary.id,
-                "address" to "",
-                "title" to "Conversation",
+                "address" to summary.addresses.singleOrNull().orEmpty(),
+                "title" to initialTitle.ifEmpty { "Conversation" },
                 "preview" to summary.preview,
                 "updatedAt" to summary.updatedAt,
                 "unreadCount" to summary.unreadCount,
@@ -593,7 +660,7 @@ class MainActivity : FlutterActivity() {
                 "messages" to emptyList<HashMap<String, Any?>>(),
             )
         }
-        return ConversationPage(items = items, summaries = summaries)
+        return ConversationPage(items = items, summaries = resolvedSummaries)
     }
 
     private fun enrichConversationSummaries(
@@ -601,20 +668,12 @@ class MainActivity : FlutterActivity() {
         generation: Int,
     ) {
         Thread {
-            val addressBook = canonicalAddresses(
-                summaries.flatMap { it.recipientIds }.toSet(),
-            )
             val contactCache = mutableMapOf<String, ContactDetails>()
             for (summary in summaries) {
                 if (generation != enrichmentGeneration.get()) {
                     break
                 }
-                val addresses = summary.addresses.ifEmpty {
-                    summary.recipientIds.mapNotNull(addressBook::get)
-                }
-                    .ifEmpty {
-                        listOfNotNull(latestSmsAddress(summary.id))
-                    }
+                val addresses = summary.addresses
                 val contacts = addresses.map { address ->
                     contactCache.getOrPut(address) { contactDetails(address) }
                 }
@@ -762,21 +821,23 @@ class MainActivity : FlutterActivity() {
     private fun canonicalAddresses(recipientIds: Set<String>): Map<String, String> {
         if (recipientIds.isEmpty()) return emptyMap()
         val ids = recipientIds.toList()
-        val placeholders = List(ids.size) { "?" }.joinToString(",")
         return runCatching {
             val addresses = mutableMapOf<String, String>()
-            providerQuery(
-                Uri.parse("content://mms-sms/canonical-addresses"),
-                arrayOf(BaseColumns._ID, "address"),
-                "${BaseColumns._ID} IN ($placeholders)",
-                ids.toTypedArray(),
-                timeoutMs = 2_000L,
-            ) { cursor ->
-                val idColumn = cursor.getColumnIndexOrThrow(BaseColumns._ID)
-                val addressColumn = cursor.getColumnIndexOrThrow("address")
-                while (cursor.moveToNext()) {
-                    addresses[cursor.getLong(idColumn).toString()] =
-                        cursor.getString(addressColumn).orEmpty()
+            ids.chunked(500).forEach { chunk ->
+                val placeholders = List(chunk.size) { "?" }.joinToString(",")
+                providerQuery(
+                    Uri.parse("content://mms-sms/canonical-addresses"),
+                    arrayOf(BaseColumns._ID, "address"),
+                    "${BaseColumns._ID} IN ($placeholders)",
+                    chunk.toTypedArray(),
+                    timeoutMs = 2_000L,
+                ) { cursor ->
+                    val idColumn = cursor.getColumnIndexOrThrow(BaseColumns._ID)
+                    val addressColumn = cursor.getColumnIndexOrThrow("address")
+                    while (cursor.moveToNext()) {
+                        addresses[cursor.getLong(idColumn).toString()] =
+                            cursor.getString(addressColumn).orEmpty()
+                    }
                 }
             }
             addresses

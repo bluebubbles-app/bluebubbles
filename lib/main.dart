@@ -261,11 +261,9 @@ class _MessagesUiAppState extends State<MessagesUiApp>
     if (!_smsController.isActive) return conversation.messages.length;
     final messages = await _smsController.loadThreadMessages(conversation.id);
     if (!mounted) return 0;
-    setState(() {
-      conversation.messages
-        ..clear()
-        ..addAll(messages);
-    });
+    conversation.messages
+      ..clear()
+      ..addAll(messages);
     return messages.length;
   }
 
@@ -429,6 +427,20 @@ class _MessagesUiAppState extends State<MessagesUiApp>
     unawaited(_smsController.dialNumber(address));
   }
 
+  void _openConversationContact(Conversation conversation) {
+    final address = conversation.address;
+    if (address == null || address.isEmpty) return;
+    unawaited(_openContact(address));
+  }
+
+  Future<void> _openContact(String address) async {
+    try {
+      await _smsController.openContact(address);
+    } catch (error) {
+      debugPrint('Contact could not be opened: $error');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -482,6 +494,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
             onLoadConversation: _loadConversationMessages,
             onLoadOlderConversation: _loadOlderConversationMessages,
             onCallConversation: _callConversation,
+            onOpenConversationContact: _openConversationContact,
           ),
         ),
       ),

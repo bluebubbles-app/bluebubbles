@@ -261,8 +261,11 @@ class MessageBubblePainter extends CustomPainter {
     if (gradient != null && screenHeight > 0) {
       final currentScrollOffset =
           scrollPosition?.pixels ?? referenceScrollOffset;
-      final screenTop =
-          referenceScreenTop - (currentScrollOffset - referenceScrollOffset);
+      final scrollDirection = scrollPosition?.axisDirection == AxisDirection.up
+          ? 1.0
+          : -1.0;
+      final screenTop = referenceScreenTop +
+          (currentScrollOffset - referenceScrollOffset) * scrollDirection;
       paint.shader = gradient!.createShader(
         Rect.fromLTWH(0, -screenTop, size.width, screenHeight),
       );
