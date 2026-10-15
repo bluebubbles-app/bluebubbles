@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/services.dart';
 
+import 'data/conversation_header_merge.dart';
 import 'data/demo_data.dart';
 import 'data/local_sms_store.dart';
 import 'data/message_repository.dart';
@@ -194,25 +195,10 @@ class _MessagesUiAppState extends State<MessagesUiApp>
     try {
       final loaded = await _smsController.loadConversations();
       if (!mounted || !_smsController.isActive) return;
-      final existing = {
-        for (final conversation in _messageRepository.conversations)
-          conversation.id: conversation,
-      };
-      final merged = loaded.map((incoming) {
-        final current = existing[incoming.id];
-        if (current == null) return incoming;
-        if (incoming.address?.isNotEmpty == true) {
-          current.address = incoming.address;
-        }
-        if (incoming.title != 'Conversation') {
-          current.title = incoming.title;
-        }
-        current
-          ..preview = incoming.preview
-          ..updatedAt = incoming.updatedAt
-          ..unreadCount = incoming.unreadCount;
-        return current;
-      }).toList();
+      final merged = mergeConversationHeaders(
+        current: _messageRepository.conversations,
+        incoming: loaded,
+      );
       setState(() {
         _phoneLoadError = null;
         _messageRepository.replaceAll(merged);

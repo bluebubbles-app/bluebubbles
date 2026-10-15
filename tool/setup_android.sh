@@ -24,6 +24,21 @@ cp "$native_source/RespondViaMessageService.kt" \
 
 cd "$project_root"
 flutter pub get
+
+# flutter_launcher_icons keeps custom-named resources from earlier runs.
+# Remove only generated BlueBubbles launcher resources so Android and the
+# launcher cannot resolve a stale icon after an incremental installation.
+find "$project_root/android/app/src/main/res" -type f \
+  \( -name 'launcher_icon*.png' -o -name 'launcher_icon*.xml' \) \
+  -delete
+
 dart run flutter_launcher_icons
+
+generated_icon="$(find "$project_root/android/app/src/main/res" -type f \
+  -name 'launcher_icon_v4*' -print -quit)"
+if [[ -z "$generated_icon" ]]; then
+  echo "BlueBubbles launcher icon generation failed." >&2
+  exit 1
+fi
 
 echo "Android SMS role and branding configured: BlueBubbles"
