@@ -2,7 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/cupertino.dart';
 
-enum DeliveryState { sending, delivered, read, failed }
+enum DeliveryState { sending, sent, delivered, read, failed }
 
 class ChatMessage {
   ChatMessage({

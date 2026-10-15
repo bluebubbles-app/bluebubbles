@@ -362,6 +362,7 @@ class AndroidSmsController extends ChangeNotifier {
   ChatMessage _messageFromNative(Map<Object?, Object?> raw) {
     final state = switch ((raw['deliveryState'] ?? '').toString()) {
       'sending' => DeliveryState.sending,
+      'sent' => DeliveryState.sent,
       'read' => DeliveryState.read,
       'failed' => DeliveryState.failed,
       _ => DeliveryState.delivered,

@@ -2008,6 +2008,7 @@ String _formatFullDateTime(BuildContext context, DateTime value) {
 String _deliveryStateLabel(DeliveryState state) {
   return switch (state) {
     DeliveryState.sending => 'Sending',
+    DeliveryState.sent => 'Sent',
     DeliveryState.delivered => 'Delivered',
     DeliveryState.read => 'Read',
     DeliveryState.failed => 'Not Delivered',

@@ -52,4 +52,25 @@ void main() {
 
     expect(merged.title, '+331234');
   });
+
+  test('keeps a newer local send state during an older provider refresh', () {
+    final local = conversation(
+      title: 'Alice Martin',
+      address: '+331234',
+      preview: 'Pending local message',
+    )..updatedAt = DateTime.fromMillisecondsSinceEpoch(3);
+    final provider = conversation(
+      title: '+331234',
+      address: '+331234',
+      preview: 'Previous provider message',
+    )..updatedAt = DateTime.fromMillisecondsSinceEpoch(2);
+
+    final merged = mergeConversationHeaders(
+      current: [local],
+      incoming: [provider],
+    ).single;
+
+    expect(merged.preview, 'Pending local message');
+    expect(merged.updatedAt, DateTime.fromMillisecondsSinceEpoch(3));
+  });
 }

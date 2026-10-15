@@ -187,6 +187,7 @@ class _MessageBubbleState extends State<MessageBubble> {
   String _statusLabel(DeliveryState state) {
     return switch (state) {
       DeliveryState.sending => 'Sending…',
+      DeliveryState.sent => 'Sent',
       DeliveryState.delivered => 'Delivered',
       DeliveryState.read => 'Read',
       DeliveryState.failed => 'Not Delivered',

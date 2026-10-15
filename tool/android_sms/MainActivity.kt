@@ -481,9 +481,14 @@ class MainActivity : FlutterActivity() {
                     put(Telephony.Sms.READ, 1)
                     put(Telephony.Sms.SEEN, 1)
                 }
-                contentResolver.insert(Telephony.Sms.Sent.CONTENT_URI, values)
+                val inserted = contentResolver.insert(
+                    Telephony.Sms.Sent.CONTENT_URI,
+                    values,
+                ) ?: error("The SMS provider rejected the sent message.")
+                Log.i(TAG, "SMS queued and stored at $inserted")
                 runOnUiThread { result.success(null) }
             } catch (error: Exception) {
+                Log.e(TAG, "SMS send failed", error)
                 runOnUiThread {
                     result.error("sms_send_failed", error.message, null)
                 }
@@ -918,6 +923,7 @@ class MainActivity : FlutterActivity() {
                     Telephony.Sms.MESSAGE_TYPE_OUTBOX,
                     Telephony.Sms.MESSAGE_TYPE_QUEUED -> "sending"
                     Telephony.Sms.MESSAGE_TYPE_FAILED -> "failed"
+                    Telephony.Sms.MESSAGE_TYPE_SENT -> "sent"
                     else -> "delivered"
                 }
                 messages.add(

@@ -24,10 +24,12 @@ List<Conversation> mergeConversationHeaders({
         freshTitle != 'Conversation') {
       conversation.title = freshTitle;
     }
-    conversation
-      ..preview = fresh.preview
-      ..updatedAt = fresh.updatedAt
-      ..unreadCount = fresh.unreadCount;
+    if (!fresh.updatedAt.isBefore(conversation.updatedAt)) {
+      conversation
+        ..preview = fresh.preview
+        ..updatedAt = fresh.updatedAt;
+    }
+    conversation.unreadCount = fresh.unreadCount;
     return conversation;
   }).toList();
 }

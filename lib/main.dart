@@ -422,10 +422,32 @@ class _MessagesUiAppState extends State<MessagesUiApp>
           reachedBeginning: messages.length < 40,
         );
         if (!mounted) return 0;
+        final providerMessages = messages.toList();
+        final providerHasEquivalent = (ChatMessage localMessage) =>
+            providerMessages.any(
+              (providerMessage) =>
+                  providerMessage.isFromMe == localMessage.isFromMe &&
+                  providerMessage.text == localMessage.text &&
+                  providerMessage.sentAt
+                          .difference(localMessage.sentAt)
+                          .abs()
+                          .compareTo(const Duration(minutes: 2)) <
+                      0,
+            );
+        final localOnlyMessages = cached.where(
+          (message) =>
+              (message.id.startsWith('sending-') ||
+                  message.id.startsWith('failed-')) &&
+              !providerHasEquivalent(message),
+        );
+        final visibleMessages = <ChatMessage>[
+          ...providerMessages,
+          ...localOnlyMessages,
+        ]..sort((a, b) => a.sentAt.compareTo(b.sentAt));
         conversation.messages
           ..clear()
-          ..addAll(messages);
-        return messages.length;
+          ..addAll(visibleMessages);
+        return visibleMessages.length;
       } catch (_) {
         if (cached.isNotEmpty) return cached.length;
         rethrow;
@@ -626,7 +648,9 @@ class _MessagesUiAppState extends State<MessagesUiApp>
   ) async {
     try {
       await _smsController.sendText(address, text);
-    } catch (_) {
+    } catch (error, stackTrace) {
+      debugPrint('SMS send failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
       if (!mounted) return;
       final now = DateTime.now();
       setState(() {
@@ -667,7 +691,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
           text: pending.text,
           sentAt: pending.sentAt,
           isFromMe: true,
-          deliveryState: DeliveryState.delivered,
+          deliveryState: DeliveryState.sent,
         );
       }
     });

@@ -1072,7 +1072,7 @@ class _NewMessageRecipientScreenState
         child: Column(
           children: [
             Container(
-              minHeight: 50,
+              constraints: const BoxConstraints(minHeight: 50),
               padding: const EdgeInsets.fromLTRB(16, 5, 12, 5),
               decoration: BoxDecoration(
                 border: Border(
