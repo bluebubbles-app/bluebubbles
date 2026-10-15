@@ -62,6 +62,10 @@
             </intent-filter>
         </receiver>
 
+        <receiver
+            android:name="io.github.bluebubblesapp.bluebubbles.NotificationActionReceiver"
+            android:exported="false" />
+
         <service
             android:name="io.github.bluebubblesapp.bluebubbles.RespondViaMessageService"
             android:exported="true"

@@ -21,6 +21,7 @@ class MmsReceiver : BroadcastReceiver() {
             context,
             "MMS received",
             "MMS display is not available in this build yet.",
+            enableActions = false,
         )
     }
 }
