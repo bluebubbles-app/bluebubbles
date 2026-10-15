@@ -1,7 +1,7 @@
 name: bluebubbles
 description: BlueBubbles is a standalone Flutter messaging interface for Android.
 publish_to: none
-version: 0.1.0+5
+version: 0.1.0+6
 
 environment:
   sdk: ">=3.1.0 <4.0.0"
@@ -52,9 +52,9 @@ flutter:
         - asset: assets/fonts/AppleColorEmoji.ttf
 
 flutter_launcher_icons:
-  android: "launcher_icon_v5"
+  android: "launcher_icon_v6"
   ios: false
-  image_path_android: assets/icon/bluebubbles-circle.png
+  image_path_android: assets/icon/bluebubbles-square.png
   adaptive_icon_background: assets/icon/bluebubbles-square.png
   adaptive_icon_foreground: assets/icon/transparent-foreground.png
   adaptive_icon_foreground_inset: 0
