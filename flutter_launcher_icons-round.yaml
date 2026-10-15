@@ -1,0 +1,5 @@
+flutter_launcher_icons:
+  android: "launcher_icon_round_v5"
+  ios: false
+  image_path_android: assets/icon/bluebubbles-circle.png
+  min_sdk_android: 21

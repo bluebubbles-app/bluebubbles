@@ -33,10 +33,18 @@ find "$project_root/android/app/src/main/res" -type f \
   -delete
 
 dart run flutter_launcher_icons
+dart run flutter_launcher_icons -f flutter_launcher_icons-round.yaml
+
+# Each generator updates android:icon. Restore the canonical manifest so
+# round launchers use the dedicated, already-circular artwork instead of
+# applying another mask to the adaptive icon.
+cp "$native_source/AndroidManifest.xml" "$manifest"
 
 generated_icon="$(find "$project_root/android/app/src/main/res" -type f \
-  -name 'launcher_icon_v4*' -print -quit)"
-if [[ -z "$generated_icon" ]]; then
+  -name 'launcher_icon_v5*' -print -quit)"
+generated_round_icon="$(find "$project_root/android/app/src/main/res" \
+  -type f -name 'launcher_icon_round_v5*' -print -quit)"
+if [[ -z "$generated_icon" || -z "$generated_round_icon" ]]; then
   echo "BlueBubbles launcher icon generation failed." >&2
   exit 1
 fi
