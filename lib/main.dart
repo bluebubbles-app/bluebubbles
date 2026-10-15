@@ -366,7 +366,26 @@ class _MessagesUiAppState extends State<MessagesUiApp>
   ) async {
     try {
       await _smsController.sendText(address, text);
-      await _loadConversationMessages(conversation);
+      if (!mounted) return;
+      setState(() {
+        final pendingIndex = conversation.messages.indexWhere(
+          (message) => message.id == pendingId,
+        );
+        if (pendingIndex != -1) {
+          final pending = conversation.messages[pendingIndex];
+          conversation.messages[pendingIndex] = ChatMessage(
+            id: pending.id,
+            text: pending.text,
+            sentAt: pending.sentAt,
+            isFromMe: true,
+            deliveryState: DeliveryState.delivered,
+          );
+        }
+      });
+      // Reload only the thread summaries here. Replacing the open message
+      // list while AnimatedList is presenting the pending row desynchronizes
+      // its item count and causes an out-of-range build. The provider-backed
+      // message IDs are refreshed the next time the conversation is opened.
       await _loadPhoneMessages();
     } catch (_) {
       if (!mounted) return;

@@ -238,10 +238,11 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final filtered = _filtered;
     final pinned =
-        _filtered.where((conversation) => conversation.isPinned).toList();
+        filtered.where((conversation) => conversation.isPinned).toList();
     final regular =
-        _filtered.where((conversation) => !conversation.isPinned).toList();
+        filtered.where((conversation) => !conversation.isPinned).toList();
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: MessagesPalette.isDark(context)
@@ -274,7 +275,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                     onLongPress: _showConversationActions,
                   ),
                 ),
-              if (_filtered.isEmpty)
+              if (filtered.isEmpty)
                 SliverFillRemaining(
                   hasScrollBody: false,
                   child: Center(
@@ -844,77 +845,83 @@ class _SwipeableConversationRowState extends State<SwipeableConversationRow>
 
   @override
   Widget build(BuildContext context) {
-    return ClipRect(
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: Row(
-              children: [
-                SizedBox(
-                  width: _actionWidth,
-                  child: CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    color: MessagesPalette.blue,
-                    borderRadius: BorderRadius.zero,
-                    onPressed: () => _perform(widget.onPin),
-                    child: const _SwipeActionContent(
-                      icon: CupertinoIcons.pin_fill,
-                      label: 'Pin',
-                    ),
-                  ),
-                ),
-                const Spacer(),
-                SizedBox(
-                  width: _actionWidth,
-                  child: CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    color: Color(0xFFFF9F0A),
-                    borderRadius: BorderRadius.zero,
-                    onPressed: () => _perform(widget.onToggleMute),
-                    child: _SwipeActionContent(
-                      icon: widget.conversation.isMuted
-                          ? CupertinoIcons.bell_fill
-                          : CupertinoIcons.bell_slash_fill,
-                      label: widget.conversation.isMuted ? 'Unmute' : 'Mute',
-                    ),
-                  ),
-                ),
-                SizedBox(
-                  width: _actionWidth,
-                  child: CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    color: CupertinoColors.systemRed,
-                    borderRadius: BorderRadius.zero,
-                    onPressed: () => _perform(widget.onDelete),
-                    child: const _SwipeActionContent(
-                      icon: CupertinoIcons.delete_solid,
-                      label: 'Delete',
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          AnimatedBuilder(
-            animation: _offsetController,
-            builder: (context, child) => Transform.translate(
-              key: ValueKey('swipe-content-${widget.conversation.id}'),
-              offset: Offset(_offsetController.value, 0),
-              child: child,
-            ),
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onHorizontalDragUpdate: _handleDragUpdate,
-              onHorizontalDragEnd: _handleDragEnd,
-              onLongPress: widget.onLongPress,
-              child: ConversationRow(
-                conversation: widget.conversation,
-                onTap: widget.onTap,
-              ),
-            ),
-          ),
-        ],
+    return AnimatedBuilder(
+      animation: _offsetController,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onHorizontalDragUpdate: _handleDragUpdate,
+        onHorizontalDragEnd: _handleDragEnd,
+        onLongPress: widget.onLongPress,
+        child: ConversationRow(
+          conversation: widget.conversation,
+          onTap: widget.onTap,
+        ),
       ),
+      builder: (context, child) {
+        final offset = _offsetController.value;
+        if (offset.abs() < .01) return child!;
+        return ClipRect(
+          child: Stack(
+            children: [
+              Positioned.fill(child: _buildSwipeActions(context)),
+              Transform.translate(
+                key: ValueKey('swipe-content-${widget.conversation.id}'),
+                offset: Offset(offset, 0),
+                child: child,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSwipeActions(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: _actionWidth,
+          child: CupertinoButton(
+            padding: EdgeInsets.zero,
+            color: MessagesPalette.blue,
+            borderRadius: BorderRadius.zero,
+            onPressed: () => _perform(widget.onPin),
+            child: const _SwipeActionContent(
+              icon: CupertinoIcons.pin_fill,
+              label: 'Pin',
+            ),
+          ),
+        ),
+        const Spacer(),
+        SizedBox(
+          width: _actionWidth,
+          child: CupertinoButton(
+            padding: EdgeInsets.zero,
+            color: const Color(0xFFFF9F0A),
+            borderRadius: BorderRadius.zero,
+            onPressed: () => _perform(widget.onToggleMute),
+            child: _SwipeActionContent(
+              icon: widget.conversation.isMuted
+                  ? CupertinoIcons.bell_fill
+                  : CupertinoIcons.bell_slash_fill,
+              label: widget.conversation.isMuted ? 'Unmute' : 'Mute',
+            ),
+          ),
+        ),
+        SizedBox(
+          width: _actionWidth,
+          child: CupertinoButton(
+            padding: EdgeInsets.zero,
+            color: CupertinoColors.systemRed,
+            borderRadius: BorderRadius.zero,
+            onPressed: () => _perform(widget.onDelete),
+            child: const _SwipeActionContent(
+              icon: CupertinoIcons.delete_solid,
+              label: 'Delete',
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

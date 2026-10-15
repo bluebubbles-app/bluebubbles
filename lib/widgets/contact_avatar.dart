@@ -17,12 +17,18 @@ class ContactAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final avatarBytes = conversation.avatarBytes;
+    final decodedSize = (size * MediaQuery.devicePixelRatioOf(context))
+        .round()
+        .clamp(1, 512)
+        .toInt();
     final Widget avatarContent;
     if (avatarBytes != null) {
       avatarContent = Image.memory(
         avatarBytes,
         width: size,
         height: size,
+        cacheWidth: decodedSize,
+        cacheHeight: decodedSize,
         fit: BoxFit.cover,
         gaplessPlayback: true,
       );
@@ -31,6 +37,8 @@ class ContactAvatar extends StatelessWidget {
         conversation.avatarAsset!,
         width: size,
         height: size,
+        cacheWidth: decodedSize,
+        cacheHeight: decodedSize,
         fit: BoxFit.cover,
       );
     } else {

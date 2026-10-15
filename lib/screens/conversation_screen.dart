@@ -179,10 +179,11 @@ class _ConversationScreenState extends State<ConversationScreen>
   }
 
   void _send(String text) {
-    final insertionIndex = widget.conversation.messages.length + 1;
+    final previousLength = widget.conversation.messages.length;
     widget.onSend(text);
+    if (widget.conversation.messages.length <= previousLength) return;
     _messageListKey.currentState?.insertItem(
-      insertionIndex,
+      previousLength + 1,
       duration: const Duration(milliseconds: 280),
     );
     Timer(const Duration(milliseconds: 40), _scrollToBottom);
@@ -511,6 +512,10 @@ class _ConversationScreenState extends State<ConversationScreen>
                         }
 
                         final messageIndex = index - 1;
+                        if (messageIndex >=
+                            widget.conversation.messages.length) {
+                          return const SizedBox.shrink();
+                        }
                         final message =
                             widget.conversation.messages[messageIndex];
                         final next = messageIndex + 1 <
