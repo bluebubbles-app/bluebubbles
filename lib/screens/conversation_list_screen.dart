@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../models/conversation.dart';
+import '../models/notification_open_request.dart';
 import '../models/sms_sync_progress.dart';
 import '../models/sms_search_hit.dart';
 import '../settings/app_settings.dart';
@@ -42,6 +43,7 @@ class ConversationListScreen extends StatefulWidget {
     required this.onConversationVisibilityChanged,
     required this.syncProgress,
     required this.onSearchMessages,
+    this.notificationOpenRequest,
   });
 
   final List<Conversation> conversations;
@@ -61,6 +63,7 @@ class ConversationListScreen extends StatefulWidget {
   final ValueChanged<bool> onConversationVisibilityChanged;
   final ValueListenable<SmsSyncProgress> syncProgress;
   final Future<List<SmsSearchHit>> Function(String query) onSearchMessages;
+  final ValueListenable<NotificationOpenRequest?>? notificationOpenRequest;
 
   @override
   State<ConversationListScreen> createState() =>
@@ -76,12 +79,21 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
   Timer? _searchDebounce;
   int _searchGeneration = 0;
   late bool _syncWasActive;
+  int _lastNotificationOpenSequence = -1;
+  String? _activeConversationId;
+  bool _openingNotificationConversation = false;
 
   @override
   void initState() {
     super.initState();
     _syncWasActive = widget.syncProgress.value.active;
     widget.syncProgress.addListener(_handleSyncProgress);
+    widget.notificationOpenRequest?.addListener(
+      _handleNotificationOpenRequest,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _handleNotificationOpenRequest();
+    });
   }
 
   @override
@@ -91,6 +103,47 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
       oldWidget.syncProgress.removeListener(_handleSyncProgress);
       _syncWasActive = widget.syncProgress.value.active;
       widget.syncProgress.addListener(_handleSyncProgress);
+    }
+    if (oldWidget.notificationOpenRequest != widget.notificationOpenRequest) {
+      oldWidget.notificationOpenRequest?.removeListener(
+        _handleNotificationOpenRequest,
+      );
+      widget.notificationOpenRequest?.addListener(
+        _handleNotificationOpenRequest,
+      );
+      _handleNotificationOpenRequest();
+    }
+  }
+
+  void _handleNotificationOpenRequest() {
+    final request = widget.notificationOpenRequest?.value;
+    if (request == null ||
+        request.sequence == _lastNotificationOpenSequence) {
+      return;
+    }
+    _lastNotificationOpenSequence = request.sequence;
+    if (_activeConversationId == request.threadId) return;
+    unawaited(_openNotificationConversation(request.threadId));
+  }
+
+  Future<void> _openNotificationConversation(String threadId) async {
+    if (_openingNotificationConversation) return;
+    _openingNotificationConversation = true;
+    try {
+      var conversation = _conversationForThread(threadId);
+      if (conversation == null) {
+        try {
+          await widget.onReloadPhoneMessages();
+        } catch (_) {
+          return;
+        }
+        if (!mounted) return;
+        conversation = _conversationForThread(threadId);
+      }
+      if (conversation == null || !mounted) return;
+      unawaited(_openConversation(conversation, forceReload: true));
+    } finally {
+      _openingNotificationConversation = false;
     }
   }
 
@@ -158,8 +211,10 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
   Future<void> _openConversation(
     Conversation conversation, {
     String? initialMessageId,
+    bool forceReload = false,
   }) async {
     final targetMessageId = initialMessageId;
+    _activeConversationId = conversation.id;
     widget.onConversationVisibilityChanged(true);
     try {
       setState(() => conversation.unreadCount = 0);
@@ -171,8 +226,11 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
             conversation: conversation,
             allConversations: widget.conversations,
             messagesPreloaded:
-                targetMessageId == null && conversation.messages.isNotEmpty,
+                !forceReload &&
+                targetMessageId == null &&
+                conversation.messages.isNotEmpty,
             initialMessageId: targetMessageId,
+            notificationOpenRequest: widget.notificationOpenRequest,
             onLoad: () => targetMessageId == null
                 ? widget.onLoadConversation(conversation)
                 : widget.onLoadMessageContext?.call(
@@ -198,6 +256,9 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
       if (!mounted) return;
       setState(() => conversation.unreadCount = 0);
     } finally {
+      if (_activeConversationId == conversation.id) {
+        _activeConversationId = null;
+      }
       widget.onConversationVisibilityChanged(false);
     }
   }
@@ -351,6 +412,9 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
   @override
   void dispose() {
     widget.syncProgress.removeListener(_handleSyncProgress);
+    widget.notificationOpenRequest?.removeListener(
+      _handleNotificationOpenRequest,
+    );
     _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();

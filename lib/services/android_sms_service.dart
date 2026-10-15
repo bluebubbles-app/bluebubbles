@@ -38,6 +38,7 @@ class AndroidSmsController extends ChangeNotifier {
   bool busy = false;
   String? lastError;
   VoidCallback? onMessagesChanged;
+  ValueChanged<String>? onNotificationOpened;
   ValueChanged<ConversationEnrichment>? onConversationEnriched;
 
   bool get isActive => supported && isDefaultSmsApp && permissionsGranted;
@@ -50,6 +51,20 @@ class AndroidSmsController extends ChangeNotifier {
   }
 
   Future<void> initialize() => refreshState();
+
+  Future<String?> consumeNotificationThread() async {
+    if (kIsWeb || !Platform.isAndroid) return null;
+    try {
+      final threadId = await _channel.invokeMethod<String>(
+        'consumeNotificationThread',
+      );
+      return threadId?.trim().isNotEmpty == true ? threadId : null;
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return null;
+    }
+  }
 
   Future<void> refreshState() async {
     if (kIsWeb || !Platform.isAndroid) return;
@@ -231,6 +246,13 @@ class AndroidSmsController extends ChangeNotifier {
   }
 
   Future<void> _handleNativeCall(MethodCall call) async {
+    if (call.method == 'notificationOpened') {
+      final threadId = call.arguments?.toString().trim();
+      if (threadId != null && threadId.isNotEmpty) {
+        onNotificationOpened?.call(threadId);
+      }
+      return;
+    }
     if (call.method == 'messagesChanged') {
       onMessagesChanged?.call();
       return;

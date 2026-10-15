@@ -9,6 +9,7 @@ import 'data/demo_data.dart';
 import 'data/local_sms_store.dart';
 import 'data/message_repository.dart';
 import 'models/conversation.dart';
+import 'models/notification_open_request.dart';
 import 'models/sms_sync_progress.dart';
 import 'models/sms_search_hit.dart';
 import 'screens/conversation_list_screen.dart';
@@ -38,6 +39,8 @@ class _MessagesUiAppState extends State<MessagesUiApp>
   final LocalSmsStore _localSmsStore = LocalSmsStore();
   final ValueNotifier<SmsSyncProgress> _smsSyncProgress =
       ValueNotifier(SmsSyncProgress.idle);
+  final ValueNotifier<NotificationOpenRequest?> _notificationOpenRequest =
+      ValueNotifier(null);
   bool _usingPhoneMessages = false;
   bool _loadingPhoneMessages = false;
   String? _phoneLoadError;
@@ -50,6 +53,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
   final Map<String, ConversationEnrichment> _pendingEnrichments = {};
   Timer? _enrichmentTimer;
   DateTime _lastSyncProgressUpdate = DateTime.fromMillisecondsSinceEpoch(0);
+  int _notificationOpenSequence = 0;
 
   @override
   void initState() {
@@ -57,6 +61,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
     WidgetsBinding.instance.addObserver(this);
     _smsController.onMessagesChanged = () =>
         unawaited(_reloadPhoneMessagesSilently());
+    _smsController.onNotificationOpened = _handleNotificationOpened;
     _smsController.onConversationEnriched = _applyConversationEnrichment;
     unawaited(_initializeApp());
   }
@@ -68,6 +73,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
     _backgroundSyncGeneration++;
     unawaited(_localSmsStore.close());
     _smsSyncProgress.dispose();
+    _notificationOpenRequest.dispose();
     _smsController.dispose();
     _settings.dispose();
     super.dispose();
@@ -86,6 +92,11 @@ class _MessagesUiAppState extends State<MessagesUiApp>
   Future<void> _initializeApp() async {
     await _settings.load();
     await _refreshSmsMode();
+    final notificationThread =
+        await _smsController.consumeNotificationThread();
+    if (notificationThread != null) {
+      _handleNotificationOpened(notificationThread);
+    }
     if (!mounted ||
         !_smsController.supported ||
         _settings.permissionsOnboardingShown) {
@@ -101,6 +112,14 @@ class _MessagesUiAppState extends State<MessagesUiApp>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(_showPermissionsOnboarding());
     });
+  }
+
+  void _handleNotificationOpened(String threadId) {
+    if (!mounted || threadId.isEmpty) return;
+    _notificationOpenRequest.value = NotificationOpenRequest(
+      threadId: threadId,
+      sequence: ++_notificationOpenSequence,
+    );
   }
 
   Future<void> _showPermissionsOnboarding() async {
@@ -791,6 +810,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
             onConversationVisibilityChanged: _setConversationRouteVisible,
             syncProgress: _smsSyncProgress,
             onSearchMessages: _searchCachedMessages,
+            notificationOpenRequest: _notificationOpenRequest,
           ),
         ),
       ),

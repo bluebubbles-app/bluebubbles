@@ -2,10 +2,12 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 
 import '../models/conversation.dart';
+import '../models/notification_open_request.dart';
 import '../settings/app_settings.dart';
 import '../theme/messages_theme.dart';
 import '../widgets/contact_avatar.dart';
@@ -19,6 +21,7 @@ class ConversationScreen extends StatefulWidget {
     required this.allConversations,
     required this.messagesPreloaded,
     this.initialMessageId,
+    this.notificationOpenRequest,
     required this.onLoad,
     required this.onLoadOlder,
     required this.onSend,
@@ -30,6 +33,7 @@ class ConversationScreen extends StatefulWidget {
   final List<Conversation> allConversations;
   final bool messagesPreloaded;
   final String? initialMessageId;
+  final ValueListenable<NotificationOpenRequest?>? notificationOpenRequest;
   final Future<int> Function() onLoad;
   final Future<int> Function() onLoadOlder;
   final ValueChanged<String> onSend;
@@ -63,6 +67,8 @@ class _ConversationScreenState extends State<ConversationScreen>
   Timer? _restoreHeaderBlurTimer;
   bool _initialMessagePositioned = false;
   int _initialMessagePositionAttempts = 0;
+  int _lastNotificationOpenSequence = -1;
+  bool _refreshingFromNotification = false;
 
   @override
   void initState() {
@@ -71,7 +77,52 @@ class _ConversationScreenState extends State<ConversationScreen>
       _loadingMessages = false;
       _hasOlderMessages = widget.conversation.messages.isNotEmpty;
     }
+    final request = widget.notificationOpenRequest?.value;
+    if (request?.threadId == widget.conversation.id) {
+      _lastNotificationOpenSequence = request!.sequence;
+    }
+    widget.notificationOpenRequest?.addListener(
+      _handleNotificationOpenRequest,
+    );
     unawaited(_loadMessages(showLoading: !widget.messagesPreloaded));
+  }
+
+  @override
+  void didUpdateWidget(ConversationScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.notificationOpenRequest != widget.notificationOpenRequest) {
+      oldWidget.notificationOpenRequest?.removeListener(
+        _handleNotificationOpenRequest,
+      );
+      widget.notificationOpenRequest?.addListener(
+        _handleNotificationOpenRequest,
+      );
+    }
+  }
+
+  void _handleNotificationOpenRequest() {
+    final request = widget.notificationOpenRequest?.value;
+    if (request == null ||
+        request.threadId != widget.conversation.id ||
+        request.sequence == _lastNotificationOpenSequence) {
+      return;
+    }
+    _lastNotificationOpenSequence = request.sequence;
+    unawaited(_refreshFromNotification());
+  }
+
+  Future<void> _refreshFromNotification() async {
+    if (_refreshingFromNotification) return;
+    _refreshingFromNotification = true;
+    try {
+      await _loadMessages(showLoading: false);
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _scrollToBottom();
+      });
+    } finally {
+      _refreshingFromNotification = false;
+    }
   }
 
   Future<void> _loadMessages({bool showLoading = true}) async {
@@ -503,6 +554,9 @@ class _ConversationScreenState extends State<ConversationScreen>
   @override
   void dispose() {
     _restoreHeaderBlurTimer?.cancel();
+    widget.notificationOpenRequest?.removeListener(
+      _handleNotificationOpenRequest,
+    );
     _timestampRevealController.dispose();
     _scrollElasticController.dispose();
     _scrollController.dispose();
