@@ -82,46 +82,11 @@ class MessageBubble extends StatefulWidget {
 class _MessageBubbleState extends State<MessageBubble> {
   final _paintKey = GlobalKey();
   ScrollPosition? _scrollPosition;
-  double _referenceScreenTop = 0;
-  double _referenceScrollOffset = 0;
-  bool _positionMeasurementScheduled = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final nextPosition = Scrollable.maybeOf(context)?.position;
-    if (!identical(nextPosition, _scrollPosition)) {
-      _scrollPosition = nextPosition;
-    }
-    _schedulePositionMeasurement();
-  }
-
-  @override
-  void didUpdateWidget(MessageBubble oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _schedulePositionMeasurement();
-  }
-
-  void _schedulePositionMeasurement() {
-    if (!widget.message.isFromMe) return;
-    if (_positionMeasurementScheduled) return;
-    _positionMeasurementScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _positionMeasurementScheduled = false;
-      if (!mounted) return;
-      final renderObject =
-          _paintKey.currentContext?.findRenderObject() as RenderBox?;
-      if (renderObject == null || !renderObject.hasSize) return;
-      final nextTop = renderObject.localToGlobal(Offset.zero).dy;
-      final nextOffset = _scrollPosition?.pixels ?? 0;
-      if ((nextTop - _referenceScreenTop).abs() > .25 ||
-          (nextOffset - _referenceScrollOffset).abs() > .25) {
-        setState(() {
-          _referenceScreenTop = nextTop;
-          _referenceScrollOffset = nextOffset;
-        });
-      }
-    });
+    _scrollPosition = Scrollable.maybeOf(context)?.position;
   }
 
   @override
@@ -160,8 +125,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                         )
                       : null,
                   scrollPosition: _scrollPosition,
-                  referenceScreenTop: _referenceScreenTop,
-                  referenceScrollOffset: _referenceScrollOffset,
+                  paintKey: _paintKey,
                   screenHeight: MediaQuery.sizeOf(context).height,
                   isFromMe: isFromMe,
                   showTail: widget.showTail,
@@ -237,8 +201,7 @@ class MessageBubblePainter extends CustomPainter {
     required this.color,
     required this.gradient,
     required this.scrollPosition,
-    required this.referenceScreenTop,
-    required this.referenceScrollOffset,
+    required this.paintKey,
     required this.screenHeight,
     required this.isFromMe,
     required this.showTail,
@@ -248,38 +211,54 @@ class MessageBubblePainter extends CustomPainter {
   final Color color;
   final LinearGradient? gradient;
   final ScrollPosition? scrollPosition;
-  final double referenceScreenTop;
-  final double referenceScrollOffset;
+  final GlobalKey paintKey;
   final double screenHeight;
   final bool isFromMe;
   final bool showTail;
   final double shadowElevation;
+  Size? _cachedPathSize;
+  Path? _cachedBubblePath;
+  double? _referenceScreenTop;
+  double? _referenceScrollOffset;
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = color;
     if (gradient != null && screenHeight > 0) {
-      final currentScrollOffset =
-          scrollPosition?.pixels ?? referenceScrollOffset;
+      if (_referenceScreenTop == null) {
+        final renderObject =
+            paintKey.currentContext?.findRenderObject() as RenderBox?;
+        _referenceScreenTop =
+            renderObject?.localToGlobal(Offset.zero).dy ?? 0;
+        _referenceScrollOffset = scrollPosition?.pixels ?? 0;
+      }
+      final currentScrollOffset = scrollPosition?.pixels ?? 0;
       final scrollDirection = scrollPosition?.axisDirection == AxisDirection.up
           ? 1.0
           : -1.0;
-      final screenTop = referenceScreenTop +
-          (currentScrollOffset - referenceScrollOffset) * scrollDirection;
+      final screenTop = _referenceScreenTop! +
+          (currentScrollOffset - _referenceScrollOffset!) * scrollDirection;
       paint.shader = gradient!.createShader(
         Rect.fromLTWH(0, -screenTop, size.width, screenHeight),
       );
     }
-    final body = Path()
-      ..addRRect(
-        RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(20)),
-      );
-    var bubble = body;
+    late Path bubble;
+    if (_cachedPathSize == size && _cachedBubblePath != null) {
+      bubble = _cachedBubblePath!;
+    } else {
+      final body = Path()
+        ..addRRect(
+          RRect.fromRectAndRadius(
+            Offset.zero & size,
+            const Radius.circular(20),
+          ),
+        );
+      bubble = body;
 
-    if (showTail) {
-      final tail = Path();
-      if (isFromMe) {
-        tail
+      if (showTail) {
+        final tail = Path();
+        if (isFromMe) {
+          tail
           ..moveTo(size.width - 1, size.height - 6.5)
           ..cubicTo(
             size.width - .5,
@@ -309,8 +288,8 @@ class MessageBubblePainter extends CustomPainter {
             size.width - 1,
             size.height - 6.5,
           );
-      } else {
-        tail
+        } else {
+          tail
           ..moveTo(1, size.height - 6.5)
           ..cubicTo(
             .5,
@@ -340,12 +319,15 @@ class MessageBubblePainter extends CustomPainter {
             1,
             size.height - 6.5,
           );
+        }
+        tail.close();
+        // Joining two subpaths can cancel their overlapping winding area and
+        // leave a white notch between the body and tail. A geometric union
+        // guarantees a single solid silhouette on every Android renderer.
+        bubble = Path.combine(PathOperation.union, body, tail);
       }
-      tail.close();
-      // Joining two subpaths can cancel their overlapping winding area and
-      // leave a white notch between the body and tail. A geometric union
-      // guarantees a single solid silhouette on every Android renderer.
-      bubble = Path.combine(PathOperation.union, body, tail);
+      _cachedPathSize = size;
+      _cachedBubblePath = bubble;
     }
 
     if (shadowElevation > 0) {
@@ -364,8 +346,7 @@ class MessageBubblePainter extends CustomPainter {
       oldDelegate.color != color ||
       oldDelegate.gradient != gradient ||
       oldDelegate.scrollPosition != scrollPosition ||
-      oldDelegate.referenceScreenTop != referenceScreenTop ||
-      oldDelegate.referenceScrollOffset != referenceScrollOffset ||
+      oldDelegate.paintKey != paintKey ||
       oldDelegate.screenHeight != screenHeight ||
       oldDelegate.isFromMe != isFromMe ||
       oldDelegate.showTail != showTail ||

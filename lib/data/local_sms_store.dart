@@ -5,6 +5,7 @@ import 'package:path/path.dart' as path;
 import 'package:sqflite/sqflite.dart';
 
 import '../models/conversation.dart';
+import '../models/sms_search_hit.dart';
 
 /// Local read model for the Android SMS provider.
 ///
@@ -106,26 +107,34 @@ class LocalSmsStore {
     return Sqflite.firstIntValue(rows) ?? 0;
   }
 
-  Future<Set<String>> searchThreadIds(
+  Future<List<SmsSearchHit>> searchMessages(
     String searchText, {
-    int limit = 1000,
+    int limit = 250,
   }) async {
     final query = searchText.trim();
-    if (query.isEmpty) return const <String>{};
+    if (query.isEmpty) return const <SmsSearchHit>[];
     final db = await _db;
     final rows = await db.rawQuery(
       '''
-        SELECT DISTINCT thread_id
+        SELECT thread_id, id, text, sent_at, is_from_me
         FROM messages
         WHERE text LIKE ? COLLATE NOCASE
+        ORDER BY sent_at DESC, order_id DESC
         LIMIT ?
       ''',
       ['%$query%', limit],
     );
     return rows
-        .map((row) => row['thread_id'])
-        .whereType<String>()
-        .toSet();
+        .map(
+          (row) => SmsSearchHit(
+            threadId: row['thread_id'] as String,
+            messageId: row['id'] as String,
+            text: row['text'] as String,
+            sentAt: DateTime.fromMillisecondsSinceEpoch(row['sent_at'] as int),
+            isFromMe: row['is_from_me'] == 1,
+          ),
+        )
+        .toList();
   }
 
   Future<void> replaceConversationHeaders(

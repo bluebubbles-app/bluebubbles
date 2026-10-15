@@ -53,9 +53,11 @@ class _ConversationScreenState extends State<ConversationScreen>
   bool _loadingOlderMessages = false;
   bool _hasOlderMessages = true;
   bool _programmaticScroll = false;
+  bool _isScrolling = false;
   int _programmaticScrollGeneration = 0;
   double _lastManualScrollDelta = 0;
   Object? _loadError;
+  Timer? _restoreHeaderBlurTimer;
 
   @override
   void initState() {
@@ -100,16 +102,27 @@ class _ConversationScreenState extends State<ConversationScreen>
         !_scrollController.hasClients) {
       return;
     }
+    final previousMessageCount = widget.conversation.messages.length;
     setState(() => _loadingOlderMessages = true);
     try {
       final addedCount = await widget.onLoadOlder();
       if (!mounted) return;
+      final listState = _messageListKey.currentState;
+      if (addedCount > 0 && listState != null) {
+        listState.insertAllItems(
+          previousMessageCount,
+          addedCount,
+          duration: Duration.zero,
+        );
+      }
       setState(() {
         _loadingOlderMessages = false;
         // Some Android SMS providers apply their own page cap. Only an empty
         // page proves that the beginning of the thread has been reached.
         _hasOlderMessages = addedCount > 0;
-        _messageListKey = GlobalKey<AnimatedListState>();
+        if (listState == null) {
+          _messageListKey = GlobalKey<AnimatedListState>();
+        }
       });
     } catch (_) {
       if (mounted) setState(() => _loadingOlderMessages = false);
@@ -183,7 +196,7 @@ class _ConversationScreenState extends State<ConversationScreen>
   }
 
   bool _handleScrollNotification(ScrollNotification notification) {
-    if (!_programmaticScroll && notification.metrics.extentAfter <= 700) {
+    if (!_programmaticScroll && notification.metrics.extentAfter <= 1800) {
       unawaited(_loadOlderMessages());
     }
     if (_programmaticScroll) {
@@ -194,6 +207,7 @@ class _ConversationScreenState extends State<ConversationScreen>
     }
     if (notification is ScrollStartNotification &&
         notification.dragDetails != null) {
+      _setScrolling(true);
       _lastManualScrollDelta = 0;
       _scrollElasticController
         ..stop()
@@ -204,6 +218,11 @@ class _ConversationScreenState extends State<ConversationScreen>
     } else if (notification is OverscrollNotification) {
       _lastManualScrollDelta = notification.overscroll;
     } else if (notification is ScrollEndNotification) {
+      _restoreHeaderBlurTimer?.cancel();
+      _restoreHeaderBlurTimer = Timer(
+        const Duration(milliseconds: 120),
+        () => _setScrolling(false),
+      );
       _scrollElasticController.value =
           (-_lastManualScrollDelta * .06).clamp(-1.5, 1.5).toDouble();
       _lastManualScrollDelta = 0;
@@ -221,6 +240,14 @@ class _ConversationScreenState extends State<ConversationScreen>
       );
     }
     return false;
+  }
+
+  void _setScrolling(bool value) {
+    if (!mounted || _isScrolling == value) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _isScrolling == value) return;
+      setState(() => _isScrolling = value);
+    });
   }
 
   Future<void> _showMessageActions(ChatMessage message) async {
@@ -407,6 +434,7 @@ class _ConversationScreenState extends State<ConversationScreen>
 
   @override
   void dispose() {
+    _restoreHeaderBlurTimer?.cancel();
     _timestampRevealController.dispose();
     _scrollElasticController.dispose();
     _scrollController.dispose();
@@ -577,10 +605,12 @@ class _ConversationScreenState extends State<ConversationScreen>
                                       : interactiveMessage,
                                 ),
                               );
-                              return _ElasticMessageMotion(
-                                animation: _scrollElasticController,
-                                intensity: .78 + (messageIndex % 3) * .1,
-                                child: insertedMessage,
+                              return RepaintBoundary(
+                                child: _ElasticMessageMotion(
+                                  animation: _scrollElasticController,
+                                  intensity: .78 + (messageIndex % 3) * .1,
+                                  child: insertedMessage,
+                                ),
                               );
                             },
                           ),
@@ -629,6 +659,7 @@ class _ConversationScreenState extends State<ConversationScreen>
                           : _ConversationHeader(
                               conversation: widget.conversation,
                               topCompensation: topCompensation,
+                              enableBlur: !_isScrolling,
                               onCall: widget.onCall,
                               onOpenContact: widget.onOpenContact,
                             ),
@@ -1013,12 +1044,14 @@ class _ConversationHeader extends StatelessWidget {
   const _ConversationHeader({
     required this.conversation,
     required this.topCompensation,
+    required this.enableBlur,
     required this.onCall,
     required this.onOpenContact,
   });
 
   final Conversation conversation;
   final double topCompensation;
+  final bool enableBlur;
   final VoidCallback onCall;
   final VoidCallback onOpenContact;
 
@@ -1153,7 +1186,7 @@ class _ConversationHeader extends StatelessWidget {
         ),
       ),
     );
-    if (settings.headerBlurSigma < .1) return header;
+    if (!enableBlur || settings.headerBlurSigma < .1) return header;
     Widget addGlass(Widget child) => ClipRect(
           key: const ValueKey('conversation-header-glass'),
           child: BackdropFilter(

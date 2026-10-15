@@ -9,6 +9,7 @@ import 'data/local_sms_store.dart';
 import 'data/message_repository.dart';
 import 'models/conversation.dart';
 import 'models/sms_sync_progress.dart';
+import 'models/sms_search_hit.dart';
 import 'screens/conversation_list_screen.dart';
 import 'services/android_sms_service.dart';
 import 'settings/app_settings.dart';
@@ -372,8 +373,8 @@ class _MessagesUiAppState extends State<MessagesUiApp>
     );
   }
 
-  Future<Set<String>> _searchCachedMessages(String query) =>
-      _localSmsStore.searchThreadIds(query);
+  Future<List<SmsSearchHit>> _searchCachedMessages(String query) =>
+      _localSmsStore.searchMessages(query);
 
   Future<bool> _canContinueBackgroundSync(int generation) async {
     if (generation != _backgroundSyncGeneration ||
@@ -437,6 +438,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
       var older = await _localSmsStore.loadMessagesBefore(
         conversation.id,
         visibleOldest,
+        limit: 120,
       );
       if (older.isEmpty &&
           !await _localSmsStore.isThreadFullySynced(conversation.id)) {
@@ -447,6 +449,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
           conversation.id,
           before: cachedOldest.sentAt,
           beforeMessageId: cachedOldest.id,
+          limit: 120,
         );
         await _localSmsStore.storeMessagePage(
           conversation.id,
@@ -456,6 +459,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
         older = await _localSmsStore.loadMessagesBefore(
           conversation.id,
           visibleOldest,
+          limit: 120,
         );
       }
       if (!mounted || older.isEmpty) return 0;

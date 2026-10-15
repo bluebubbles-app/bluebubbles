@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import '../models/conversation.dart';
 import '../models/sms_sync_progress.dart';
+import '../models/sms_search_hit.dart';
 import '../settings/app_settings.dart';
 import '../services/android_sms_service.dart';
 import '../theme/messages_theme.dart';
@@ -57,7 +58,7 @@ class ConversationListScreen extends StatefulWidget {
   final ValueChanged<Conversation> onOpenConversationContact;
   final ValueChanged<bool> onConversationVisibilityChanged;
   final ValueListenable<SmsSyncProgress> syncProgress;
-  final Future<Set<String>> Function(String query) onSearchMessages;
+  final Future<List<SmsSearchHit>> Function(String query) onSearchMessages;
 
   @override
   State<ConversationListScreen> createState() =>
@@ -69,7 +70,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
   String _query = '';
   bool _editingFavorites = false;
   bool _searchingMessages = false;
-  Set<String> _messageSearchMatches = const <String>{};
+  List<SmsSearchHit> _messageSearchResults = const <SmsSearchHit>[];
   Timer? _searchDebounce;
   int _searchGeneration = 0;
   late bool _syncWasActive;
@@ -94,16 +95,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
   List<Conversation> get _filtered {
     final conversations = [...widget.conversations]
       ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-    if (_query.trim().isEmpty) return conversations;
-    final query = _query.toLowerCase().trim();
-    return conversations
-        .where(
-          (conversation) =>
-              conversation.title.toLowerCase().contains(query) ||
-              conversation.preview.toLowerCase().contains(query) ||
-              _messageSearchMatches.contains(conversation.id),
-        )
-        .toList();
+    return _query.trim().isEmpty ? conversations : const <Conversation>[];
   }
 
   void _handleSyncProgress() {
@@ -118,9 +110,10 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
     setState(() {
       _query = value;
       if (value.trim().isEmpty) {
-        _messageSearchMatches = const <String>{};
+        _messageSearchResults = const <SmsSearchHit>[];
         _searchingMessages = false;
       } else {
+        _messageSearchResults = const <SmsSearchHit>[];
         _searchingMessages = true;
       }
     });
@@ -142,7 +135,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
           final matches = await widget.onSearchMessages(query);
           if (!mounted || generation != _searchGeneration) return;
           setState(() {
-            _messageSearchMatches = matches;
+            _messageSearchResults = matches;
             _searchingMessages = false;
           });
         } catch (_) {
@@ -153,27 +146,25 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
     );
   }
 
+  Conversation? _conversationForThread(String threadId) {
+    for (final conversation in widget.conversations) {
+      if (conversation.id == threadId) return conversation;
+    }
+    return null;
+  }
+
   Future<void> _openConversation(Conversation conversation) async {
     widget.onConversationVisibilityChanged(true);
     try {
       setState(() => conversation.unreadCount = 0);
       unawaited(_markConversationRead(conversation));
-      var messagesPreloaded = false;
-      try {
-        await widget.onLoadConversation(conversation);
-        messagesPreloaded = true;
-      } catch (_) {
-        // The conversation screen retains its own retry state.
-      }
-      if (!mounted) return;
-      await WidgetsBinding.instance.endOfFrame;
       if (!mounted) return;
       await Navigator.of(context).push(
         CupertinoPageRoute<void>(
           builder: (_) => ConversationScreen(
             conversation: conversation,
             allConversations: widget.conversations,
-            messagesPreloaded: messagesPreloaded,
+            messagesPreloaded: conversation.messages.isNotEmpty,
             onLoad: () => widget.onLoadConversation(conversation),
             onLoadOlder: () => widget.onLoadOlderConversation(conversation),
             onSend: (text) {
@@ -350,6 +341,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final searchActive = _query.trim().isNotEmpty;
     final filtered = _filtered;
     final pinned =
         filtered.where((conversation) => conversation.isPinned).toList();
@@ -379,7 +371,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                   ),
                 ),
               ),
-              if (pinned.isNotEmpty)
+              if (!searchActive && pinned.isNotEmpty)
                 SliverToBoxAdapter(
                   child: _PinnedGrid(
                     conversations: pinned,
@@ -389,7 +381,54 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                     onLongPress: _showConversationActions,
                   ),
                 ),
-              if (filtered.isEmpty)
+              if (searchActive && _searchingMessages)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const CupertinoActivityIndicator(),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Searching Messages…',
+                          style: MessagesText.secondary(context),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else if (searchActive && _messageSearchResults.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                    child: Text(
+                      'No Results',
+                      style: MessagesText.secondary(context),
+                    ),
+                  ),
+                )
+              else if (searchActive)
+                SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final result = _messageSearchResults[index];
+                      final conversation =
+                          _conversationForThread(result.threadId);
+                      if (conversation == null) {
+                        return const SizedBox.shrink();
+                      }
+                      return _MessageSearchResultRow(
+                        conversation: conversation,
+                        result: result,
+                        query: _query.trim(),
+                        onTap: () => _openConversation(conversation),
+                      );
+                    },
+                    childCount: _messageSearchResults.length,
+                  ),
+                )
+              else if (filtered.isEmpty)
                 SliverFillRemaining(
                   hasScrollBody: false,
                   child: Center(
@@ -398,14 +437,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (_searchingMessages) ...[
-                            const CupertinoActivityIndicator(),
-                            const SizedBox(height: 12),
-                            Text(
-                              'Searching Messages…',
-                              style: MessagesText.secondary(context),
-                            ),
-                          ] else if (widget.loadingConversations) ...[
+                          if (widget.loadingConversations) ...[
                             const CupertinoActivityIndicator(),
                             const SizedBox(height: 12),
                             Text(
@@ -415,9 +447,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                           ] else ...[
                             Text(
                               widget.loadError == null
-                                  ? (_query.trim().isEmpty
-                                      ? 'No Conversations'
-                                      : 'No Results')
+                                  ? 'No Conversations'
                                   : 'Messages could not be loaded.',
                               textAlign: TextAlign.center,
                               style: MessagesText.secondary(context),
@@ -549,6 +579,152 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _MessageSearchResultRow extends StatelessWidget {
+  const _MessageSearchResultRow({
+    required this.conversation,
+    required this.result,
+    required this.query,
+    required this.onTap,
+  });
+
+  final Conversation conversation;
+  final SmsSearchHit result;
+  final String query;
+  final VoidCallback onTap;
+
+  String _snippet() {
+    final text = result.text.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final matchIndex = text.toLowerCase().indexOf(query.toLowerCase());
+    if (matchIndex < 0 || text.length <= 120) return text;
+    var start = matchIndex > 42 ? matchIndex - 42 : 0;
+    var end = start + 120;
+    if (end > text.length) {
+      end = text.length;
+      start = (end - 120).clamp(0, end).toInt();
+    }
+    return '${start > 0 ? '…' : ''}${text.substring(start, end)}'
+        '${end < text.length ? '…' : ''}';
+  }
+
+  List<InlineSpan> _highlightedSpans(String text) {
+    final spans = <InlineSpan>[];
+    final lowerText = text.toLowerCase();
+    final lowerQuery = query.toLowerCase();
+    var cursor = 0;
+    while (cursor < text.length) {
+      final match = lowerText.indexOf(lowerQuery, cursor);
+      if (match < 0) {
+        spans.add(TextSpan(text: text.substring(cursor)));
+        break;
+      }
+      if (match > cursor) {
+        spans.add(TextSpan(text: text.substring(cursor, match)));
+      }
+      spans.add(
+        TextSpan(
+          text: text.substring(match, match + query.length),
+          style: const TextStyle(
+            color: MessagesPalette.blue,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      );
+      cursor = match + query.length;
+    }
+    return spans;
+  }
+
+  String _time(BuildContext context) {
+    final difference = DateTime.now().difference(result.sentAt);
+    if (difference.inDays == 0) {
+      return AppSettingsScope.of(context).formatTime(
+        result.sentAt,
+        platformUses24Hour: MediaQuery.alwaysUse24HourFormatOf(context),
+      );
+    }
+    if (difference.inDays == 1) return 'Yesterday';
+    return AppSettingsScope.of(context).formatDate(
+      result.sentAt,
+      localeCode: Localizations.localeOf(context).languageCode,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final snippet = _snippet();
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      pressedOpacity: .55,
+      onPressed: onTap,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(26, 10, 13, 10),
+            child: ContactAvatar(conversation: conversation, size: 44),
+          ),
+          Expanded(
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 78),
+              padding: const EdgeInsets.fromLTRB(0, 9, 14, 9),
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(
+                    color: MessagesPalette.hairline(context)
+                        .withValues(alpha: .55),
+                    width: .45,
+                  ),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          conversation.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: MessagesText.headline(context).copyWith(
+                            fontSize: 17,
+                            height: 1.08,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _time(context),
+                        style: MessagesText.secondary(context).copyWith(
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text.rich(
+                    TextSpan(
+                      style: MessagesText.secondary(context).copyWith(
+                        fontSize: 15,
+                        height: 1.18,
+                      ),
+                      children: _highlightedSpans(snippet),
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.left,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
