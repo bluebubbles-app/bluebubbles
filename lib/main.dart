@@ -8,6 +8,7 @@ import 'data/demo_data.dart';
 import 'data/local_sms_store.dart';
 import 'data/message_repository.dart';
 import 'models/conversation.dart';
+import 'models/sms_sync_progress.dart';
 import 'screens/conversation_list_screen.dart';
 import 'services/android_sms_service.dart';
 import 'settings/app_settings.dart';
@@ -33,6 +34,8 @@ class _MessagesUiAppState extends State<MessagesUiApp>
   final AppSettingsController _settings = AppSettingsController();
   final AndroidSmsController _smsController = AndroidSmsController();
   final LocalSmsStore _localSmsStore = LocalSmsStore();
+  final ValueNotifier<SmsSyncProgress> _smsSyncProgress =
+      ValueNotifier(SmsSyncProgress.idle);
   bool _usingPhoneMessages = false;
   bool _loadingPhoneMessages = false;
   String? _phoneLoadError;
@@ -44,6 +47,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
   bool _conversationRouteVisible = false;
   final Map<String, ConversationEnrichment> _pendingEnrichments = {};
   Timer? _enrichmentTimer;
+  DateTime _lastSyncProgressUpdate = DateTime.fromMillisecondsSinceEpoch(0);
 
   @override
   void initState() {
@@ -61,6 +65,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
     _enrichmentTimer?.cancel();
     _backgroundSyncGeneration++;
     unawaited(_localSmsStore.close());
+    _smsSyncProgress.dispose();
     _smsController.dispose();
     _settings.dispose();
     super.dispose();
@@ -268,55 +273,107 @@ class _MessagesUiAppState extends State<MessagesUiApp>
     int generation,
   ) async {
     const pageSize = 200;
-    for (final conversation in conversations) {
-      if (!await _canContinueBackgroundSync(generation)) return;
-      try {
-        final needsSync = await _localSmsStore.threadNeedsSync(
-          conversation.id,
-          conversation.updatedAt,
-        );
-        if (!needsSync) continue;
-        final latest = await _smsController.loadThreadMessages(
-          conversation.id,
-          limit: pageSize,
-        );
-        await _localSmsStore.storeMessagePage(
-          conversation.id,
-          latest,
-          reachedBeginning: latest.length < pageSize,
-        );
-        if (latest.length < pageSize ||
-            await _localSmsStore.isThreadFullySynced(conversation.id)) {
-          await Future<void>.delayed(const Duration(milliseconds: 35));
-          continue;
-        }
-
-        var oldest = await _localSmsStore.oldestMessage(conversation.id);
-        while (oldest != null) {
-          if (!await _canContinueBackgroundSync(generation)) return;
-          final page = await _smsController.loadThreadMessages(
+    var totalMessages = 0;
+    try {
+      totalMessages = await _smsController.getSmsMessageCount();
+      await _publishSyncProgress(
+        totalMessages: totalMessages,
+        active: true,
+        force: true,
+      );
+      for (final conversation in conversations) {
+        if (!await _canContinueBackgroundSync(generation)) return;
+        try {
+          final needsSync = await _localSmsStore.threadNeedsSync(
             conversation.id,
-            before: oldest.sentAt,
-            beforeMessageId: oldest.id,
+            conversation.updatedAt,
+          );
+          if (!needsSync) continue;
+          final latest = await _smsController.loadThreadMessages(
+            conversation.id,
             limit: pageSize,
+            background: true,
           );
           await _localSmsStore.storeMessagePage(
             conversation.id,
-            page,
-            reachedBeginning: page.length < pageSize,
+            latest,
+            reachedBeginning: latest.length < pageSize,
           );
-          if (page.length < pageSize) break;
-          oldest = page.first;
-          await Future<void>.delayed(const Duration(milliseconds: 35));
+          await _publishSyncProgress(totalMessages: totalMessages);
+          if (latest.length < pageSize ||
+              await _localSmsStore.isThreadFullySynced(conversation.id)) {
+            await Future<void>.delayed(const Duration(milliseconds: 35));
+            continue;
+          }
+
+          var oldest = await _localSmsStore.oldestMessage(conversation.id);
+          while (oldest != null) {
+            if (!await _canContinueBackgroundSync(generation)) return;
+            final page = await _smsController.loadThreadMessages(
+              conversation.id,
+              before: oldest.sentAt,
+              beforeMessageId: oldest.id,
+              limit: pageSize,
+              background: true,
+            );
+            await _localSmsStore.storeMessagePage(
+              conversation.id,
+              page,
+              reachedBeginning: page.length < pageSize,
+            );
+            await _publishSyncProgress(totalMessages: totalMessages);
+            if (page.length < pageSize) break;
+            oldest = page.first;
+            await Future<void>.delayed(const Duration(milliseconds: 35));
+          }
+        } catch (error) {
+          debugPrint(
+            'Background SMS sync failed for ${conversation.id}: $error',
+          );
         }
-      } catch (error) {
-        debugPrint(
-          'Background SMS sync failed for ${conversation.id}: $error',
-        );
+        await Future<void>.delayed(const Duration(milliseconds: 60));
       }
-      await Future<void>.delayed(const Duration(milliseconds: 60));
+    } catch (error) {
+      debugPrint('Background SMS sync could not start: $error');
+    } finally {
+      await _publishSyncProgress(
+        totalMessages: totalMessages,
+        active: false,
+        force: true,
+      );
     }
   }
+
+  Future<void> _publishSyncProgress({
+    required int totalMessages,
+    bool active = true,
+    bool force = false,
+  }) async {
+    final now = DateTime.now();
+    if (!force &&
+        now.difference(_lastSyncProgressUpdate) <
+            const Duration(milliseconds: 350)) {
+      return;
+    }
+    _lastSyncProgressUpdate = now;
+    int cachedMessages;
+    try {
+      cachedMessages = await _localSmsStore.countMessages();
+    } catch (_) {
+      return;
+    }
+    if (!mounted) return;
+    _smsSyncProgress.value = SmsSyncProgress(
+      active: active &&
+          totalMessages > 0 &&
+          cachedMessages < totalMessages,
+      cachedMessages: cachedMessages,
+      totalMessages: totalMessages,
+    );
+  }
+
+  Future<Set<String>> _searchCachedMessages(String query) =>
+      _localSmsStore.searchThreadIds(query);
 
   Future<bool> _canContinueBackgroundSync(int generation) async {
     if (generation != _backgroundSyncGeneration ||
@@ -717,6 +774,8 @@ class _MessagesUiAppState extends State<MessagesUiApp>
             onCallConversation: _callConversation,
             onOpenConversationContact: _openConversationContact,
             onConversationVisibilityChanged: _setConversationRouteVisible,
+            syncProgress: _smsSyncProgress,
+            onSearchMessages: _searchCachedMessages,
           ),
         ),
       ),

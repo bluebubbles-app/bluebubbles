@@ -34,7 +34,7 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val CHANNEL = "bluebubbles/sms"
         private const val TAG = "BlueBubblesSms"
-        private const val NATIVE_BUILD = "2026-10-15-local-cache-v1"
+        private const val NATIVE_BUILD = "2026-10-15-cache-progress-v2"
         private const val ROLE_REQUEST = 4701
         private const val PERMISSION_REQUEST = 4702
         private const val PROVIDER_LOAD_TIMEOUT_MS = 20_000L
@@ -93,6 +93,7 @@ class MainActivity : FlutterActivity() {
             "requestSmsPermissions" -> requestSmsPermissions(result)
             "loadConversations" -> loadConversations(result)
             "loadThreadMessages" -> loadThreadMessages(call, result)
+            "getSmsMessageCount" -> getSmsMessageCount(result)
             "sendSms" -> sendSms(call, result)
             "markThreadRead" -> markThreadRead(call, result)
             "deleteThread" -> deleteThread(call, result)
@@ -475,6 +476,7 @@ class MainActivity : FlutterActivity() {
             ?.toLongOrNull()
         val pageSize = (call.argument<Number>("limit")?.toInt() ?: 40)
             .coerceIn(20, 250)
+        val background = call.argument<Boolean>("background") == true
         val replied = AtomicBoolean(false)
         val timeoutReply = Runnable {
             if (replied.compareAndSet(false, true)) {
@@ -499,7 +501,9 @@ class MainActivity : FlutterActivity() {
                         mainHandler.removeCallbacks(timeoutReply)
                         lastThreadLoad =
                             "${messages.size} messages in $duration ms"
-                        Log.i(TAG, "Thread $threadId: $lastThreadLoad")
+                        if (!background) {
+                            Log.i(TAG, "Thread $threadId: $lastThreadLoad")
+                        }
                         result.success(messages)
                     }
                 }
@@ -516,6 +520,26 @@ class MainActivity : FlutterActivity() {
                             null,
                         )
                     }
+                }
+            }
+        }.start()
+    }
+
+    private fun getSmsMessageCount(result: MethodChannel.Result) {
+        if (!isDefaultSmsApp() || !hasCoreSmsPermissions()) {
+            result.error("sms_access_denied", "SMS access is not active.", null)
+            return
+        }
+        Thread {
+            try {
+                val count = providerQuery(
+                    Telephony.Sms.CONTENT_URI,
+                    arrayOf(BaseColumns._ID),
+                ) { cursor -> cursor.count } ?: 0
+                runOnUiThread { result.success(count) }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    result.error("sms_count_failed", error.message, null)
                 }
             }
         }.start()

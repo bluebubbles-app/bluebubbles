@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 
 import '../models/conversation.dart';
+import '../models/sms_sync_progress.dart';
 import '../settings/app_settings.dart';
 import '../services/android_sms_service.dart';
 import '../theme/messages_theme.dart';
@@ -36,6 +37,8 @@ class ConversationListScreen extends StatefulWidget {
     required this.onCallConversation,
     required this.onOpenConversationContact,
     required this.onConversationVisibilityChanged,
+    required this.syncProgress,
+    required this.onSearchMessages,
   });
 
   final List<Conversation> conversations;
@@ -52,6 +55,8 @@ class ConversationListScreen extends StatefulWidget {
   final ValueChanged<Conversation> onCallConversation;
   final ValueChanged<Conversation> onOpenConversationContact;
   final ValueChanged<bool> onConversationVisibilityChanged;
+  final ValueListenable<SmsSyncProgress> syncProgress;
+  final Future<Set<String>> Function(String query) onSearchMessages;
 
   @override
   State<ConversationListScreen> createState() =>
@@ -62,6 +67,28 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
   final _searchController = TextEditingController();
   String _query = '';
   bool _editingFavorites = false;
+  bool _searchingMessages = false;
+  Set<String> _messageSearchMatches = const <String>{};
+  Timer? _searchDebounce;
+  int _searchGeneration = 0;
+  late bool _syncWasActive;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncWasActive = widget.syncProgress.value.active;
+    widget.syncProgress.addListener(_handleSyncProgress);
+  }
+
+  @override
+  void didUpdateWidget(ConversationListScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.syncProgress != widget.syncProgress) {
+      oldWidget.syncProgress.removeListener(_handleSyncProgress);
+      _syncWasActive = widget.syncProgress.value.active;
+      widget.syncProgress.addListener(_handleSyncProgress);
+    }
+  }
 
   List<Conversation> get _filtered {
     final conversations = [...widget.conversations]
@@ -72,9 +99,57 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
         .where(
           (conversation) =>
               conversation.title.toLowerCase().contains(query) ||
-              conversation.preview.toLowerCase().contains(query),
+              conversation.preview.toLowerCase().contains(query) ||
+              _messageSearchMatches.contains(conversation.id),
         )
         .toList();
+  }
+
+  void _handleSyncProgress() {
+    final active = widget.syncProgress.value.active;
+    if (_syncWasActive && !active && _query.trim().isNotEmpty) {
+      _scheduleMessageSearch(_query, immediately: true);
+    }
+    _syncWasActive = active;
+  }
+
+  void _onSearchChanged(String value) {
+    setState(() {
+      _query = value;
+      if (value.trim().isEmpty) {
+        _messageSearchMatches = const <String>{};
+        _searchingMessages = false;
+      } else {
+        _searchingMessages = true;
+      }
+    });
+    _scheduleMessageSearch(value);
+  }
+
+  void _scheduleMessageSearch(
+    String value, {
+    bool immediately = false,
+  }) {
+    _searchDebounce?.cancel();
+    final generation = ++_searchGeneration;
+    final query = value.trim();
+    if (query.isEmpty) return;
+    _searchDebounce = Timer(
+      immediately ? Duration.zero : const Duration(milliseconds: 220),
+      () async {
+        try {
+          final matches = await widget.onSearchMessages(query);
+          if (!mounted || generation != _searchGeneration) return;
+          setState(() {
+            _messageSearchMatches = matches;
+            _searchingMessages = false;
+          });
+        } catch (_) {
+          if (!mounted || generation != _searchGeneration) return;
+          setState(() => _searchingMessages = false);
+        }
+      },
+    );
   }
 
   Future<void> _openConversation(Conversation conversation) async {
@@ -266,6 +341,8 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
 
   @override
   void dispose() {
+    widget.syncProgress.removeListener(_handleSyncProgress);
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -284,9 +361,11 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
           : SystemUiOverlayStyle.dark,
       child: CupertinoPageScaffold(
         backgroundColor: MessagesPalette.background(context),
-        child: SafeArea(
-          bottom: false,
-          child: CustomScrollView(
+        child: Stack(
+          children: [
+            SafeArea(
+              bottom: false,
+              child: CustomScrollView(
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             slivers: [
               SliverToBoxAdapter(child: _buildHeader(context)),
@@ -295,7 +374,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                   child: IosSearchField(
                     controller: _searchController,
-                    onChanged: (value) => setState(() => _query = value),
+                    onChanged: _onSearchChanged,
                   ),
                 ),
               ),
@@ -318,7 +397,14 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (widget.loadingConversations) ...[
+                          if (_searchingMessages) ...[
+                            const CupertinoActivityIndicator(),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Searching Messages…',
+                              style: MessagesText.secondary(context),
+                            ),
+                          ] else if (widget.loadingConversations) ...[
                             const CupertinoActivityIndicator(),
                             const SizedBox(height: 12),
                             Text(
@@ -328,7 +414,9 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                           ] else ...[
                             Text(
                               widget.loadError == null
-                                  ? 'No Conversations'
+                                  ? (_query.trim().isEmpty
+                                      ? 'No Conversations'
+                                      : 'No Results')
                                   : 'Messages could not be loaded.',
                               textAlign: TextAlign.center,
                               style: MessagesText.secondary(context),
@@ -363,7 +451,30 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                 ),
               const SliverPadding(padding: EdgeInsets.only(bottom: 28)),
             ],
-          ),
+              ),
+            ),
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: MediaQuery.paddingOf(context).bottom + 12,
+              child: ValueListenableBuilder<SmsSyncProgress>(
+                valueListenable: widget.syncProgress,
+                builder: (context, progress, _) => IgnorePointer(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    child: progress.active
+                        ? _SmsSyncProgressPill(
+                            key: const ValueKey('sms-sync-progress'),
+                            progress: progress,
+                          )
+                        : const SizedBox.shrink(
+                            key: ValueKey('sms-sync-idle'),
+                          ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -440,6 +551,130 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
       ),
     );
   }
+}
+
+class _SmsSyncProgressPill extends StatelessWidget {
+  const _SmsSyncProgressPill({
+    super.key,
+    required this.progress,
+  });
+
+  final SmsSyncProgress progress;
+
+  String _count(int value) {
+    final digits = value.toString();
+    final output = StringBuffer();
+    for (var index = 0; index < digits.length; index++) {
+      if (index > 0 && (digits.length - index) % 3 == 0) output.write(',');
+      output.write(digits[index]);
+    }
+    return output.toString();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fraction = progress.fraction;
+    final percent = (fraction * 100).round();
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: CupertinoDynamicColor.resolve(
+          const CupertinoDynamicColor.withBrightness(
+            color: Color(0xF2FFFFFF),
+            darkColor: Color(0xF21C1C1E),
+          ),
+          context,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x22000000),
+            blurRadius: 18,
+            offset: Offset(0, 7),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 28,
+              height: 28,
+              child: CustomPaint(
+                painter: _SyncRingPainter(
+                  fraction: fraction,
+                  trackColor: MessagesPalette.separator,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Indexing Messages  $percent%',
+                    style: MessagesText.body(context).copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${_count(progress.cachedMessages)} of '
+                    '${_count(progress.totalMessages)} · Search results '
+                    'will become complete',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: MessagesText.secondary(context).copyWith(
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SyncRingPainter extends CustomPainter {
+  const _SyncRingPainter({
+    required this.fraction,
+    required this.trackColor,
+  });
+
+  final double fraction;
+  final Color trackColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.shortestSide - 4) / 2;
+    final track = Paint()
+      ..color = trackColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3;
+    final progress = Paint()
+      ..color = MessagesPalette.blue
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = 3;
+    canvas.drawCircle(center, radius, track);
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -1.5707963267948966,
+      6.283185307179586 * fraction,
+      false,
+      progress,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_SyncRingPainter oldDelegate) =>
+      oldDelegate.fraction != fraction || oldDelegate.trackColor != trackColor;
 }
 
 class _PinnedGrid extends StatelessWidget {

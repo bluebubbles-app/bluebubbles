@@ -124,12 +124,14 @@ class AndroidSmsController extends ChangeNotifier {
     DateTime? before,
     String? beforeMessageId,
     int limit = 40,
+    bool background = false,
   }) async {
     if (!isActive) return const [];
     try {
       final arguments = <String, Object?>{
         'threadId': threadId,
         'limit': limit,
+        'background': background,
       };
       if (before != null) {
         arguments['beforeTimestamp'] = before.millisecondsSinceEpoch;
@@ -154,6 +156,14 @@ class AndroidSmsController extends ChangeNotifier {
       notifyListeners();
       rethrow;
     }
+  }
+
+  Future<int> getSmsMessageCount() async {
+    if (!isActive) return 0;
+    final count = await _channel
+        .invokeMethod<num>('getSmsMessageCount')
+        .timeout(_providerTimeout);
+    return count?.toInt() ?? 0;
   }
 
   Future<void> sendText(String address, String text) async {

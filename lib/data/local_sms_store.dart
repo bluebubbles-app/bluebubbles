@@ -100,6 +100,34 @@ class LocalSmsStore {
     return rows.map(_conversationFromRow).toList();
   }
 
+  Future<int> countMessages() async {
+    final db = await _db;
+    final rows = await db.rawQuery('SELECT COUNT(*) FROM messages');
+    return Sqflite.firstIntValue(rows) ?? 0;
+  }
+
+  Future<Set<String>> searchThreadIds(
+    String searchText, {
+    int limit = 1000,
+  }) async {
+    final query = searchText.trim();
+    if (query.isEmpty) return const <String>{};
+    final db = await _db;
+    final rows = await db.rawQuery(
+      '''
+        SELECT DISTINCT thread_id
+        FROM messages
+        WHERE text LIKE ? COLLATE NOCASE
+        LIMIT ?
+      ''',
+      ['%$query%', limit],
+    );
+    return rows
+        .map((row) => row['thread_id'])
+        .whereType<String>()
+        .toSet();
+  }
+
   Future<void> replaceConversationHeaders(
     Iterable<Conversation> conversations,
   ) async {
