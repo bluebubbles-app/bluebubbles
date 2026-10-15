@@ -12,6 +12,8 @@ import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.pm.ShortcutInfo
+import android.content.pm.ShortcutManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.drawable.Icon
@@ -20,6 +22,7 @@ import android.os.Build
 import android.provider.ContactsContract
 import android.provider.Telephony
 import android.telephony.SmsManager
+import android.util.Log
 
 class SmsReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -57,6 +60,10 @@ class SmsReceiver : BroadcastReceiver() {
 }
 
 class NotificationActionReceiver : BroadcastReceiver() {
+    companion object {
+        private const val TAG = "BlueBubblesReply"
+    }
+
     override fun onReceive(context: Context, intent: Intent) {
         val pendingResult = goAsync()
         val appContext = context.applicationContext
@@ -99,9 +106,15 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 put(Telephony.Sms.SEEN, 1)
                 intent.threadId()?.let { put(Telephony.Sms.THREAD_ID, it) }
             }
-            context.contentResolver.insert(Telephony.Sms.Sent.CONTENT_URI, values)
+            val inserted = context.contentResolver.insert(
+                Telephony.Sms.Sent.CONTENT_URI,
+                values,
+            ) ?: error("The sent SMS provider rejected the quick reply.")
             intent.threadId()?.let { MessageNotifier.markThreadRead(context, it) }
             MessageNotifier.cancel(context, intent.notificationId())
+            Log.i(TAG, "Quick reply stored at $inserted")
+        }.onFailure { error ->
+            Log.e(TAG, "Quick reply failed", error)
         }
     }
 
@@ -171,6 +184,18 @@ internal object MessageNotifier {
             launchIntent,
             immutableFlags(),
         )
+        val shortcutId = if (resolvedThreadId != null) {
+            publishConversationShortcut(
+                context = context,
+                threadId = resolvedThreadId,
+                displayName = displayName,
+                address = address,
+                avatar = contact.avatar,
+                launchIntent = launchIntent,
+            )
+        } else {
+            null
+        }
 
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(context, CHANNEL_ID)
@@ -187,6 +212,9 @@ internal object MessageNotifier {
             .setShowWhen(true)
             .setWhen(timestamp)
             .setVisibility(Notification.VISIBILITY_PRIVATE)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && shortcutId != null) {
+            builder.setShortcutId(shortcutId)
+        }
         contact.avatar?.let(builder::setLargeIcon)
         applyMessageStyle(builder, displayName, body, timestamp, contact.avatar)
 
@@ -367,6 +395,41 @@ internal object MessageNotifier {
         } else {
             0
         }
+
+    private fun publishConversationShortcut(
+        context: Context,
+        threadId: Long,
+        displayName: String,
+        address: String,
+        avatar: Bitmap?,
+        launchIntent: Intent,
+    ): String? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        val shortcutId = "sms-conversation-$threadId"
+        return runCatching {
+            val personBuilder = Person.Builder()
+                .setName(displayName)
+                .setKey(address.ifBlank { threadId.toString() })
+            if (address.isNotBlank()) personBuilder.setUri("tel:$address")
+            avatar?.let { personBuilder.setIcon(Icon.createWithBitmap(it)) }
+
+            val shortcutBuilder = ShortcutInfo.Builder(context, shortcutId)
+                .setShortLabel(displayName.take(25))
+                .setLongLabel(displayName)
+                .setIntent(Intent(launchIntent).apply { action = Intent.ACTION_VIEW })
+                .setLongLived(true)
+                .setPerson(personBuilder.build())
+            avatar?.let { shortcutBuilder.setIcon(Icon.createWithBitmap(it)) }
+            val shortcut = shortcutBuilder.build()
+            val manager = context.getSystemService(ShortcutManager::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                manager.pushDynamicShortcut(shortcut)
+            } else {
+                manager.addDynamicShortcuts(listOf(shortcut))
+            }
+            shortcutId
+        }.getOrNull()
+    }
 
     private fun notificationId(threadId: Long?, address: String): Int {
         val raw = threadId?.hashCode() ?: address.hashCode()

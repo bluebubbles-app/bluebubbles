@@ -226,6 +226,46 @@ class LocalSmsStore {
     return rows.reversed.map(_messageFromRow).toList();
   }
 
+  Future<List<ChatMessage>> loadMessageWindow(
+    String threadId,
+    String messageId, {
+    int radius = 40,
+  }) async {
+    final db = await _db;
+    final targetRows = await db.query(
+      'messages',
+      where: 'thread_id = ? AND id = ?',
+      whereArgs: [threadId, messageId],
+      limit: 1,
+    );
+    if (targetRows.isEmpty) return const <ChatMessage>[];
+
+    final target = targetRows.first;
+    final sentAt = target['sent_at'] as int;
+    final orderId = target['order_id'] as int;
+    final olderRows = await db.query(
+      'messages',
+      where: 'thread_id = ? AND '
+          '(sent_at < ? OR (sent_at = ? AND order_id < ?))',
+      whereArgs: [threadId, sentAt, sentAt, orderId],
+      orderBy: 'sent_at DESC, order_id DESC',
+      limit: radius,
+    );
+    final newerRows = await db.query(
+      'messages',
+      where: 'thread_id = ? AND '
+          '(sent_at > ? OR (sent_at = ? AND order_id > ?))',
+      whereArgs: [threadId, sentAt, sentAt, orderId],
+      orderBy: 'sent_at ASC, order_id ASC',
+      limit: radius,
+    );
+    return [
+      ...olderRows.reversed.map(_messageFromRow),
+      _messageFromRow(target),
+      ...newerRows.map(_messageFromRow),
+    ];
+  }
+
   Future<List<ChatMessage>> loadMessagesBefore(
     String threadId,
     ChatMessage before, {

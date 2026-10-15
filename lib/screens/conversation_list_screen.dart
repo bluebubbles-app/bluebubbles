@@ -35,6 +35,7 @@ class ConversationListScreen extends StatefulWidget {
     required this.onReloadPhoneMessages,
     required this.onDeleteConversation,
     required this.onLoadConversation,
+    this.onLoadMessageContext,
     required this.onLoadOlderConversation,
     required this.onCallConversation,
     required this.onOpenConversationContact,
@@ -53,6 +54,7 @@ class ConversationListScreen extends StatefulWidget {
   final Future<void> Function() onReloadPhoneMessages;
   final Future<void> Function(Conversation) onDeleteConversation;
   final Future<int> Function(Conversation) onLoadConversation;
+  final Future<int> Function(Conversation, String)? onLoadMessageContext;
   final Future<int> Function(Conversation) onLoadOlderConversation;
   final ValueChanged<Conversation> onCallConversation;
   final ValueChanged<Conversation> onOpenConversationContact;
@@ -153,7 +155,11 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
     return null;
   }
 
-  Future<void> _openConversation(Conversation conversation) async {
+  Future<void> _openConversation(
+    Conversation conversation, {
+    String? initialMessageId,
+  }) async {
+    final targetMessageId = initialMessageId;
     widget.onConversationVisibilityChanged(true);
     try {
       setState(() => conversation.unreadCount = 0);
@@ -164,8 +170,16 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
           builder: (_) => ConversationScreen(
             conversation: conversation,
             allConversations: widget.conversations,
-            messagesPreloaded: conversation.messages.isNotEmpty,
-            onLoad: () => widget.onLoadConversation(conversation),
+            messagesPreloaded:
+                targetMessageId == null && conversation.messages.isNotEmpty,
+            initialMessageId: targetMessageId,
+            onLoad: () => targetMessageId == null
+                ? widget.onLoadConversation(conversation)
+                : widget.onLoadMessageContext?.call(
+                      conversation,
+                      targetMessageId,
+                    ) ??
+                    widget.onLoadConversation(conversation),
             onLoadOlder: () => widget.onLoadOlderConversation(conversation),
             onSend: (text) {
               widget.onSend(conversation, text);
@@ -177,6 +191,9 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
           ),
         ),
       );
+      if (targetMessageId != null) {
+        await widget.onLoadConversation(conversation);
+      }
       await _markConversationRead(conversation);
       if (!mounted) return;
       setState(() => conversation.unreadCount = 0);
@@ -422,7 +439,10 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                         conversation: conversation,
                         result: result,
                         query: _query.trim(),
-                        onTap: () => _openConversation(conversation),
+                        onTap: () => _openConversation(
+                          conversation,
+                          initialMessageId: result.messageId,
+                        ),
                       );
                     },
                     childCount: _messageSearchResults.length,

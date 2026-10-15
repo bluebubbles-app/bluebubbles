@@ -392,19 +392,43 @@ class _MessagesUiAppState extends State<MessagesUiApp>
         conversation.messages
           ..clear()
           ..addAll(cached);
-        unawaited(_refreshThreadHeadInCache(conversation.id));
-        return cached.length;
       }
+      try {
+        final messages = await _smsController.loadThreadMessages(
+          conversation.id,
+        );
+        await _localSmsStore.storeMessagePage(
+          conversation.id,
+          messages,
+          reachedBeginning: messages.length < 40,
+        );
+        if (!mounted) return 0;
+        conversation.messages
+          ..clear()
+          ..addAll(messages);
+        return messages.length;
+      } catch (_) {
+        if (cached.isNotEmpty) return cached.length;
+        rethrow;
+      }
+    } finally {
+      _foregroundThreadLoads--;
+    }
+  }
 
-      final messages = await _smsController.loadThreadMessages(
+  Future<int> _loadConversationMessageContext(
+    Conversation conversation,
+    String messageId,
+  ) async {
+    _foregroundThreadLoads++;
+    try {
+      final messages = await _localSmsStore.loadMessageWindow(
         conversation.id,
+        messageId,
       );
-      await _localSmsStore.storeMessagePage(
-        conversation.id,
-        messages,
-        reachedBeginning: messages.length < 40,
-      );
-      if (!mounted) return 0;
+      if (!mounted || messages.isEmpty) {
+        return _loadConversationMessages(conversation);
+      }
       conversation.messages
         ..clear()
         ..addAll(messages);
@@ -760,6 +784,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
             onReloadPhoneMessages: _loadPhoneMessages,
             onDeleteConversation: _deleteConversation,
             onLoadConversation: _loadConversationMessages,
+            onLoadMessageContext: _loadConversationMessageContext,
             onLoadOlderConversation: _loadOlderConversationMessages,
             onCallConversation: _callConversation,
             onOpenConversationContact: _openConversationContact,

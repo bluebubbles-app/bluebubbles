@@ -18,6 +18,7 @@ class ConversationScreen extends StatefulWidget {
     required this.conversation,
     required this.allConversations,
     required this.messagesPreloaded,
+    this.initialMessageId,
     required this.onLoad,
     required this.onLoadOlder,
     required this.onSend,
@@ -28,6 +29,7 @@ class ConversationScreen extends StatefulWidget {
   final Conversation conversation;
   final List<Conversation> allConversations;
   final bool messagesPreloaded;
+  final String? initialMessageId;
   final Future<int> Function() onLoad;
   final Future<int> Function() onLoadOlder;
   final ValueChanged<String> onSend;
@@ -42,6 +44,7 @@ class _ConversationScreenState extends State<ConversationScreen>
     with TickerProviderStateMixin {
   static const _timestampRevealDistance = 58.0;
   final _scrollController = ScrollController();
+  final _initialMessageKey = GlobalKey();
   GlobalKey<AnimatedListState> _messageListKey = GlobalKey<AnimatedListState>();
   late final AnimationController _timestampRevealController =
       AnimationController.unbounded(vsync: this);
@@ -58,6 +61,8 @@ class _ConversationScreenState extends State<ConversationScreen>
   double _lastManualScrollDelta = 0;
   Object? _loadError;
   Timer? _restoreHeaderBlurTimer;
+  bool _initialMessagePositioned = false;
+  int _initialMessagePositionAttempts = 0;
 
   @override
   void initState() {
@@ -65,13 +70,15 @@ class _ConversationScreenState extends State<ConversationScreen>
     if (widget.messagesPreloaded) {
       _loadingMessages = false;
       _hasOlderMessages = widget.conversation.messages.isNotEmpty;
-    } else {
-      unawaited(_loadMessages());
     }
+    unawaited(_loadMessages(showLoading: !widget.messagesPreloaded));
   }
 
-  Future<void> _loadMessages() async {
-    if (!_loadingMessages) {
+  Future<void> _loadMessages({bool showLoading = true}) async {
+    final previousIds = widget.conversation.messages
+        .map((message) => message.id)
+        .toList(growable: false);
+    if (showLoading && !_loadingMessages) {
       setState(() {
         _loadingMessages = true;
         _loadError = null;
@@ -80,12 +87,23 @@ class _ConversationScreenState extends State<ConversationScreen>
     try {
       final loadedCount = await widget.onLoad();
       if (!mounted) return;
+      final currentIds = widget.conversation.messages
+          .map((message) => message.id)
+          .toList(growable: false);
+      final messagesChanged = !_sameIds(previousIds, currentIds);
+      if (!showLoading && !messagesChanged && _loadError == null) {
+        _hasOlderMessages = loadedCount > 0;
+        return;
+      }
       setState(() {
         _loadingMessages = false;
         _hasOlderMessages = loadedCount > 0;
         _loadError = null;
-        _messageListKey = GlobalKey<AnimatedListState>();
+        if (messagesChanged || showLoading) {
+          _messageListKey = GlobalKey<AnimatedListState>();
+        }
       });
+      _scheduleInitialMessagePosition();
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -93,6 +111,56 @@ class _ConversationScreenState extends State<ConversationScreen>
         _loadError = error;
       });
     }
+  }
+
+  bool _sameIds(List<String> first, List<String> second) {
+    if (first.length != second.length) return false;
+    for (var index = 0; index < first.length; index++) {
+      if (first[index] != second[index]) return false;
+    }
+    return true;
+  }
+
+  void _scheduleInitialMessagePosition() {
+    if (widget.initialMessageId == null || _initialMessagePositioned) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _positionInitialMessage();
+    });
+  }
+
+  void _positionInitialMessage() {
+    if (_initialMessagePositioned) return;
+    final targetContext = _initialMessageKey.currentContext;
+    if (targetContext != null) {
+      _initialMessagePositioned = true;
+      Scrollable.ensureVisible(
+        targetContext,
+        alignment: .5,
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+      );
+      return;
+    }
+    if (!_scrollController.hasClients ||
+        _initialMessagePositionAttempts >= 5) {
+      return;
+    }
+    final targetIndex = widget.conversation.messages.indexWhere(
+      (message) => message.id == widget.initialMessageId,
+    );
+    if (targetIndex == -1) return;
+    final reversedIndex = widget.conversation.messages.length - 1 - targetIndex;
+    final denominator =
+        (widget.conversation.messages.length - 1).clamp(1, 1 << 30);
+    final ratio = reversedIndex / denominator;
+    final position = _scrollController.position;
+    position.jumpTo(
+      (position.maxScrollExtent * ratio)
+          .clamp(position.minScrollExtent, position.maxScrollExtent)
+          .toDouble(),
+    );
+    _initialMessagePositionAttempts++;
+    _scheduleInitialMessagePosition();
   }
 
   Future<void> _loadOlderMessages() async {
@@ -605,11 +673,18 @@ class _ConversationScreenState extends State<ConversationScreen>
                                       : interactiveMessage,
                                 ),
                               );
+                              final positionedMessage =
+                                  message.id == widget.initialMessageId
+                                      ? KeyedSubtree(
+                                          key: _initialMessageKey,
+                                          child: insertedMessage,
+                                        )
+                                      : insertedMessage;
                               return RepaintBoundary(
                                 child: _ElasticMessageMotion(
                                   animation: _scrollElasticController,
                                   intensity: .78 + (messageIndex % 3) * .1,
-                                  child: insertedMessage,
+                                  child: positionedMessage,
                                 ),
                               );
                             },
