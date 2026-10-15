@@ -34,7 +34,7 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val CHANNEL = "bluebubbles/sms"
         private const val TAG = "BlueBubblesSms"
-        private const val NATIVE_BUILD = "2026-10-15-all-threads-v1"
+        private const val NATIVE_BUILD = "2026-10-15-local-cache-v1"
         private const val ROLE_REQUEST = 4701
         private const val PERMISSION_REQUEST = 4702
         private const val PROVIDER_LOAD_TIMEOUT_MS = 20_000L
@@ -473,6 +473,8 @@ class MainActivity : FlutterActivity() {
         val beforeTimestamp = call.argument<Number>("beforeTimestamp")?.toLong()
         val beforeMessageId = call.argument<String>("beforeMessageId")
             ?.toLongOrNull()
+        val pageSize = (call.argument<Number>("limit")?.toInt() ?: 40)
+            .coerceIn(20, 250)
         val replied = AtomicBoolean(false)
         val timeoutReply = Runnable {
             if (replied.compareAndSet(false, true)) {
@@ -489,6 +491,7 @@ class MainActivity : FlutterActivity() {
                     threadId,
                     beforeTimestamp,
                     beforeMessageId,
+                    pageSize,
                 )
                 val duration = SystemClock.elapsedRealtime() - startedAt
                 runOnUiThread {
@@ -702,6 +705,7 @@ class MainActivity : FlutterActivity() {
         threadId: String,
         beforeTimestamp: Long?,
         beforeMessageId: Long?,
+        pageSize: Int,
     ): List<HashMap<String, Any?>> {
         val projection = arrayOf(
             BaseColumns._ID,
@@ -733,7 +737,7 @@ class MainActivity : FlutterActivity() {
             selection = selection,
             selectionArgs = selectionArgs,
             sortOrder = "${Telephony.Sms.DATE} DESC, " +
-                "${BaseColumns._ID} DESC LIMIT 40",
+                "${BaseColumns._ID} DESC LIMIT $pageSize",
             timeoutMs = 10_000L,
         ) { cursor ->
             val idColumn = cursor.getColumnIndexOrThrow(BaseColumns._ID)
@@ -741,7 +745,7 @@ class MainActivity : FlutterActivity() {
             val dateColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.DATE)
             val typeColumn = cursor.getColumnIndexOrThrow(Telephony.Sms.TYPE)
             var processed = 0
-            while (cursor.moveToNext() && processed < 40) {
+            while (cursor.moveToNext() && processed < pageSize) {
                 processed += 1
                 val type = cursor.getInt(typeColumn)
                 val fromMe = type == Telephony.Sms.MESSAGE_TYPE_SENT ||

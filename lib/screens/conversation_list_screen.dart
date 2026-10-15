@@ -35,6 +35,7 @@ class ConversationListScreen extends StatefulWidget {
     required this.onLoadOlderConversation,
     required this.onCallConversation,
     required this.onOpenConversationContact,
+    required this.onConversationVisibilityChanged,
   });
 
   final List<Conversation> conversations;
@@ -50,6 +51,7 @@ class ConversationListScreen extends StatefulWidget {
   final Future<int> Function(Conversation) onLoadOlderConversation;
   final ValueChanged<Conversation> onCallConversation;
   final ValueChanged<Conversation> onOpenConversationContact;
+  final ValueChanged<bool> onConversationVisibilityChanged;
 
   @override
   State<ConversationListScreen> createState() =>
@@ -76,39 +78,44 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
   }
 
   Future<void> _openConversation(Conversation conversation) async {
-    setState(() => conversation.unreadCount = 0);
-    unawaited(_markConversationRead(conversation));
-    var messagesPreloaded = false;
+    widget.onConversationVisibilityChanged(true);
     try {
-      await widget.onLoadConversation(conversation);
-      messagesPreloaded = true;
-    } catch (_) {
-      // The conversation screen retains its own retry state.
-    }
-    if (!mounted) return;
-    await WidgetsBinding.instance.endOfFrame;
-    if (!mounted) return;
-    await Navigator.of(context).push(
-      CupertinoPageRoute<void>(
-        builder: (_) => ConversationScreen(
-          conversation: conversation,
-          allConversations: widget.conversations,
-          messagesPreloaded: messagesPreloaded,
-          onLoad: () => widget.onLoadConversation(conversation),
-          onLoadOlder: () => widget.onLoadOlderConversation(conversation),
-          onSend: (text) {
-            widget.onSend(conversation, text);
-            setState(() {});
-          },
-          onCall: () => widget.onCallConversation(conversation),
-          onOpenContact: () =>
-              widget.onOpenConversationContact(conversation),
+      setState(() => conversation.unreadCount = 0);
+      unawaited(_markConversationRead(conversation));
+      var messagesPreloaded = false;
+      try {
+        await widget.onLoadConversation(conversation);
+        messagesPreloaded = true;
+      } catch (_) {
+        // The conversation screen retains its own retry state.
+      }
+      if (!mounted) return;
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        CupertinoPageRoute<void>(
+          builder: (_) => ConversationScreen(
+            conversation: conversation,
+            allConversations: widget.conversations,
+            messagesPreloaded: messagesPreloaded,
+            onLoad: () => widget.onLoadConversation(conversation),
+            onLoadOlder: () => widget.onLoadOlderConversation(conversation),
+            onSend: (text) {
+              widget.onSend(conversation, text);
+              setState(() {});
+            },
+            onCall: () => widget.onCallConversation(conversation),
+            onOpenContact: () =>
+                widget.onOpenConversationContact(conversation),
+          ),
         ),
-      ),
-    );
-    await _markConversationRead(conversation);
-    if (!mounted) return;
-    setState(() => conversation.unreadCount = 0);
+      );
+      await _markConversationRead(conversation);
+      if (!mounted) return;
+      setState(() => conversation.unreadCount = 0);
+    } finally {
+      widget.onConversationVisibilityChanged(false);
+    }
   }
 
   Future<void> _markConversationRead(Conversation conversation) async {

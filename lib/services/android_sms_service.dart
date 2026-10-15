@@ -123,10 +123,14 @@ class AndroidSmsController extends ChangeNotifier {
     String threadId, {
     DateTime? before,
     String? beforeMessageId,
+    int limit = 40,
   }) async {
     if (!isActive) return const [];
     try {
-      final arguments = <String, Object?>{'threadId': threadId};
+      final arguments = <String, Object?>{
+        'threadId': threadId,
+        'limit': limit,
+      };
       if (before != null) {
         arguments['beforeTimestamp'] = before.millisecondsSinceEpoch;
         arguments['beforeMessageId'] = beforeMessageId;

@@ -1,12 +1,11 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'data/demo_data.dart';
+import 'data/local_sms_store.dart';
 import 'data/message_repository.dart';
 import 'models/conversation.dart';
 import 'screens/conversation_list_screen.dart';
@@ -29,15 +28,20 @@ class MessagesUiApp extends StatefulWidget {
 
 class _MessagesUiAppState extends State<MessagesUiApp>
     with WidgetsBindingObserver {
-  static const _phoneConversationCacheKey = 'phone_conversation_headers_v1';
   late final MessageRepository _messageRepository =
       DemoMessageRepository(demoConversations());
   final AppSettingsController _settings = AppSettingsController();
   final AndroidSmsController _smsController = AndroidSmsController();
+  final LocalSmsStore _localSmsStore = LocalSmsStore();
   bool _usingPhoneMessages = false;
   bool _loadingPhoneMessages = false;
   String? _phoneLoadError;
   Future<void>? _phoneLoadFuture;
+  Future<void> _backgroundSyncTail = Future<void>.value();
+  AppLifecycleState _lifecycleState = AppLifecycleState.resumed;
+  int _backgroundSyncGeneration = 0;
+  int _foregroundThreadLoads = 0;
+  bool _conversationRouteVisible = false;
   final Map<String, ConversationEnrichment> _pendingEnrichments = {};
   Timer? _enrichmentTimer;
 
@@ -55,6 +59,8 @@ class _MessagesUiAppState extends State<MessagesUiApp>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _enrichmentTimer?.cancel();
+    _backgroundSyncGeneration++;
+    unawaited(_localSmsStore.close());
     _smsController.dispose();
     _settings.dispose();
     super.dispose();
@@ -62,7 +68,12 @@ class _MessagesUiAppState extends State<MessagesUiApp>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) unawaited(_refreshSmsMode());
+    _lifecycleState = state;
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_refreshSmsMode());
+    } else {
+      _backgroundSyncGeneration++;
+    }
   }
 
   Future<void> _initializeApp() async {
@@ -118,7 +129,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
     if (!mounted) return;
     if (_smsController.isActive) {
       if (!_usingPhoneMessages || _messageRepository.conversations.isEmpty) {
-        await _restorePhoneConversationCache();
+        await _restoreLocalConversations();
       }
       await _reloadPhoneMessagesSilently();
     } else if (_smsController.isDefaultSmsApp && !_usingPhoneMessages) {
@@ -200,7 +211,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
         _phoneLoadError = null;
         _messageRepository.replaceAll(merged);
       });
-      unawaited(_savePhoneConversationCache(merged));
+      unawaited(_cacheHeadersAndScheduleSync(merged));
     } catch (error) {
       if (mounted) {
         setState(() {
@@ -213,80 +224,209 @@ class _MessagesUiAppState extends State<MessagesUiApp>
     }
   }
 
-  Future<void> _restorePhoneConversationCache() async {
+  Future<void> _restoreLocalConversations() async {
     try {
-      final preferences = await SharedPreferences.getInstance();
-      final encoded = preferences.getString(_phoneConversationCacheKey);
-      if (encoded == null || encoded.isEmpty || !mounted) return;
-      final decoded = jsonDecode(encoded);
-      if (decoded is! List) return;
-      final cached = decoded
-          .whereType<Map>()
-          .map(
-            (item) => Conversation.fromJson(
-              Map<String, Object?>.from(item),
-            ),
-          )
-          .toList();
+      final cached = await _localSmsStore.loadConversations();
       if (cached.isEmpty || !mounted) return;
       setState(() {
         _usingPhoneMessages = true;
         _messageRepository.replaceAll(cached);
       });
     } catch (error) {
-      debugPrint('Conversation cache restore failed: $error');
+      debugPrint('Local SMS cache restore failed: $error');
     }
   }
 
-  Future<void> _savePhoneConversationCache(
+  Future<void> _cacheHeadersAndScheduleSync(
     List<Conversation> conversations,
   ) async {
     try {
-      final preferences = await SharedPreferences.getInstance();
-      final summaries = conversations.map((conversation) {
-        final json = conversation.toJson();
-        json['messages'] = const <Object?>[];
-        return json;
-      }).toList();
-      await preferences.setString(
-        _phoneConversationCacheKey,
-        jsonEncode(summaries),
-      );
+      await _localSmsStore.replaceConversationHeaders(conversations);
+      _scheduleBackgroundMessageSync(conversations);
     } catch (error) {
-      debugPrint('Conversation cache save failed: $error');
+      debugPrint('Local SMS cache save failed: $error');
     }
+  }
+
+  void _scheduleBackgroundMessageSync(
+    Iterable<Conversation> conversations,
+  ) {
+    if (!_smsController.isActive) return;
+    final generation = ++_backgroundSyncGeneration;
+    final snapshot = conversations.toList()
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    _backgroundSyncTail = _backgroundSyncTail
+        .catchError((Object _) {})
+        .then((_) async {
+      if (generation != _backgroundSyncGeneration) return;
+      await _syncMessagesInBackground(snapshot, generation);
+    });
+  }
+
+  Future<void> _syncMessagesInBackground(
+    List<Conversation> conversations,
+    int generation,
+  ) async {
+    const pageSize = 200;
+    for (final conversation in conversations) {
+      if (!await _canContinueBackgroundSync(generation)) return;
+      try {
+        final needsSync = await _localSmsStore.threadNeedsSync(
+          conversation.id,
+          conversation.updatedAt,
+        );
+        if (!needsSync) continue;
+        final latest = await _smsController.loadThreadMessages(
+          conversation.id,
+          limit: pageSize,
+        );
+        await _localSmsStore.storeMessagePage(
+          conversation.id,
+          latest,
+          reachedBeginning: latest.length < pageSize,
+        );
+        if (latest.length < pageSize ||
+            await _localSmsStore.isThreadFullySynced(conversation.id)) {
+          await Future<void>.delayed(const Duration(milliseconds: 35));
+          continue;
+        }
+
+        var oldest = await _localSmsStore.oldestMessage(conversation.id);
+        while (oldest != null) {
+          if (!await _canContinueBackgroundSync(generation)) return;
+          final page = await _smsController.loadThreadMessages(
+            conversation.id,
+            before: oldest.sentAt,
+            beforeMessageId: oldest.id,
+            limit: pageSize,
+          );
+          await _localSmsStore.storeMessagePage(
+            conversation.id,
+            page,
+            reachedBeginning: page.length < pageSize,
+          );
+          if (page.length < pageSize) break;
+          oldest = page.first;
+          await Future<void>.delayed(const Duration(milliseconds: 35));
+        }
+      } catch (error) {
+        debugPrint(
+          'Background SMS sync failed for ${conversation.id}: $error',
+        );
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+    }
+  }
+
+  Future<bool> _canContinueBackgroundSync(int generation) async {
+    if (generation != _backgroundSyncGeneration ||
+        !_smsController.isActive ||
+        _lifecycleState != AppLifecycleState.resumed ||
+        _conversationRouteVisible) {
+      return false;
+    }
+    while (_foregroundThreadLoads > 0) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      if (generation != _backgroundSyncGeneration ||
+          _lifecycleState != AppLifecycleState.resumed ||
+          _conversationRouteVisible) {
+        return false;
+      }
+    }
+    return true;
   }
 
   Future<int> _loadConversationMessages(Conversation conversation) async {
     if (!_smsController.isActive) return conversation.messages.length;
-    final messages = await _smsController.loadThreadMessages(conversation.id);
-    if (!mounted) return 0;
-    conversation.messages
-      ..clear()
-      ..addAll(messages);
-    return messages.length;
+    _foregroundThreadLoads++;
+    try {
+      await _localSmsStore.updateConversation(conversation);
+      await _localSmsStore.markConversationRead(conversation.id);
+      final cached = await _localSmsStore.loadRecentMessages(conversation.id);
+      if (cached.isNotEmpty) {
+        if (!mounted) return 0;
+        conversation.messages
+          ..clear()
+          ..addAll(cached);
+        unawaited(_refreshThreadHeadInCache(conversation.id));
+        return cached.length;
+      }
+
+      final messages = await _smsController.loadThreadMessages(
+        conversation.id,
+      );
+      await _localSmsStore.storeMessagePage(
+        conversation.id,
+        messages,
+        reachedBeginning: messages.length < 40,
+      );
+      if (!mounted) return 0;
+      conversation.messages
+        ..clear()
+        ..addAll(messages);
+      return messages.length;
+    } finally {
+      _foregroundThreadLoads--;
+    }
   }
 
   Future<int> _loadOlderConversationMessages(
     Conversation conversation,
   ) async {
     if (!_smsController.isActive || conversation.messages.isEmpty) return 0;
-    final oldest = conversation.messages.first;
-    final page = await _smsController.loadThreadMessages(
-      conversation.id,
-      before: oldest.sentAt,
-      beforeMessageId: oldest.id,
-    );
-    if (!mounted || page.isEmpty) return 0;
-    final existingIds = conversation.messages
-        .map((message) => message.id)
-        .toSet();
-    final older = page
-        .where((message) => existingIds.add(message.id))
-        .toList();
-    if (older.isEmpty) return 0;
-    conversation.messages.insertAll(0, older);
-    return older.length;
+    _foregroundThreadLoads++;
+    try {
+      final visibleOldest = conversation.messages.first;
+      var older = await _localSmsStore.loadMessagesBefore(
+        conversation.id,
+        visibleOldest,
+      );
+      if (older.isEmpty &&
+          !await _localSmsStore.isThreadFullySynced(conversation.id)) {
+        final cachedOldest =
+            await _localSmsStore.oldestMessage(conversation.id) ??
+                visibleOldest;
+        final providerPage = await _smsController.loadThreadMessages(
+          conversation.id,
+          before: cachedOldest.sentAt,
+          beforeMessageId: cachedOldest.id,
+        );
+        await _localSmsStore.storeMessagePage(
+          conversation.id,
+          providerPage,
+          reachedBeginning: providerPage.length < 40,
+        );
+        older = await _localSmsStore.loadMessagesBefore(
+          conversation.id,
+          visibleOldest,
+        );
+      }
+      if (!mounted || older.isEmpty) return 0;
+      final existingIds = conversation.messages
+          .map((message) => message.id)
+          .toSet();
+      final unique = older
+          .where((message) => existingIds.add(message.id))
+          .toList();
+      if (unique.isEmpty) return 0;
+      conversation.messages.insertAll(0, unique);
+      return unique.length;
+    } finally {
+      _foregroundThreadLoads--;
+    }
+  }
+
+  Future<void> _refreshThreadHeadInCache(String threadId) async {
+    try {
+      final latest = await _smsController.loadThreadMessages(threadId);
+      await _localSmsStore.storeMessagePage(
+        threadId,
+        latest,
+        reachedBeginning: latest.length < 40,
+      );
+    } catch (error) {
+      debugPrint('Thread cache refresh failed for $threadId: $error');
+    }
   }
 
   void _applyConversationEnrichment(ConversationEnrichment enrichment) {
@@ -318,12 +458,25 @@ class _MessagesUiAppState extends State<MessagesUiApp>
         if (enrichment.avatarBytes != null) {
           conversation.avatarBytes = enrichment.avatarBytes;
         }
+        unawaited(
+          _cacheConversationEnrichment(enrichment),
+        );
       }
     });
-    if (_usingPhoneMessages) {
-      unawaited(
-        _savePhoneConversationCache(_messageRepository.conversations),
+  }
+
+  Future<void> _cacheConversationEnrichment(
+    ConversationEnrichment enrichment,
+  ) async {
+    try {
+      await _localSmsStore.updateEnrichment(
+        threadId: enrichment.id,
+        address: enrichment.address,
+        title: enrichment.title,
+        avatarBytes: enrichment.avatarBytes,
       );
+    } catch (error) {
+      debugPrint('Contact cache update failed: $error');
     }
   }
 
@@ -352,8 +505,27 @@ class _MessagesUiAppState extends State<MessagesUiApp>
         ..updatedAt = now;
     });
     unawaited(
+      _cacheOptimisticMessage(conversation, conversation.messages.last),
+    );
+    unawaited(
       _sendPhoneMessage(conversation, address, trimmed, pendingId),
     );
+  }
+
+  Future<void> _cacheOptimisticMessage(
+    Conversation conversation,
+    ChatMessage message,
+  ) async {
+    try {
+      await _localSmsStore.updateConversation(conversation);
+      await _localSmsStore.storeMessagePage(
+        conversation.id,
+        [message],
+        reachedBeginning: false,
+      );
+    } catch (error) {
+      debugPrint('Optimistic message cache failed: $error');
+    }
   }
 
   Future<void> _sendPhoneMessage(
@@ -364,27 +536,6 @@ class _MessagesUiAppState extends State<MessagesUiApp>
   ) async {
     try {
       await _smsController.sendText(address, text);
-      if (!mounted) return;
-      setState(() {
-        final pendingIndex = conversation.messages.indexWhere(
-          (message) => message.id == pendingId,
-        );
-        if (pendingIndex != -1) {
-          final pending = conversation.messages[pendingIndex];
-          conversation.messages[pendingIndex] = ChatMessage(
-            id: pending.id,
-            text: pending.text,
-            sentAt: pending.sentAt,
-            isFromMe: true,
-            deliveryState: DeliveryState.delivered,
-          );
-        }
-      });
-      // Reload only the thread summaries here. Replacing the open message
-      // list while AnimatedList is presenting the pending row desynchronizes
-      // its item count and causes an out-of-range build. The provider-backed
-      // message IDs are refreshed the next time the conversation is opened.
-      await _loadPhoneMessages();
     } catch (_) {
       if (!mounted) return;
       final now = DateTime.now();
@@ -407,17 +558,78 @@ class _MessagesUiAppState extends State<MessagesUiApp>
         conversation
           ..preview = text
           ..updatedAt = now;
+        unawaited(
+          _cacheFailedMessage(conversation, pendingId, failedMessage),
+        );
       });
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      final pendingIndex = conversation.messages.indexWhere(
+        (message) => message.id == pendingId,
+      );
+      if (pendingIndex != -1) {
+        final pending = conversation.messages[pendingIndex];
+        conversation.messages[pendingIndex] = ChatMessage(
+          id: pending.id,
+          text: pending.text,
+          sentAt: pending.sentAt,
+          isFromMe: true,
+          deliveryState: DeliveryState.delivered,
+        );
+      }
+    });
+    try {
+      await _localSmsStore.deleteMessage(conversation.id, pendingId);
+    } catch (error) {
+      debugPrint('Sent message cache cleanup failed: $error');
+    }
+    unawaited(_refreshThreadHeadInCache(conversation.id));
+    // Reload only thread summaries here. Replacing the open AnimatedList
+    // would desynchronize its item count from the optimistic message row.
+    try {
+      await _loadPhoneMessages();
+    } catch (error) {
+      debugPrint('Conversation header refresh after send failed: $error');
+    }
+  }
+
+  Future<void> _cacheFailedMessage(
+    Conversation conversation,
+    String pendingId,
+    ChatMessage failedMessage,
+  ) async {
+    try {
+      await _localSmsStore.deleteMessage(conversation.id, pendingId);
+      await _cacheOptimisticMessage(conversation, failedMessage);
+    } catch (error) {
+      debugPrint('Failed message cache update failed: $error');
     }
   }
 
   void _replaceConversations(List<Conversation> conversations) {
     setState(() => _messageRepository.replaceAll(conversations));
+    if (_smsController.isActive) {
+      unawaited(_persistConversationHeaders(conversations));
+    }
+  }
+
+  Future<void> _persistConversationHeaders(
+    List<Conversation> conversations,
+  ) async {
+    try {
+      await _localSmsStore.replaceConversationHeaders(conversations);
+    } catch (error) {
+      debugPrint('Conversation preference cache failed: $error');
+    }
   }
 
   Future<void> _deleteConversation(Conversation conversation) async {
     if (_smsController.isActive) {
       await _smsController.deleteThread(conversation.id);
+      await _localSmsStore.deleteConversation(conversation.id);
     }
   }
 
@@ -438,6 +650,15 @@ class _MessagesUiAppState extends State<MessagesUiApp>
       await _smsController.openContact(address);
     } catch (error) {
       debugPrint('Contact could not be opened: $error');
+    }
+  }
+
+  void _setConversationRouteVisible(bool visible) {
+    _conversationRouteVisible = visible;
+    if (visible) {
+      _backgroundSyncGeneration++;
+    } else if (_smsController.isActive) {
+      _scheduleBackgroundMessageSync(_messageRepository.conversations);
     }
   }
 
@@ -495,6 +716,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
             onLoadOlderConversation: _loadOlderConversationMessages,
             onCallConversation: _callConversation,
             onOpenConversationContact: _openConversationContact,
+            onConversationVisibilityChanged: _setConversationRouteVisible,
           ),
         ),
       ),
