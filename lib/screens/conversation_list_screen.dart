@@ -87,6 +87,8 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
   int _lastNotificationOpenSequence = -1;
   String? _activeConversationId;
   bool _openingNotificationConversation = false;
+  int? _sortedConversationsSignature;
+  List<Conversation> _sortedConversations = const <Conversation>[];
 
   @override
   void initState() {
@@ -153,9 +155,23 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
   }
 
   List<Conversation> get _filtered {
-    final conversations = [...widget.conversations]
-      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-    return _query.trim().isEmpty ? conversations : const <Conversation>[];
+    var signature = widget.conversations.length;
+    for (final conversation in widget.conversations) {
+      signature = Object.hash(
+        signature,
+        identityHashCode(conversation),
+        conversation.id,
+        conversation.updatedAt.microsecondsSinceEpoch,
+      );
+    }
+    if (_sortedConversationsSignature != signature) {
+      _sortedConversationsSignature = signature;
+      _sortedConversations = List<Conversation>.of(widget.conversations)
+        ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    }
+    return _query.trim().isEmpty
+        ? _sortedConversations
+        : const <Conversation>[];
   }
 
   void _handleSyncProgress() {

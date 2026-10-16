@@ -1303,10 +1303,10 @@ class _ConversationHeader extends StatelessWidget {
               sigmaX: settings.headerBlurSigma,
               sigmaY: settings.headerBlurSigma,
             ),
-            child: child,
+            child: RepaintBoundary(child: child),
           ),
         );
-    return addGlass(header);
+    return RepaintBoundary(child: addGlass(header));
   }
 }
 
