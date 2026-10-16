@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 
 import '../models/conversation.dart';
@@ -2018,8 +2019,13 @@ class _SwipeableConversationRowState extends State<SwipeableConversationRow>
     with SingleTickerProviderStateMixin {
   static const _actionWidth = 78.0;
   static const _rightActionsWidth = _actionWidth * 2;
+  static const _longPressMoveTolerance = 8.0;
   late final AnimationController _offsetController =
       AnimationController.unbounded(vsync: this);
+  Timer? _longPressTimer;
+  int? _trackedPointer;
+  Offset? _longPressOrigin;
+  bool _suppressTapAfterLongPress = false;
 
   @override
   void initState() {
@@ -2035,8 +2041,53 @@ class _SwipeableConversationRowState extends State<SwipeableConversationRow>
       widget.openConversationId.addListener(_handleOpenRowChanged);
     }
     if (widget.selectionMode && !oldWidget.selectionMode) {
+      _cancelLongPressTracking();
       _close();
     }
+  }
+
+  void _handlePointerDown(PointerDownEvent event) {
+    if (widget.selectionMode) return;
+    _cancelLongPressTracking();
+    _suppressTapAfterLongPress = false;
+    _trackedPointer = event.pointer;
+    _longPressOrigin = event.position;
+    _longPressTimer = Timer(kLongPressTimeout, () {
+      if (!mounted ||
+          widget.selectionMode ||
+          _trackedPointer != event.pointer) {
+        return;
+      }
+      _longPressTimer = null;
+      _suppressTapAfterLongPress = true;
+      widget.onLongPress();
+    });
+  }
+
+  void _handlePointerMove(PointerMoveEvent event) {
+    if (_trackedPointer != event.pointer) return;
+    final origin = _longPressOrigin;
+    if (origin != null &&
+        (event.position - origin).distance > _longPressMoveTolerance) {
+      _cancelLongPressTracking();
+    }
+  }
+
+  void _handlePointerEnd(PointerEvent event) {
+    if (_trackedPointer != event.pointer) return;
+    _cancelLongPressTracking();
+    if (_suppressTapAfterLongPress) {
+      Future<void>.delayed(const Duration(milliseconds: 300), () {
+        if (mounted) _suppressTapAfterLongPress = false;
+      });
+    }
+  }
+
+  void _cancelLongPressTracking() {
+    _longPressTimer?.cancel();
+    _longPressTimer = null;
+    _trackedPointer = null;
+    _longPressOrigin = null;
   }
 
   void _handleOpenRowChanged() {
@@ -2061,6 +2112,7 @@ class _SwipeableConversationRowState extends State<SwipeableConversationRow>
   }
 
   void _handleDragStart(DragStartDetails details) {
+    _cancelLongPressTracking();
     _offsetController.stop();
     if (widget.openConversationId.value != widget.conversation.id) {
       widget.openConversationId.value = widget.conversation.id;
@@ -2094,6 +2146,10 @@ class _SwipeableConversationRowState extends State<SwipeableConversationRow>
   }
 
   void _handleTap() {
+    if (_suppressTapAfterLongPress) {
+      _suppressTapAfterLongPress = false;
+      return;
+    }
     if (_offsetController.value.abs() > .01) {
       _close();
     } else {
@@ -2112,6 +2168,7 @@ class _SwipeableConversationRowState extends State<SwipeableConversationRow>
 
   @override
   void dispose() {
+    _cancelLongPressTracking();
     widget.openConversationId.removeListener(_handleOpenRowChanged);
     _offsetController.dispose();
     super.dispose();
@@ -2121,20 +2178,26 @@ class _SwipeableConversationRowState extends State<SwipeableConversationRow>
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _offsetController,
-      child: GestureDetector(
+      child: Listener(
         behavior: HitTestBehavior.opaque,
-        onHorizontalDragStart:
-            widget.selectionMode ? null : _handleDragStart,
-        onHorizontalDragUpdate:
-            widget.selectionMode ? null : _handleDragUpdate,
-        onHorizontalDragEnd: widget.selectionMode ? null : _handleDragEnd,
-        onHorizontalDragCancel: widget.selectionMode ? null : _close,
-        onLongPress: widget.selectionMode ? null : widget.onLongPress,
-        child: ConversationRow(
-          conversation: widget.conversation,
-          onTap: _handleTap,
-          selectionMode: widget.selectionMode,
-          selected: widget.selected,
+        onPointerDown: _handlePointerDown,
+        onPointerMove: _handlePointerMove,
+        onPointerUp: _handlePointerEnd,
+        onPointerCancel: _handlePointerEnd,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onHorizontalDragStart:
+              widget.selectionMode ? null : _handleDragStart,
+          onHorizontalDragUpdate:
+              widget.selectionMode ? null : _handleDragUpdate,
+          onHorizontalDragEnd: widget.selectionMode ? null : _handleDragEnd,
+          onHorizontalDragCancel: widget.selectionMode ? null : _close,
+          child: ConversationRow(
+            conversation: widget.conversation,
+            onTap: _handleTap,
+            selectionMode: widget.selectionMode,
+            selected: widget.selected,
+          ),
         ),
       ),
       builder: (context, child) {
