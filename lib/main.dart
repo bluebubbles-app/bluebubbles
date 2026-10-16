@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/services.dart';
 
@@ -33,7 +35,11 @@ class MessagesUiApp extends StatefulWidget {
 class _MessagesUiAppState extends State<MessagesUiApp>
     with WidgetsBindingObserver {
   late final MessageRepository _messageRepository =
-      DemoMessageRepository(demoConversations());
+      DemoMessageRepository(
+        !kIsWeb && Platform.isAndroid
+            ? const <Conversation>[]
+            : demoConversations(),
+      );
   final AppSettingsController _settings = AppSettingsController();
   final AndroidSmsController _smsController = AndroidSmsController();
   final LocalSmsStore _localSmsStore = LocalSmsStore();
@@ -54,6 +60,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
   Timer? _enrichmentTimer;
   DateTime _lastSyncProgressUpdate = DateTime.fromMillisecondsSinceEpoch(0);
   int _notificationOpenSequence = 0;
+  late bool _initialMessagingModeResolved = kIsWeb || !Platform.isAndroid;
 
   @override
   void initState() {
@@ -157,16 +164,22 @@ class _MessagesUiAppState extends State<MessagesUiApp>
       if (!_usingPhoneMessages || _messageRepository.conversations.isEmpty) {
         await _restoreLocalConversations();
       }
-      await _reloadPhoneMessagesSilently();
-    } else if (_smsController.isDefaultSmsApp && !_usingPhoneMessages) {
+      final reload = _reloadPhoneMessagesSilently();
+      if (!_initialMessagingModeResolved && mounted) {
+        setState(() => _initialMessagingModeResolved = true);
+      }
+      await reload;
+    } else if (_smsController.isDefaultSmsApp) {
       setState(() {
         _usingPhoneMessages = true;
         _messageRepository.replaceAll(const []);
+        _initialMessagingModeResolved = true;
       });
-    } else if (!_smsController.isDefaultSmsApp && _usingPhoneMessages) {
+    } else {
       setState(() {
         _usingPhoneMessages = false;
         _messageRepository.replaceAll(demoConversations());
+        _initialMessagingModeResolved = true;
       });
     }
   }
@@ -832,7 +845,9 @@ class _MessagesUiAppState extends State<MessagesUiApp>
             ),
             applyThemeToAll: true,
           ),
-          home: ConversationListScreen(
+          home: !_initialMessagingModeResolved
+              ? const _MessagesLaunchScreen()
+              : ConversationListScreen(
             conversations: _messageRepository.conversations,
             loadingConversations: _loadingPhoneMessages,
             loadError: _phoneLoadError,
@@ -854,6 +869,20 @@ class _MessagesUiAppState extends State<MessagesUiApp>
             notificationOpenRequest: _notificationOpenRequest,
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _MessagesLaunchScreen extends StatelessWidget {
+  const _MessagesLaunchScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoPageScaffold(
+      backgroundColor: MessagesPalette.background(context),
+      child: const Center(
+        child: CupertinoActivityIndicator(radius: 11),
       ),
     );
   }
