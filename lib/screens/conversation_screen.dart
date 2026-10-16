@@ -60,11 +60,9 @@ class _ConversationScreenState extends State<ConversationScreen>
   bool _loadingOlderMessages = false;
   bool _hasOlderMessages = true;
   bool _programmaticScroll = false;
-  bool _isScrolling = false;
   int _programmaticScrollGeneration = 0;
   double _lastManualScrollDelta = 0;
   Object? _loadError;
-  Timer? _restoreHeaderBlurTimer;
   bool _initialMessagePositioned = false;
   int _initialMessagePositionAttempts = 0;
   int _lastNotificationOpenSequence = -1;
@@ -326,7 +324,6 @@ class _ConversationScreenState extends State<ConversationScreen>
     }
     if (notification is ScrollStartNotification &&
         notification.dragDetails != null) {
-      _setScrolling(true);
       _lastManualScrollDelta = 0;
       _scrollElasticController
         ..stop()
@@ -337,11 +334,6 @@ class _ConversationScreenState extends State<ConversationScreen>
     } else if (notification is OverscrollNotification) {
       _lastManualScrollDelta = notification.overscroll;
     } else if (notification is ScrollEndNotification) {
-      _restoreHeaderBlurTimer?.cancel();
-      _restoreHeaderBlurTimer = Timer(
-        const Duration(milliseconds: 120),
-        () => _setScrolling(false),
-      );
       _scrollElasticController.value =
           (-_lastManualScrollDelta * .06).clamp(-1.5, 1.5).toDouble();
       _lastManualScrollDelta = 0;
@@ -359,14 +351,6 @@ class _ConversationScreenState extends State<ConversationScreen>
       );
     }
     return false;
-  }
-
-  void _setScrolling(bool value) {
-    if (!mounted || _isScrolling == value) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _isScrolling == value) return;
-      setState(() => _isScrolling = value);
-    });
   }
 
   Future<void> _showMessageActions(ChatMessage message) async {
@@ -553,7 +537,6 @@ class _ConversationScreenState extends State<ConversationScreen>
 
   @override
   void dispose() {
-    _restoreHeaderBlurTimer?.cancel();
     widget.notificationOpenRequest?.removeListener(
       _handleNotificationOpenRequest,
     );
@@ -788,7 +771,6 @@ class _ConversationScreenState extends State<ConversationScreen>
                           : _ConversationHeader(
                               conversation: widget.conversation,
                               topCompensation: topCompensation,
-                              enableBlur: !_isScrolling,
                               onCall: widget.onCall,
                               onOpenContact: widget.onOpenContact,
                             ),
@@ -1173,14 +1155,12 @@ class _ConversationHeader extends StatelessWidget {
   const _ConversationHeader({
     required this.conversation,
     required this.topCompensation,
-    required this.enableBlur,
     required this.onCall,
     required this.onOpenContact,
   });
 
   final Conversation conversation;
   final double topCompensation;
-  final bool enableBlur;
   final VoidCallback onCall;
   final VoidCallback onOpenContact;
 
@@ -1315,7 +1295,7 @@ class _ConversationHeader extends StatelessWidget {
         ),
       ),
     );
-    if (!enableBlur || settings.headerBlurSigma < .1) return header;
+    if (settings.headerBlurSigma < .1) return header;
     Widget addGlass(Widget child) => ClipRect(
           key: const ValueKey('conversation-header-glass'),
           child: BackdropFilter(
