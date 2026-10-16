@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../models/conversation.dart';
+import '../theme/contact_avatar_palette.dart';
 
 class ConversationEnrichment {
   const ConversationEnrichment({
@@ -350,7 +351,7 @@ class AndroidSmsController extends ChangeNotifier {
       title: title.isEmpty ? address : title,
       preview: (raw['preview'] ?? '').toString(),
       updatedAt: DateTime.fromMillisecondsSinceEpoch(updatedAtMillis),
-      avatarColors: _avatarColors(id),
+      avatarColors: contactAvatarColors(id),
       messages: messages,
       avatarBytes: raw['avatarBytes'] is Uint8List
           ? raw['avatarBytes'] as Uint8List
@@ -377,21 +378,6 @@ class AndroidSmsController extends ChangeNotifier {
       isFromMe: raw['isFromMe'] == true,
       deliveryState: state,
     );
-  }
-
-  List<Color> _avatarColors(String id) {
-    const palettes = [
-      [Color(0xFF5AC8FA), Color(0xFF007AFF)],
-      [Color(0xFFAF52DE), Color(0xFF5856D6)],
-      [Color(0xFFFF9F0A), Color(0xFFFF375F)],
-      [Color(0xFF30D158), Color(0xFF00A7A5)],
-      [Color(0xFFFF6482), Color(0xFFFF2D55)],
-    ];
-    var hash = 0;
-    for (final codeUnit in id.codeUnits) {
-      hash = ((hash * 31) + codeUnit) & 0x7FFFFFFF;
-    }
-    return palettes[hash % palettes.length];
   }
 
   @override

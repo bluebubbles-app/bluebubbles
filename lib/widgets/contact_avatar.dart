@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 
 import '../models/conversation.dart';
+import '../theme/contact_avatar_palette.dart';
 
 class ContactAvatar extends StatelessWidget {
   const ContactAvatar({
@@ -42,15 +43,25 @@ class ContactAvatar extends StatelessWidget {
         fit: BoxFit.cover,
       );
     } else {
+      final colors = contactAvatarColors(conversation.id);
+      final topColor = Color.alphaBlend(
+        CupertinoColors.white.withValues(alpha: .12),
+        colors.first,
+      );
+      final middleColor = Color.alphaBlend(
+        CupertinoColors.white.withValues(alpha: .04),
+        Color.lerp(colors.first, colors.last, .52)!,
+      );
       avatarContent = Container(
         width: size,
         height: size,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: conversation.avatarColors,
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [topColor, middleColor, colors.last],
+            stops: const [0, .48, 1],
           ),
         ),
         child: Text(

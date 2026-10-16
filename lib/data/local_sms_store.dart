@@ -1,11 +1,11 @@
 import 'dart:typed_data';
 
-import 'package:flutter/cupertino.dart';
 import 'package:path/path.dart' as path;
 import 'package:sqflite/sqflite.dart';
 
 import '../models/conversation.dart';
 import '../models/sms_search_hit.dart';
+import '../theme/contact_avatar_palette.dart';
 
 /// Local read model for the Android SMS provider.
 ///
@@ -424,7 +424,7 @@ class LocalSmsStore {
       title: row['title'] as String,
       preview: row['preview'] as String,
       updatedAt: DateTime.fromMillisecondsSinceEpoch(row['updated_at'] as int),
-      avatarColors: _avatarColors(id),
+      avatarColors: contactAvatarColors(id),
       avatarBytes: avatarBytes,
       unreadCount: row['unread_count'] as int,
       isPinned: row['is_pinned'] == 1,
@@ -460,21 +460,6 @@ class LocalSmsStore {
   int _messageOrder(String id) {
     final numeric = id.startsWith('mms-') ? id.substring(4) : id;
     return int.tryParse(numeric) ?? id.hashCode;
-  }
-
-  List<Color> _avatarColors(String id) {
-    const palettes = [
-      [Color(0xFF5AC8FA), Color(0xFF007AFF)],
-      [Color(0xFFAF52DE), Color(0xFF5856D6)],
-      [Color(0xFFFF9F0A), Color(0xFFFF375F)],
-      [Color(0xFF30D158), Color(0xFF00A7A5)],
-      [Color(0xFFFF6482), Color(0xFFFF2D55)],
-    ];
-    var hash = 0;
-    for (final codeUnit in id.codeUnits) {
-      hash = ((hash * 31) + codeUnit) & 0x7FFFFFFF;
-    }
-    return palettes[hash % palettes.length];
   }
 
   Future<void> close() async {
