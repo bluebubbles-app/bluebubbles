@@ -2024,7 +2024,12 @@ class _SwipeableConversationRowState extends State<SwipeableConversationRow>
       AnimationController.unbounded(vsync: this);
   Timer? _longPressTimer;
   int? _trackedPointer;
-  Offset? _longPressOrigin;
+  Offset? _pointerOrigin;
+  Offset? _lastPointerPosition;
+  Duration? _lastPointerTime;
+  bool? _trackingHorizontalSwipe;
+  double _swipeStartOffset = 0;
+  double _swipeVelocityX = 0;
   bool _suppressTapAfterLongPress = false;
 
   @override
@@ -2041,17 +2046,20 @@ class _SwipeableConversationRowState extends State<SwipeableConversationRow>
       widget.openConversationId.addListener(_handleOpenRowChanged);
     }
     if (widget.selectionMode && !oldWidget.selectionMode) {
-      _cancelLongPressTracking();
+      _resetPointerTracking();
       _close();
     }
   }
 
   void _handlePointerDown(PointerDownEvent event) {
     if (widget.selectionMode) return;
-    _cancelLongPressTracking();
+    _resetPointerTracking();
     _suppressTapAfterLongPress = false;
     _trackedPointer = event.pointer;
-    _longPressOrigin = event.position;
+    _pointerOrigin = event.position;
+    _lastPointerPosition = event.position;
+    _lastPointerTime = event.timeStamp;
+    _swipeStartOffset = _offsetController.value;
     _longPressTimer = Timer(kLongPressTimeout, () {
       if (!mounted ||
           widget.selectionMode ||
@@ -2066,16 +2074,58 @@ class _SwipeableConversationRowState extends State<SwipeableConversationRow>
 
   void _handlePointerMove(PointerMoveEvent event) {
     if (_trackedPointer != event.pointer) return;
-    final origin = _longPressOrigin;
-    if (origin != null &&
-        (event.position - origin).distance > _longPressMoveTolerance) {
-      _cancelLongPressTracking();
+    final origin = _pointerOrigin;
+    if (origin == null) return;
+    final movement = event.position - origin;
+    if (movement.distance > _longPressMoveTolerance) {
+      _cancelLongPressTimer();
     }
+
+    if (_trackingHorizontalSwipe == null && movement.distance >= 6) {
+      final horizontal = movement.dx.abs();
+      final vertical = movement.dy.abs();
+      if (horizontal > vertical * 1.08) {
+        _trackingHorizontalSwipe = true;
+        _cancelLongPressTimer();
+        _offsetController.stop();
+        if (widget.openConversationId.value != widget.conversation.id) {
+          widget.openConversationId.value = widget.conversation.id;
+        }
+      } else if (vertical > horizontal * 1.08) {
+        _trackingHorizontalSwipe = false;
+        _cancelLongPressTimer();
+      }
+    }
+
+    if (_trackingHorizontalSwipe == true) {
+      _offsetController.value = (_swipeStartOffset + movement.dx)
+          .clamp(-_rightActionsWidth, _actionWidth)
+          .toDouble();
+
+      final lastPosition = _lastPointerPosition;
+      final lastTime = _lastPointerTime;
+      if (lastPosition != null && lastTime != null) {
+        final elapsedMicros =
+            (event.timeStamp - lastTime).inMicroseconds.clamp(1, 1000000);
+        final instantaneousVelocity =
+            (event.position.dx - lastPosition.dx) * 1000000 / elapsedMicros;
+        _swipeVelocityX =
+            (_swipeVelocityX * .35) + (instantaneousVelocity * .65);
+      }
+    }
+    _lastPointerPosition = event.position;
+    _lastPointerTime = event.timeStamp;
   }
 
   void _handlePointerEnd(PointerEvent event) {
     if (_trackedPointer != event.pointer) return;
-    _cancelLongPressTracking();
+    final wasHorizontalSwipe = _trackingHorizontalSwipe == true;
+    final velocity = _swipeVelocityX;
+    _resetPointerTracking();
+    if (wasHorizontalSwipe) {
+      _settleSwipe(velocity);
+      return;
+    }
     if (_suppressTapAfterLongPress) {
       Future<void>.delayed(const Duration(milliseconds: 300), () {
         if (mounted) _suppressTapAfterLongPress = false;
@@ -2083,11 +2133,20 @@ class _SwipeableConversationRowState extends State<SwipeableConversationRow>
     }
   }
 
-  void _cancelLongPressTracking() {
+  void _cancelLongPressTimer() {
     _longPressTimer?.cancel();
     _longPressTimer = null;
+  }
+
+  void _resetPointerTracking() {
+    _cancelLongPressTimer();
     _trackedPointer = null;
-    _longPressOrigin = null;
+    _pointerOrigin = null;
+    _lastPointerPosition = null;
+    _lastPointerTime = null;
+    _trackingHorizontalSwipe = null;
+    _swipeStartOffset = 0;
+    _swipeVelocityX = 0;
   }
 
   void _handleOpenRowChanged() {
@@ -2105,20 +2164,6 @@ class _SwipeableConversationRowState extends State<SwipeableConversationRow>
     );
   }
 
-  void _handleDragUpdate(DragUpdateDetails details) {
-    _offsetController.value = (_offsetController.value + details.delta.dx)
-        .clamp(-_rightActionsWidth, _actionWidth)
-        .toDouble();
-  }
-
-  void _handleDragStart(DragStartDetails details) {
-    _cancelLongPressTracking();
-    _offsetController.stop();
-    if (widget.openConversationId.value != widget.conversation.id) {
-      widget.openConversationId.value = widget.conversation.id;
-    }
-  }
-
   void _close() {
     if (widget.openConversationId.value == widget.conversation.id) {
       widget.openConversationId.value = null;
@@ -2127,8 +2172,7 @@ class _SwipeableConversationRowState extends State<SwipeableConversationRow>
     }
   }
 
-  void _handleDragEnd(DragEndDetails details) {
-    final velocity = details.primaryVelocity ?? 0;
+  void _settleSwipe(double velocity) {
     final offset = _offsetController.value;
     if (offset > 0 &&
         velocity >= -300 &&
@@ -2168,7 +2212,7 @@ class _SwipeableConversationRowState extends State<SwipeableConversationRow>
 
   @override
   void dispose() {
-    _cancelLongPressTracking();
+    _resetPointerTracking();
     widget.openConversationId.removeListener(_handleOpenRowChanged);
     _offsetController.dispose();
     super.dispose();
@@ -2184,20 +2228,11 @@ class _SwipeableConversationRowState extends State<SwipeableConversationRow>
         onPointerMove: _handlePointerMove,
         onPointerUp: _handlePointerEnd,
         onPointerCancel: _handlePointerEnd,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onHorizontalDragStart:
-              widget.selectionMode ? null : _handleDragStart,
-          onHorizontalDragUpdate:
-              widget.selectionMode ? null : _handleDragUpdate,
-          onHorizontalDragEnd: widget.selectionMode ? null : _handleDragEnd,
-          onHorizontalDragCancel: widget.selectionMode ? null : _close,
-          child: ConversationRow(
-            conversation: widget.conversation,
-            onTap: _handleTap,
-            selectionMode: widget.selectionMode,
-            selected: widget.selected,
-          ),
+        child: ConversationRow(
+          conversation: widget.conversation,
+          onTap: _handleTap,
+          selectionMode: widget.selectionMode,
+          selected: widget.selected,
         ),
       ),
       builder: (context, child) {
