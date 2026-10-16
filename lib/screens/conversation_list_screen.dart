@@ -89,6 +89,8 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
   bool _openingNotificationConversation = false;
   int? _sortedConversationsSignature;
   List<Conversation> _sortedConversations = const <Conversation>[];
+  final ValueNotifier<String?> _openSwipeConversationId =
+      ValueNotifier<String?>(null);
 
   @override
   void initState() {
@@ -542,7 +544,16 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
     );
     _searchDebounce?.cancel();
     _searchController.dispose();
+    _openSwipeConversationId.dispose();
     super.dispose();
+  }
+
+  bool _handleConversationListScroll(ScrollNotification notification) {
+    if (notification is ScrollStartNotification &&
+        _openSwipeConversationId.value != null) {
+      _openSwipeConversationId.value = null;
+    }
+    return false;
   }
 
   @override
@@ -564,9 +575,12 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
           children: [
             SafeArea(
               bottom: false,
-              child: CustomScrollView(
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            slivers: [
+              child: NotificationListener<ScrollNotification>(
+                onNotification: _handleConversationListScroll,
+                child: CustomScrollView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  slivers: [
               SliverToBoxAdapter(child: _buildHeader(context)),
               SliverToBoxAdapter(
                 child: Padding(
@@ -684,7 +698,9 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                 SliverList(
                   delegate: SliverChildBuilderDelegate(
                     (context, index) => SwipeableConversationRow(
+                      key: ValueKey('conversation-${regular[index].id}'),
                       conversation: regular[index],
+                      openConversationId: _openSwipeConversationId,
                       selectionMode: _selectingConversations,
                       selected: _selectedConversationIds.contains(
                         regular[index].id,
@@ -706,7 +722,8 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                   bottom: _selectingConversations ? 96 : 28,
                 ),
               ),
-            ],
+                  ],
+                ),
               ),
             ),
             Positioned(
@@ -1972,6 +1989,7 @@ class SwipeableConversationRow extends StatefulWidget {
   const SwipeableConversationRow({
     super.key,
     required this.conversation,
+    required this.openConversationId,
     required this.onTap,
     required this.onPin,
     required this.onToggleMute,
@@ -1982,6 +2000,7 @@ class SwipeableConversationRow extends StatefulWidget {
   });
 
   final Conversation conversation;
+  final ValueNotifier<String?> openConversationId;
   final VoidCallback onTap;
   final VoidCallback onPin;
   final VoidCallback onToggleMute;
@@ -2002,6 +2021,31 @@ class _SwipeableConversationRowState extends State<SwipeableConversationRow>
   late final AnimationController _offsetController =
       AnimationController.unbounded(vsync: this);
 
+  @override
+  void initState() {
+    super.initState();
+    widget.openConversationId.addListener(_handleOpenRowChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant SwipeableConversationRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.openConversationId != widget.openConversationId) {
+      oldWidget.openConversationId.removeListener(_handleOpenRowChanged);
+      widget.openConversationId.addListener(_handleOpenRowChanged);
+    }
+    if (widget.selectionMode && !oldWidget.selectionMode) {
+      _close();
+    }
+  }
+
+  void _handleOpenRowChanged() {
+    if (widget.openConversationId.value != widget.conversation.id &&
+        _offsetController.value.abs() > .01) {
+      _animateTo(0);
+    }
+  }
+
   void _animateTo(double target) {
     _offsetController.animateTo(
       target,
@@ -2016,25 +2060,59 @@ class _SwipeableConversationRowState extends State<SwipeableConversationRow>
         .toDouble();
   }
 
-  void _handleDragEnd(DragEndDetails details) {
-    final velocity = details.primaryVelocity ?? 0;
-    if (velocity > 700 || _offsetController.value > _actionWidth * .48) {
-      _animateTo(_actionWidth);
-    } else if (velocity < -700 ||
-        _offsetController.value < -_rightActionsWidth * .3) {
-      _animateTo(-_rightActionsWidth);
-    } else {
+  void _handleDragStart(DragStartDetails details) {
+    _offsetController.stop();
+    if (widget.openConversationId.value != widget.conversation.id) {
+      widget.openConversationId.value = widget.conversation.id;
+    }
+  }
+
+  void _close() {
+    if (widget.openConversationId.value == widget.conversation.id) {
+      widget.openConversationId.value = null;
+    } else if (_offsetController.value.abs() > .01) {
       _animateTo(0);
     }
   }
 
+  void _handleDragEnd(DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+    final offset = _offsetController.value;
+    if (offset > 0 &&
+        velocity >= -300 &&
+        (velocity > 300 || offset > _actionWidth * .32)) {
+      widget.openConversationId.value = widget.conversation.id;
+      _animateTo(_actionWidth);
+    } else if (offset < 0 &&
+        velocity <= 300 &&
+        (velocity < -300 || offset < -_actionWidth * .28)) {
+      widget.openConversationId.value = widget.conversation.id;
+      _animateTo(-_rightActionsWidth);
+    } else {
+      _close();
+    }
+  }
+
+  void _handleTap() {
+    if (_offsetController.value.abs() > .01) {
+      _close();
+    } else {
+      widget.onTap();
+    }
+  }
+
   void _perform(VoidCallback action) {
+    _offsetController.stop();
     _offsetController.value = 0;
+    if (widget.openConversationId.value == widget.conversation.id) {
+      widget.openConversationId.value = null;
+    }
     action();
   }
 
   @override
   void dispose() {
+    widget.openConversationId.removeListener(_handleOpenRowChanged);
     _offsetController.dispose();
     super.dispose();
   }
@@ -2045,13 +2123,16 @@ class _SwipeableConversationRowState extends State<SwipeableConversationRow>
       animation: _offsetController,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
+        onHorizontalDragStart:
+            widget.selectionMode ? null : _handleDragStart,
         onHorizontalDragUpdate:
             widget.selectionMode ? null : _handleDragUpdate,
         onHorizontalDragEnd: widget.selectionMode ? null : _handleDragEnd,
+        onHorizontalDragCancel: widget.selectionMode ? null : _close,
         onLongPress: widget.selectionMode ? null : widget.onLongPress,
         child: ConversationRow(
           conversation: widget.conversation,
-          onTap: widget.onTap,
+          onTap: _handleTap,
           selectionMode: widget.selectionMode,
           selected: widget.selected,
         ),
