@@ -1326,16 +1326,7 @@ class _ConversationHeader extends StatelessWidget {
             child: child,
           ),
         );
-    final routeAnimation = ModalRoute.of(context)?.animation;
-    if (routeAnimation == null) return addGlass(header);
-    return AnimatedBuilder(
-      animation: routeAnimation,
-      child: header,
-      builder: (context, child) => routeAnimation.status ==
-              AnimationStatus.completed
-          ? addGlass(child!)
-          : child!,
-    );
+    return addGlass(header);
   }
 }
 
