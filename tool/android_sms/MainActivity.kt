@@ -34,7 +34,7 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val CHANNEL = "bluebubbles/sms"
         private const val TAG = "BlueBubblesSms"
-        private const val NATIVE_BUILD = "2026-10-17-message-retry-v1"
+        private const val NATIVE_BUILD = "2026-10-17-safe-sms-fragmentation-v1"
         private const val ROLE_REQUEST = 4701
         private const val PERMISSION_REQUEST = 4702
         private const val PROVIDER_LOAD_TIMEOUT_MS = 20_000L
@@ -469,12 +469,7 @@ class MainActivity : FlutterActivity() {
         Thread {
             try {
                 val manager = SmsManager.getDefault()
-                val parts = manager.divideMessage(text)
-                if (parts.size > 1) {
-                    manager.sendMultipartTextMessage(address, null, parts, null, null)
-                } else {
-                    manager.sendTextMessage(address, null, text, null, null)
-                }
+                SmsSendCompat.send(manager, address, text)
                 val values = ContentValues().apply {
                     put(Telephony.Sms.ADDRESS, address)
                     put(Telephony.Sms.BODY, text)

@@ -90,12 +90,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
 
         runCatching {
             val manager = SmsManager.getDefault()
-            val parts = manager.divideMessage(replyText)
-            if (parts.size > 1) {
-                manager.sendMultipartTextMessage(address, null, parts, null, null)
-            } else {
-                manager.sendTextMessage(address, null, replyText, null, null)
-            }
+            SmsSendCompat.send(manager, address, replyText)
             val now = System.currentTimeMillis()
             val values = ContentValues().apply {
                 put(Telephony.Sms.ADDRESS, address)

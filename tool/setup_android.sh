@@ -21,6 +21,7 @@ cp "$native_source/SmsReceiver.kt" "$kotlin_target/SmsReceiver.kt"
 cp "$native_source/MmsReceiver.kt" "$kotlin_target/MmsReceiver.kt"
 cp "$native_source/RespondViaMessageService.kt" \
   "$kotlin_target/RespondViaMessageService.kt"
+cp "$native_source/SmsSendCompat.kt" "$kotlin_target/SmsSendCompat.kt"
 
 cd "$project_root"
 flutter pub get
