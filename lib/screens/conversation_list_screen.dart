@@ -2387,7 +2387,9 @@ class ConversationRow extends StatelessWidget {
                 else
                   SizedBox(
                     width: 24,
-                    height: 64,
+                    // Match the complete row height so the unread dot is
+                    // centered on the conversation, not just the avatar.
+                    height: 78,
                     child: highlighted
                         ? const Center(
                             child: DecoratedBox(

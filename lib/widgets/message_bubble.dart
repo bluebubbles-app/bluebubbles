@@ -179,7 +179,9 @@ class _MessageBubbleState extends State<MessageBubble> {
                     message.deliveryState == DeliveryState.failed) &&
                 isFromMe)
               Padding(
-                padding: const EdgeInsets.only(top: 4),
+                // Keep the delivery label visually clear of the outgoing
+                // bubble tail instead of aligning it with the tail's tip.
+                padding: const EdgeInsets.only(top: 4, right: 8),
                 child: message.deliveryState == DeliveryState.failed &&
                         widget.onRetry != null
                     ? CupertinoButton(
@@ -217,7 +219,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                         style: TextStyle(
                           color: MessagesPalette.secondaryLabel(context),
                           fontSize: 11,
-                          fontWeight: FontWeight.w400,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
               ),
