@@ -1,7 +1,7 @@
 name: bluebubbles
 description: BlueBubbles is a standalone Flutter messaging interface for Android.
 publish_to: none
-version: 0.1.0+8
+version: 0.1.0+9
 
 environment:
   sdk: ">=3.1.0 <4.0.0"

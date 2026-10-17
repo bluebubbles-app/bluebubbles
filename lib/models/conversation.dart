@@ -4,6 +4,53 @@ import 'package:flutter/cupertino.dart';
 
 enum DeliveryState { sending, sent, delivered, read, failed }
 
+enum MessageAttachmentKind { image, audio }
+
+class MessageAttachment {
+  const MessageAttachment({
+    required this.kind,
+    required this.uri,
+    required this.mimeType,
+    this.name,
+    this.localPath,
+    this.thumbnailBytes,
+    this.durationMilliseconds,
+  });
+
+  final MessageAttachmentKind kind;
+  final String uri;
+  final String mimeType;
+  final String? name;
+  final String? localPath;
+  final Uint8List? thumbnailBytes;
+  final int? durationMilliseconds;
+
+  Map<String, Object?> toJson() => {
+        'kind': kind.name,
+        'uri': uri,
+        'mimeType': mimeType,
+        'name': name,
+        'localPath': localPath,
+        'durationMilliseconds': durationMilliseconds,
+      };
+
+  factory MessageAttachment.fromJson(Map<String, Object?> json) {
+    final kindName = json['kind'] as String?;
+    return MessageAttachment(
+      kind: MessageAttachmentKind.values.firstWhere(
+        (value) => value.name == kindName,
+        orElse: () => MessageAttachmentKind.image,
+      ),
+      uri: json['uri'] as String? ?? '',
+      mimeType: json['mimeType'] as String? ?? 'application/octet-stream',
+      name: json['name'] as String?,
+      localPath: json['localPath'] as String?,
+      durationMilliseconds:
+          (json['durationMilliseconds'] as num?)?.toInt(),
+    );
+  }
+}
+
 class ChatMessage {
   ChatMessage({
     required this.id,
@@ -11,6 +58,7 @@ class ChatMessage {
     required this.sentAt,
     required this.isFromMe,
     this.deliveryState = DeliveryState.delivered,
+    this.attachment,
   });
 
   final String id;
@@ -18,6 +66,7 @@ class ChatMessage {
   final DateTime sentAt;
   final bool isFromMe;
   final DeliveryState deliveryState;
+  final MessageAttachment? attachment;
 
   Map<String, Object?> toJson() => {
         'id': id,
@@ -25,6 +74,7 @@ class ChatMessage {
         'sentAt': sentAt.toIso8601String(),
         'isFromMe': isFromMe,
         'deliveryState': deliveryState.name,
+        'attachment': attachment?.toJson(),
       };
 
   factory ChatMessage.fromJson(Map<String, Object?> json) {
@@ -39,6 +89,11 @@ class ChatMessage {
       sentAt: DateTime.parse(json['sentAt'] as String),
       isFromMe: json['isFromMe'] as bool,
       deliveryState: deliveryState,
+      attachment: json['attachment'] is Map
+          ? MessageAttachment.fromJson(
+              Map<String, Object?>.from(json['attachment'] as Map),
+            )
+          : null,
     );
   }
 }

@@ -13,7 +13,7 @@ import '../theme/contact_avatar_palette.dart';
 /// transitions and scrolling never wait for a ContentProvider query.
 class LocalSmsStore {
   static const _databaseName = 'bluebubbles_sms_cache.db';
-  static const _databaseVersion = 1;
+  static const _databaseVersion = 2;
 
   Database? _database;
   Future<Database>? _opening;
@@ -70,6 +70,13 @@ class LocalSmsStore {
             order_id INTEGER NOT NULL,
             is_from_me INTEGER NOT NULL,
             delivery_state TEXT NOT NULL,
+            attachment_kind TEXT,
+            attachment_uri TEXT,
+            attachment_mime_type TEXT,
+            attachment_name TEXT,
+            attachment_local_path TEXT,
+            attachment_duration INTEGER,
+            attachment_thumbnail BLOB,
             PRIMARY KEY (thread_id, id),
             FOREIGN KEY (thread_id) REFERENCES conversations(id)
               ON DELETE CASCADE
@@ -88,6 +95,25 @@ class LocalSmsStore {
               ON DELETE CASCADE
           )
         ''');
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute('ALTER TABLE messages ADD attachment_kind TEXT');
+          await db.execute('ALTER TABLE messages ADD attachment_uri TEXT');
+          await db.execute(
+            'ALTER TABLE messages ADD attachment_mime_type TEXT',
+          );
+          await db.execute('ALTER TABLE messages ADD attachment_name TEXT');
+          await db.execute(
+            'ALTER TABLE messages ADD attachment_local_path TEXT',
+          );
+          await db.execute(
+            'ALTER TABLE messages ADD attachment_duration INTEGER',
+          );
+          await db.execute(
+            'ALTER TABLE messages ADD attachment_thumbnail BLOB',
+          );
+        }
       },
     );
   }
@@ -444,6 +470,15 @@ class LocalSmsStore {
         'order_id': _messageOrder(message.id),
         'is_from_me': message.isFromMe ? 1 : 0,
         'delivery_state': message.deliveryState.name,
+        'attachment_kind': message.attachment?.kind.name,
+        'attachment_uri': message.attachment?.uri,
+        'attachment_mime_type': message.attachment?.mimeType,
+        'attachment_name': message.attachment?.name,
+        'attachment_local_path': message.attachment?.localPath,
+        'attachment_duration': message.attachment?.durationMilliseconds,
+        'attachment_thumbnail': message.attachment?.localPath == null
+            ? message.attachment?.thumbnailBytes
+            : null,
       };
 
   ChatMessage _messageFromRow(Map<String, Object?> row) => ChatMessage(
@@ -455,6 +490,21 @@ class LocalSmsStore {
           (state) => state.name == row['delivery_state'],
           orElse: () => DeliveryState.delivered,
         ),
+        attachment: row['attachment_kind'] == null
+            ? null
+            : MessageAttachment(
+                kind: MessageAttachmentKind.values.firstWhere(
+                  (kind) => kind.name == row['attachment_kind'],
+                  orElse: () => MessageAttachmentKind.image,
+                ),
+                uri: row['attachment_uri'] as String? ?? '',
+                mimeType: row['attachment_mime_type'] as String? ??
+                    'application/octet-stream',
+                name: row['attachment_name'] as String?,
+                localPath: row['attachment_local_path'] as String?,
+                durationMilliseconds: row['attachment_duration'] as int?,
+                thumbnailBytes: row['attachment_thumbnail'] as Uint8List?,
+              ),
       );
 
   int _messageOrder(String id) {

@@ -1,5 +1,8 @@
+import 'dart:async';
+import 'dart:io';
 import 'dart:ui';
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:characters/characters.dart';
 import 'package:flutter/cupertino.dart';
 
@@ -97,16 +100,28 @@ class _MessageBubbleState extends State<MessageBubble> {
   Widget build(BuildContext context) {
     final message = widget.message;
     final isFromMe = message.isFromMe;
+    final isImageAttachment =
+        message.attachment?.kind == MessageAttachmentKind.image;
     final useGreenBubble = isFromMe &&
         AppSettingsScope.maybeOf(context)?.sentBubbleColor ==
             SentBubbleColor.green;
     final emojiScale = emojiOnlyTextScale(message.text);
     final renderedTextScale = emojiScale == 2 ? 4.0 : emojiScale;
-    final color = isFromMe
-        ? useGreenBubble
-            ? MessagesPalette.customBubbleGreen
-            : MessagesPalette.sentBubble(context)
-        : MessagesPalette.receivedBubble(context);
+    final Color color;
+    if (isImageAttachment) {
+      color = CupertinoColors.transparent;
+    } else if (isFromMe) {
+      color = useGreenBubble
+          ? MessagesPalette.customBubbleGreen
+          : MessagesPalette.sentBubble(context);
+    } else {
+      color = MessagesPalette.receivedBubble(context);
+    }
+    final foregroundColor = isImageAttachment
+        ? MessagesPalette.label(context)
+        : isFromMe
+            ? CupertinoColors.white
+            : MessagesPalette.label(context);
 
     return Semantics(
       label: isFromMe ? 'Sent message' : 'Received message',
@@ -123,7 +138,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                 key: _paintKey,
                 painter: MessageBubblePainter(
                   color: color,
-                  gradient: isFromMe && !useGreenBubble
+                  gradient: isFromMe && !useGreenBubble && !isImageAttachment
                       ? const LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
@@ -146,30 +161,20 @@ class _MessageBubbleState extends State<MessageBubble> {
                     // 274 pt on the 375 pt-wide SVG artboard.
                     maxWidth: MediaQuery.sizeOf(context).width * (274 / 375),
                   ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 7,
-                  ),
+                  padding: isImageAttachment
+                      ? EdgeInsets.zero
+                      : const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 7,
+                        ),
                   child: Align(
                     alignment: Alignment.center,
                     widthFactor: 1,
                     heightFactor: 1,
-                    child: Text(
-                      message.text,
-                      textAlign: TextAlign.left,
-                      textWidthBasis: TextWidthBasis.longestLine,
-                      textHeightBehavior: const TextHeightBehavior(
-                        applyHeightToFirstAscent: false,
-                        applyHeightToLastDescent: false,
-                      ),
-                      style: MessagesText.body(context).copyWith(
-                        fontSize: 16 * renderedTextScale,
-                        height: renderedTextScale > 1 ? 1 : 1.18,
-                        letterSpacing: renderedTextScale > 1 ? 0 : -.15,
-                        color: isFromMe
-                            ? CupertinoColors.white
-                            : MessagesPalette.label(context),
-                      ),
+                    child: _MessageBubbleContent(
+                      message: message,
+                      renderedTextScale: renderedTextScale,
+                      foregroundColor: foregroundColor,
                     ),
                   ),
                 ),
@@ -229,6 +234,206 @@ class _MessageBubbleState extends State<MessageBubble> {
     );
   }
 
+}
+
+class _MessageBubbleContent extends StatelessWidget {
+  const _MessageBubbleContent({
+    required this.message,
+    required this.renderedTextScale,
+    required this.foregroundColor,
+  });
+
+  final ChatMessage message;
+  final double renderedTextScale;
+  final Color foregroundColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final attachment = message.attachment;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (attachment?.kind == MessageAttachmentKind.image)
+          _ImageAttachment(attachment: attachment!),
+        if (attachment?.kind == MessageAttachmentKind.audio)
+          _AudioAttachment(
+            attachment: attachment!,
+            foregroundColor: foregroundColor,
+          ),
+        if (message.text.isNotEmpty) ...[
+          if (attachment != null) const SizedBox(height: 6),
+          Text(
+            message.text,
+            textAlign: TextAlign.left,
+            textWidthBasis: TextWidthBasis.longestLine,
+            textHeightBehavior: const TextHeightBehavior(
+              applyHeightToFirstAscent: false,
+              applyHeightToLastDescent: false,
+            ),
+            style: MessagesText.body(context).copyWith(
+              fontSize: 16 * renderedTextScale,
+              height: renderedTextScale > 1 ? 1 : 1.18,
+              letterSpacing: renderedTextScale > 1 ? 0 : -.15,
+              color: foregroundColor,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ImageAttachment extends StatelessWidget {
+  const _ImageAttachment({required this.attachment});
+
+  final MessageAttachment attachment;
+
+  @override
+  Widget build(BuildContext context) {
+    final bytes = attachment.thumbnailBytes;
+    final path = attachment.localPath;
+    final image = bytes != null
+        ? Image.memory(bytes, fit: BoxFit.cover, gaplessPlayback: true)
+        : path != null && File(path).existsSync()
+            ? Image.file(File(path), fit: BoxFit.cover, gaplessPlayback: true)
+            : const Center(
+                child: Icon(
+                  CupertinoIcons.photo,
+                  size: 42,
+                  color: CupertinoColors.systemGrey,
+                ),
+              );
+    return GestureDetector(
+      onTap: () => showCupertinoDialog<void>(
+        context: context,
+        barrierDismissible: true,
+        builder: (dialogContext) => CupertinoPageScaffold(
+          backgroundColor: CupertinoColors.black,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: InteractiveViewer(
+                  minScale: 1,
+                  maxScale: 4,
+                  child: Center(child: image),
+                ),
+              ),
+              Positioned(
+                top: MediaQuery.paddingOf(dialogContext).top + 8,
+                right: 12,
+                child: CupertinoButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Icon(
+                    CupertinoIcons.xmark_circle_fill,
+                    color: CupertinoColors.white,
+                    size: 30,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: SizedBox(width: 220, height: 170, child: image),
+      ),
+    );
+  }
+}
+
+class _AudioAttachment extends StatefulWidget {
+  const _AudioAttachment({
+    required this.attachment,
+    required this.foregroundColor,
+  });
+
+  final MessageAttachment attachment;
+  final Color foregroundColor;
+
+  @override
+  State<_AudioAttachment> createState() => _AudioAttachmentState();
+}
+
+class _AudioAttachmentState extends State<_AudioAttachment> {
+  final _player = AudioPlayer();
+  bool _playing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _player.onPlayerComplete.listen((_) {
+      if (mounted) setState(() => _playing = false);
+    });
+  }
+
+  Future<void> _toggle() async {
+    final path = widget.attachment.localPath;
+    if (path == null || !File(path).existsSync()) return;
+    if (_playing) {
+      await _player.pause();
+    } else {
+      await _player.play(DeviceFileSource(path));
+    }
+    if (mounted) setState(() => _playing = !_playing);
+  }
+
+  @override
+  void dispose() {
+    unawaited(_player.dispose());
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final milliseconds = widget.attachment.durationMilliseconds ?? 0;
+    final duration = Duration(milliseconds: milliseconds);
+    return SizedBox(
+      width: 220,
+      height: 34,
+      child: Row(
+        children: [
+          CupertinoButton(
+            minSize: 32,
+            padding: EdgeInsets.zero,
+            onPressed: _toggle,
+            child: Icon(
+              _playing ? CupertinoIcons.pause_fill : CupertinoIcons.play_fill,
+              size: 20,
+              color: widget.foregroundColor,
+            ),
+          ),
+          Expanded(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                for (var index = 0; index < 22; index++)
+                  Container(
+                    width: 2,
+                    height: const [6.0, 13.0, 20.0, 10.0, 17.0, 8.0]
+                        [index % 6],
+                    decoration: BoxDecoration(
+                      color: widget.foregroundColor.withValues(alpha: .78),
+                      borderRadius: BorderRadius.circular(1),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '${duration.inMinutes}:${duration.inSeconds.remainder(60).toString().padLeft(2, '0')}',
+            style: TextStyle(
+              color: widget.foregroundColor.withValues(alpha: .8),
+              fontFamily: 'SF Pro Text',
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// Paints the tail outside the bubble's layout bounds so adding a new message

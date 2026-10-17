@@ -458,6 +458,8 @@ class _MessagesUiAppState extends State<MessagesUiApp>
               (providerMessage) =>
                   providerMessage.isFromMe == localMessage.isFromMe &&
                   providerMessage.text == localMessage.text &&
+                  providerMessage.attachment?.kind ==
+                      localMessage.attachment?.kind &&
                   providerMessage.sentAt
                           .difference(localMessage.sentAt)
                           .abs()
@@ -482,7 +484,13 @@ class _MessagesUiAppState extends State<MessagesUiApp>
         if (visibleMessages.isNotEmpty) {
           final latest = visibleMessages.last;
           conversation
-            ..preview = latest.text
+            ..preview = latest.text.isNotEmpty
+                ? latest.text
+                : latest.attachment?.kind == MessageAttachmentKind.audio
+                    ? 'Audio Message'
+                    : latest.attachment?.kind == MessageAttachmentKind.image
+                        ? 'Photo'
+                        : ''
             ..updatedAt = latest.sentAt
             ..unreadCount = 0;
         }
@@ -663,6 +671,112 @@ class _MessagesUiAppState extends State<MessagesUiApp>
     );
   }
 
+  void _sendAttachment(
+    Conversation conversation,
+    MessageAttachment attachment,
+    String caption,
+  ) {
+    if (!_smsController.isActive) return;
+    final address = conversation.address;
+    if (address == null || address.isEmpty) return;
+    final now = DateTime.now();
+    final pendingId = 'sending-${now.microsecondsSinceEpoch}';
+    final preview = caption.trim().isNotEmpty
+        ? caption.trim()
+        : attachment.kind == MessageAttachmentKind.audio
+            ? 'Audio Message'
+            : 'Photo';
+    final pending = ChatMessage(
+      id: pendingId,
+      text: caption.trim(),
+      sentAt: now,
+      isFromMe: true,
+      deliveryState: DeliveryState.sending,
+      attachment: attachment,
+    );
+    setState(() {
+      conversation.messages.add(pending);
+      conversation
+        ..preview = preview
+        ..updatedAt = now;
+    });
+    unawaited(_cacheOptimisticMessage(conversation, pending));
+    unawaited(
+      _sendPhoneAttachment(
+        conversation,
+        address,
+        attachment,
+        caption.trim(),
+        pendingId,
+      ),
+    );
+  }
+
+  Future<void> _sendPhoneAttachment(
+    Conversation conversation,
+    String address,
+    MessageAttachment attachment,
+    String caption,
+    String pendingId,
+  ) async {
+    try {
+      await _smsController.sendMedia(
+        address,
+        attachment,
+        text: caption,
+        threadId: conversation.id,
+      );
+    } catch (error, stackTrace) {
+      debugPrint('MMS send failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (!mounted) return;
+      final now = DateTime.now();
+      setState(() {
+        final pendingIndex = conversation.messages.indexWhere(
+          (message) => message.id == pendingId,
+        );
+        final failed = ChatMessage(
+          id: 'failed-${now.microsecondsSinceEpoch}',
+          text: caption,
+          sentAt: now,
+          isFromMe: true,
+          deliveryState: DeliveryState.failed,
+          attachment: attachment,
+        );
+        if (pendingIndex == -1) {
+          conversation.messages.add(failed);
+        } else {
+          conversation.messages[pendingIndex] = failed;
+        }
+        unawaited(_cacheFailedMessage(conversation, pendingId, failed));
+      });
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      final pendingIndex = conversation.messages.indexWhere(
+        (message) => message.id == pendingId,
+      );
+      if (pendingIndex != -1) {
+        final pending = conversation.messages[pendingIndex];
+        conversation.messages[pendingIndex] = ChatMessage(
+          id: pending.id,
+          text: pending.text,
+          sentAt: pending.sentAt,
+          isFromMe: true,
+          deliveryState: DeliveryState.sent,
+          attachment: pending.attachment,
+        );
+      }
+    });
+    try {
+      await _localSmsStore.deleteMessage(conversation.id, pendingId);
+    } catch (error) {
+      debugPrint('Sent MMS cache cleanup failed: $error');
+    }
+    unawaited(_refreshThreadHeadInCache(conversation.id));
+  }
+
   void _retryMessage(
     Conversation conversation,
     ChatMessage failedMessage,
@@ -677,6 +791,23 @@ class _MessagesUiAppState extends State<MessagesUiApp>
       (message) => message.id == failedMessage.id,
     );
     if (failedIndex == -1) return;
+
+    final failedAttachment = failedMessage.attachment;
+    if (failedAttachment != null) {
+      setState(() => conversation.messages.removeAt(failedIndex));
+      unawaited(
+        _localSmsStore.deleteMessage(conversation.id, failedMessage.id),
+      );
+      unawaited(
+        _smsController.deleteMessage(conversation.id, failedMessage.id),
+      );
+      _sendAttachment(
+        conversation,
+        failedAttachment,
+        failedMessage.text,
+      );
+      return;
+    }
 
     final now = DateTime.now();
     final pendingId = 'sending-${now.microsecondsSinceEpoch}';
@@ -960,6 +1091,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
             loadingConversations: _loadingPhoneMessages,
             loadError: _phoneLoadError,
             onSend: _sendMessage,
+            onSendAttachment: _sendAttachment,
             onRetrySend: _retryMessage,
             onReplaceConversations: _replaceConversations,
             smsController: _smsController,

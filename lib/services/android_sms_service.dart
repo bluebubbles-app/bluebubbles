@@ -204,6 +204,26 @@ class AndroidSmsController extends ChangeNotifier {
     });
   }
 
+  Future<void> sendMedia(
+    String address,
+    MessageAttachment attachment, {
+    String text = '',
+    String? threadId,
+  }) async {
+    if (!isActive) {
+      throw StateError('BlueBubbles is not the default SMS app.');
+    }
+    await _channel.invokeMethod<void>('sendMms', {
+      'address': address,
+      'text': text,
+      'threadId': threadId,
+      'uri': attachment.uri,
+      'localPath': attachment.localPath,
+      'mimeType': attachment.mimeType,
+      'name': attachment.name,
+    });
+  }
+
   Future<Conversation> resolveOrCreateConversation(String address) async {
     final trimmed = address.trim();
     if (!isActive) {
@@ -260,7 +280,10 @@ class AndroidSmsController extends ChangeNotifier {
   }
 
   Future<void> deleteMessage(String threadId, String messageId) async {
-    if (!isActive || int.tryParse(messageId) == null) return;
+    final providerId = messageId.startsWith('mms-')
+        ? messageId.substring(4)
+        : messageId;
+    if (!isActive || int.tryParse(providerId) == null) return;
     await _channel.invokeMethod<void>('deleteMessage', {
       'threadId': threadId,
       'messageId': messageId,
@@ -385,6 +408,29 @@ class AndroidSmsController extends ChangeNotifier {
       ),
       isFromMe: raw['isFromMe'] == true,
       deliveryState: state,
+      attachment: raw['attachment'] is Map
+          ? _attachmentFromNative(
+              Map<Object?, Object?>.from(raw['attachment'] as Map),
+            )
+          : null,
+    );
+  }
+
+  MessageAttachment _attachmentFromNative(Map<Object?, Object?> raw) {
+    final mimeType = (raw['mimeType'] ?? '').toString();
+    return MessageAttachment(
+      kind: mimeType.startsWith('audio/')
+          ? MessageAttachmentKind.audio
+          : MessageAttachmentKind.image,
+      uri: (raw['uri'] ?? '').toString(),
+      mimeType: mimeType.isEmpty ? 'application/octet-stream' : mimeType,
+      name: raw['name']?.toString(),
+      localPath: raw['localPath']?.toString(),
+      thumbnailBytes: raw['thumbnailBytes'] is Uint8List
+          ? raw['thumbnailBytes'] as Uint8List
+          : null,
+      durationMilliseconds:
+          (raw['durationMilliseconds'] as num?)?.toInt(),
     );
   }
 

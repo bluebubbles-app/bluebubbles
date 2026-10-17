@@ -9,6 +9,11 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.database.ContentObserver
 import android.database.Cursor
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
+import android.media.MediaMetadataRetriever
+import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -20,13 +25,18 @@ import android.os.SystemClock
 import android.provider.BaseColumns
 import android.provider.ContactsContract
 import android.provider.Settings
+import android.provider.MediaStore
 import android.provider.Telephony
 import android.telephony.SmsManager
 import android.util.Log
+import android.util.Size
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -34,9 +44,11 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val CHANNEL = "bluebubbles/sms"
         private const val TAG = "BlueBubblesSms"
-        private const val NATIVE_BUILD = "2026-10-17-notification-history-v1"
+        private const val NATIVE_BUILD = "2026-10-18-voice-media-mms-v1"
         private const val ROLE_REQUEST = 4701
         private const val PERMISSION_REQUEST = 4702
+        private const val MEDIA_PERMISSION_REQUEST = 4703
+        private const val CAMERA_REQUEST = 4704
         private const val PROVIDER_LOAD_TIMEOUT_MS = 20_000L
         private const val METHOD_REPLY_TIMEOUT_MS = 30_000L
     }
@@ -44,6 +56,13 @@ class MainActivity : FlutterActivity() {
     private lateinit var channel: MethodChannel
     private var pendingRoleResult: MethodChannel.Result? = null
     private var pendingPermissionResult: MethodChannel.Result? = null
+    private var pendingMediaPermissionResult: MethodChannel.Result? = null
+    private var pendingMediaPermissionKind: String? = null
+    private var pendingCameraResult: MethodChannel.Result? = null
+    private var pendingCameraUri: Uri? = null
+    private var voiceRecorder: MediaRecorder? = null
+    private var voiceRecordingFile: File? = null
+    private var voiceRecordingStartedAt = 0L
     private var pendingNotificationThreadId: String? = null
     private var observerRegistered = false
     @Volatile private var lastLoadStage = "Not started"
@@ -121,6 +140,13 @@ class MainActivity : FlutterActivity() {
             "resolveOrCreateConversation" -> resolveOrCreateConversation(call, result)
             "searchContacts" -> searchContacts(call, result)
             "sendSms" -> sendSms(call, result)
+            "sendMms" -> sendMms(call, result)
+            "requestMediaPermission" -> requestMediaPermission(call, result)
+            "startVoiceRecording" -> startVoiceRecording(result)
+            "stopVoiceRecording" -> stopVoiceRecording(result)
+            "cancelVoiceRecording" -> cancelVoiceRecording(result)
+            "loadRecentImages" -> loadRecentImages(call, result)
+            "takePhoto" -> takePhoto(result)
             "markThreadRead" -> markThreadRead(call, result)
             "deleteMessage" -> deleteMessage(call, result)
             "deleteThread" -> deleteThread(call, result)
@@ -241,6 +267,283 @@ class MainActivity : FlutterActivity() {
         }
         pendingPermissionResult = result
         requestPermissions(missingPermissions.toTypedArray(), PERMISSION_REQUEST)
+    }
+
+    private fun mediaPermissionFor(kind: String): String = when (kind) {
+        "audio" -> Manifest.permission.RECORD_AUDIO
+        "camera" -> Manifest.permission.CAMERA
+        "photos" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_IMAGES
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+        else -> ""
+    }
+
+    private fun hasMediaPermission(kind: String): Boolean {
+        val permission = mediaPermissionFor(kind)
+        if (permission.isEmpty()) return false
+        if (hasPermission(permission)) return true
+        return kind == "photos" &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+            hasPermission(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
+    }
+
+    private fun requestMediaPermission(
+        call: MethodCall,
+        result: MethodChannel.Result,
+    ) {
+        val kind = call.argument<String>("kind").orEmpty()
+        val permission = mediaPermissionFor(kind)
+        if (permission.isEmpty()) {
+            result.error("invalid_media_permission", "Unknown media permission.", null)
+            return
+        }
+        if (hasMediaPermission(kind)) {
+            result.success(true)
+            return
+        }
+        if (pendingMediaPermissionResult != null) {
+            result.error("request_active", "A media permission request is active.", null)
+            return
+        }
+        pendingMediaPermissionResult = result
+        pendingMediaPermissionKind = kind
+        val permissions = if (
+            kind == "photos" &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
+        ) {
+            arrayOf(
+                Manifest.permission.READ_MEDIA_IMAGES,
+                Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED,
+            )
+        } else {
+            arrayOf(permission)
+        }
+        requestPermissions(permissions, MEDIA_PERMISSION_REQUEST)
+    }
+
+    private fun startVoiceRecording(result: MethodChannel.Result) {
+        if (!hasMediaPermission("audio")) {
+            result.error("microphone_denied", "Microphone access is not granted.", null)
+            return
+        }
+        if (voiceRecorder != null) {
+            result.error("recording_active", "A recording is already active.", null)
+            return
+        }
+        try {
+            val directory = File(cacheDir, "voice_messages").apply { mkdirs() }
+            val output = File(directory, "voice-${System.currentTimeMillis()}.3ga")
+            @Suppress("DEPRECATION")
+            val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                MediaRecorder(this)
+            } else {
+                MediaRecorder()
+            }
+            recorder.apply {
+                setAudioSource(MediaRecorder.AudioSource.MIC)
+                // QUIK uses wide-band AMR in a 3GPP container for maximum MMS
+                // carrier compatibility and much smaller voice attachments.
+                setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP)
+                setAudioEncoder(MediaRecorder.AudioEncoder.AMR_WB)
+                setMaxDuration(5 * 60 * 1000)
+                setOutputFile(output.absolutePath)
+                prepare()
+                start()
+            }
+            voiceRecorder = recorder
+            voiceRecordingFile = output
+            voiceRecordingStartedAt = SystemClock.elapsedRealtime()
+            result.success(null)
+        } catch (error: Exception) {
+            releaseVoiceRecorder(deleteFile = true)
+            Log.e(TAG, "Voice recording start failed", error)
+            result.error("recording_failed", error.message, null)
+        }
+    }
+
+    private fun stopVoiceRecording(result: MethodChannel.Result) {
+        val recorder = voiceRecorder
+        val file = voiceRecordingFile
+        if (recorder == null || file == null) {
+            result.error("no_recording", "No voice recording is active.", null)
+            return
+        }
+        val duration = (SystemClock.elapsedRealtime() - voiceRecordingStartedAt)
+            .coerceAtLeast(0L)
+        try {
+            recorder.stop()
+            recorder.release()
+            voiceRecorder = null
+            voiceRecordingFile = null
+            result.success(
+                hashMapOf(
+                    "uri" to Uri.fromFile(file).toString(),
+                    "localPath" to file.absolutePath,
+                    "mimeType" to "audio/3gpp",
+                    "name" to file.name,
+                    "durationMilliseconds" to duration,
+                ),
+            )
+        } catch (error: Exception) {
+            releaseVoiceRecorder(deleteFile = true)
+            Log.e(TAG, "Voice recording stop failed", error)
+            result.error("recording_failed", "The recording was too short.", null)
+        }
+    }
+
+    private fun cancelVoiceRecording(result: MethodChannel.Result) {
+        releaseVoiceRecorder(deleteFile = true)
+        result.success(null)
+    }
+
+    private fun releaseVoiceRecorder(deleteFile: Boolean) {
+        val recorder = voiceRecorder
+        voiceRecorder = null
+        runCatching { recorder?.stop() }
+        runCatching { recorder?.reset() }
+        runCatching { recorder?.release() }
+        if (deleteFile) runCatching { voiceRecordingFile?.delete() }
+        voiceRecordingFile = null
+        voiceRecordingStartedAt = 0L
+    }
+
+    private fun loadRecentImages(call: MethodCall, result: MethodChannel.Result) {
+        if (!hasMediaPermission("photos")) {
+            result.error("photos_denied", "Photo access is not granted.", null)
+            return
+        }
+        val limit = (call.argument<Number>("limit")?.toInt() ?: 60)
+            .coerceIn(1, 90)
+        Thread {
+            try {
+                val images = mutableListOf<Map<String, Any?>>()
+                val projection = arrayOf(
+                    MediaStore.Images.Media._ID,
+                    MediaStore.Images.Media.DISPLAY_NAME,
+                    MediaStore.Images.Media.MIME_TYPE,
+                )
+                contentResolver.query(
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                    projection,
+                    null,
+                    null,
+                    "${MediaStore.Images.Media.DATE_ADDED} DESC",
+                )?.use { cursor ->
+                    val idIndex = cursor.getColumnIndexOrThrow(
+                        MediaStore.Images.Media._ID,
+                    )
+                    val nameIndex = cursor.getColumnIndexOrThrow(
+                        MediaStore.Images.Media.DISPLAY_NAME,
+                    )
+                    val mimeIndex = cursor.getColumnIndexOrThrow(
+                        MediaStore.Images.Media.MIME_TYPE,
+                    )
+                    while (cursor.moveToNext() && images.size < limit) {
+                        val uri = Uri.withAppendedPath(
+                            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                            cursor.getLong(idIndex).toString(),
+                        )
+                        val thumbnail = mediaThumbnail(uri) ?: continue
+                        images.add(
+                            hashMapOf(
+                                "uri" to uri.toString(),
+                                "mimeType" to cursor.getString(mimeIndex)
+                                    .orEmpty()
+                                    .ifEmpty { "image/jpeg" },
+                                "name" to cursor.getString(nameIndex),
+                                "thumbnailBytes" to thumbnail,
+                            ),
+                        )
+                    }
+                }
+                runOnUiThread { result.success(images) }
+            } catch (error: Exception) {
+                Log.e(TAG, "Recent photo load failed", error)
+                runOnUiThread {
+                    result.error("photos_load_failed", error.message, null)
+                }
+            }
+        }.start()
+    }
+
+    private fun mediaThumbnail(uri: Uri): ByteArray? {
+        val platformThumbnail = runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                contentResolver.loadThumbnail(uri, Size(360, 360), null)
+            } else {
+                @Suppress("DEPRECATION")
+                MediaStore.Images.Thumbnails.getThumbnail(
+                    contentResolver,
+                    uri.lastPathSegment?.toLongOrNull() ?: return@runCatching null,
+                    MediaStore.Images.Thumbnails.MINI_KIND,
+                    null,
+                )
+            }
+        }.getOrNull()
+        val bitmap = platformThumbnail ?: runCatching {
+            contentResolver.openInputStream(uri)?.use { stream ->
+                BitmapFactory.decodeStream(stream)
+            }
+        }.getOrNull() ?: return null
+        val largestSide = maxOf(bitmap.width, bitmap.height)
+        val thumbnail = if (largestSide > 720) {
+            val scale = 720f / largestSide.toFloat()
+            Bitmap.createScaledBitmap(
+                bitmap,
+                (bitmap.width * scale).toInt().coerceAtLeast(1),
+                (bitmap.height * scale).toInt().coerceAtLeast(1),
+                true,
+            )
+        } else {
+            bitmap
+        }
+        return runCatching {
+            ByteArrayOutputStream().use { output ->
+                thumbnail.compress(Bitmap.CompressFormat.JPEG, 78, output)
+                output.toByteArray()
+            }
+        }.getOrNull()
+    }
+
+    private fun takePhoto(result: MethodChannel.Result) {
+        if (!hasMediaPermission("camera")) {
+            result.error("camera_denied", "Camera access is not granted.", null)
+            return
+        }
+        if (pendingCameraResult != null) {
+            result.error("camera_active", "The camera is already open.", null)
+            return
+        }
+        val values = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, "BlueBubbles-${System.currentTimeMillis()}.jpg")
+            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/BlueBubbles")
+            }
+        }
+        val uri = contentResolver.insert(
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            values,
+        )
+        if (uri == null) {
+            result.error("camera_failed", "A photo destination could not be created.", null)
+            return
+        }
+        val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
+            putExtra(MediaStore.EXTRA_OUTPUT, uri)
+            addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        if (intent.resolveActivity(packageManager) == null) {
+            contentResolver.delete(uri, null, null)
+            result.error("camera_unavailable", "No camera app is available.", null)
+            return
+        }
+        pendingCameraResult = result
+        pendingCameraUri = uri
+        startActivityForResult(intent, CAMERA_REQUEST)
     }
 
     private fun loadConversations(result: MethodChannel.Result) {
@@ -492,6 +795,111 @@ class MainActivity : FlutterActivity() {
         }.start()
     }
 
+    private fun sendMms(call: MethodCall, result: MethodChannel.Result) {
+        if (!isDefaultSmsApp() || !hasCoreSmsPermissions()) {
+            result.error("sms_access_denied", "SMS access is not active.", null)
+            return
+        }
+        val address = call.argument<String>("address")?.trim().orEmpty()
+        val text = call.argument<String>("text")?.trim().orEmpty()
+        val uriValue = call.argument<String>("uri").orEmpty()
+        val localPath = call.argument<String>("localPath").orEmpty()
+        val mimeType = call.argument<String>("mimeType")
+            ?.takeIf { it.isNotBlank() }
+            ?: "application/octet-stream"
+        val name = call.argument<String>("name")
+        val threadId = call.argument<String>("threadId")?.toLongOrNull()
+        if (address.isEmpty() || (uriValue.isEmpty() && localPath.isEmpty())) {
+            result.error("invalid_mms", "A recipient and attachment are required.", null)
+            return
+        }
+        Thread {
+            try {
+                val bytes = if (localPath.isNotEmpty()) {
+                    File(localPath).readBytes()
+                } else {
+                    contentResolver.openInputStream(Uri.parse(uriValue))
+                        ?.use { it.readBytes() }
+                        ?: error("The selected attachment could not be read.")
+                }
+                val prepared = prepareMmsAttachment(bytes, mimeType)
+                runOnUiThread {
+                    try {
+                        val settings =
+                            com.klinker.android.send_message.Settings().apply {
+                                setUseSystemSending(true)
+                            }
+                        val message =
+                            com.klinker.android.send_message.Message(text, address).apply {
+                                addMedia(prepared.bytes, prepared.mimeType, name)
+                            }
+                        val transaction =
+                            com.klinker.android.send_message.Transaction(this, settings)
+                        transaction.setExplicitBroadcastForSentMms(
+                            Intent(this, BlueBubblesMmsSentReceiver::class.java),
+                        )
+                        transaction.sendNewMessage(
+                            message,
+                            threadId
+                                ?: com.klinker.android.send_message.Transaction.NO_THREAD_ID,
+                        )
+                        suppressProviderReloadUntil =
+                            SystemClock.elapsedRealtime() + 1_000L
+                        result.success(null)
+                    } catch (error: Exception) {
+                        Log.e(TAG, "MMS enqueue failed", error)
+                        result.error("mms_send_failed", error.message, null)
+                    }
+                }
+            } catch (error: Exception) {
+                Log.e(TAG, "MMS send failed", error)
+                runOnUiThread {
+                    result.error("mms_send_failed", error.message, null)
+                }
+            }
+        }.start()
+    }
+
+    private fun prepareMmsAttachment(
+        bytes: ByteArray,
+        mimeType: String,
+    ): PreparedMmsAttachment {
+        if (!mimeType.startsWith("image/") || bytes.size <= 600_000) {
+            return PreparedMmsAttachment(bytes, mimeType)
+        }
+        val bitmap = runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                ImageDecoder.decodeBitmap(
+                    ImageDecoder.createSource(ByteBuffer.wrap(bytes)),
+                ) { decoder, info, _ ->
+                    decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                    val largestSide = maxOf(info.size.width, info.size.height)
+                    if (largestSide > 1_600) {
+                        val scale = 1_600f / largestSide.toFloat()
+                        decoder.setTargetSize(
+                            (info.size.width * scale).toInt().coerceAtLeast(1),
+                            (info.size.height * scale).toInt().coerceAtLeast(1),
+                        )
+                    }
+                }
+            } else {
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            }
+        }.getOrNull() ?: return PreparedMmsAttachment(bytes, mimeType)
+
+        var quality = 88
+        var encoded = bytes
+        while (quality >= 48) {
+            encoded = ByteArrayOutputStream().use { output ->
+                bitmap.compress(Bitmap.CompressFormat.JPEG, quality, output)
+                output.toByteArray()
+            }
+            if (encoded.size <= 600_000) break
+            quality -= 8
+        }
+        return PreparedMmsAttachment(encoded, "image/jpeg")
+    }
+
     private fun loadThreadMessages(call: MethodCall, result: MethodChannel.Result) {
         if (!isDefaultSmsApp() || !hasCoreSmsPermissions()) {
             result.error("sms_access_denied", "SMS access is not active.", null)
@@ -655,17 +1063,27 @@ class MainActivity : FlutterActivity() {
         }
         val threadId = call.argument<String>("threadId").orEmpty()
         val messageId = call.argument<String>("messageId").orEmpty()
-        if (threadId.isEmpty() || messageId.toLongOrNull() == null) {
-            result.error("invalid_message", "A valid SMS message is required.", null)
+        val isMms = messageId.startsWith("mms-")
+        val providerId = if (isMms) messageId.removePrefix("mms-") else messageId
+        if (threadId.isEmpty() || providerId.toLongOrNull() == null) {
+            result.error("invalid_message", "A valid message is required.", null)
             return
         }
         Thread {
             try {
-                contentResolver.delete(
-                    Telephony.Sms.CONTENT_URI,
-                    "${BaseColumns._ID} = ? AND ${Telephony.Sms.THREAD_ID} = ?",
-                    arrayOf(messageId, threadId),
-                )
+                if (isMms) {
+                    contentResolver.delete(
+                        Telephony.Mms.CONTENT_URI,
+                        "${BaseColumns._ID} = ? AND thread_id = ?",
+                        arrayOf(providerId, threadId),
+                    )
+                } else {
+                    contentResolver.delete(
+                        Telephony.Sms.CONTENT_URI,
+                        "${BaseColumns._ID} = ? AND ${Telephony.Sms.THREAD_ID} = ?",
+                        arrayOf(providerId, threadId),
+                    )
+                }
                 runOnUiThread { result.success(null) }
             } catch (error: Exception) {
                 runOnUiThread {
@@ -960,32 +1378,57 @@ class MainActivity : FlutterActivity() {
                 )
             }
         }
+        messages.addAll(
+            queryMmsThreadMessages(
+                threadId = threadId,
+                beforeTimestamp = beforeTimestamp,
+                pageSize = pageSize,
+            ),
+        )
         messages.sortWith(
             compareBy<HashMap<String, Any?>>(
                 { (it["sentAt"] as? Long) ?: 0L },
                 { (it["id"] as? String)?.toLongOrNull() ?: 0L },
             ),
         )
-        return messages
+        return if (messages.size <= pageSize) {
+            messages
+        } else {
+            messages.takeLast(pageSize)
+        }
     }
 
-    private fun queryMmsThreadMessages(threadId: String): List<HashMap<String, Any?>> {
+    private fun queryMmsThreadMessages(
+        threadId: String,
+        beforeTimestamp: Long?,
+        pageSize: Int,
+    ): List<HashMap<String, Any?>> {
         val projection = arrayOf(BaseColumns._ID, "date", "msg_box", "sub")
         val messages = mutableListOf<HashMap<String, Any?>>()
+        val selection = if (beforeTimestamp == null) {
+            "thread_id = ?"
+        } else {
+            "thread_id = ? AND date < ?"
+        }
+        val selectionArgs = if (beforeTimestamp == null) {
+            arrayOf(threadId)
+        } else {
+            arrayOf(threadId, (beforeTimestamp / 1000L).toString())
+        }
         providerQuery(
             Telephony.Mms.CONTENT_URI,
             projection,
-            "thread_id = ?",
-            arrayOf(threadId),
-            "date DESC LIMIT 20",
-            timeoutMs = 2_000L,
+            selection,
+            selectionArgs,
+            "date DESC LIMIT $pageSize",
+            timeoutMs = 5_000L,
         ) { cursor ->
             val idColumn = cursor.getColumnIndexOrThrow(BaseColumns._ID)
             val dateColumn = cursor.getColumnIndexOrThrow("date")
             val boxColumn = cursor.getColumnIndexOrThrow("msg_box")
             val subjectColumn = cursor.getColumnIndexOrThrow("sub")
             var processed = 0
-            while (cursor.moveToNext() && processed < 20) {
+            while (cursor.moveToNext() && processed < pageSize) {
                 processed += 1
                 val id = cursor.getLong(idColumn).toString()
                 val box = cursor.getInt(boxColumn)
@@ -995,10 +1438,16 @@ class MainActivity : FlutterActivity() {
                 val deliveryState = when (box) {
                     Telephony.Mms.MESSAGE_BOX_OUTBOX -> "sending"
                     Telephony.Mms.MESSAGE_BOX_FAILED -> "failed"
+                    Telephony.Mms.MESSAGE_BOX_SENT -> "sent"
                     else -> "delivered"
                 }
                 val subject = cursor.getString(subjectColumn).orEmpty()
-                val text = subject.ifBlank { "MMS" }
+                val content = queryMmsContent(id)
+                val text = subject.ifBlank {
+                    content.text.ifBlank {
+                        if (content.attachment == null) "MMS" else ""
+                    }
+                }
                 messages.add(
                     hashMapOf(
                         "id" to "mms-$id",
@@ -1006,11 +1455,108 @@ class MainActivity : FlutterActivity() {
                         "sentAt" to cursor.getLong(dateColumn) * 1000L,
                         "isFromMe" to fromMe,
                         "deliveryState" to deliveryState,
+                        "attachment" to content.attachment,
                     ),
                 )
             }
         }
         return messages
+    }
+
+    private fun queryMmsContent(mmsId: String): MmsContent {
+        var text = ""
+        var attachment: Map<String, Any?>? = null
+        providerQuery(
+            Uri.parse("content://mms/part"),
+            arrayOf(BaseColumns._ID, "ct", "name", "cl", "text"),
+            "mid = ?",
+            arrayOf(mmsId),
+            timeoutMs = 2_000L,
+        ) { cursor ->
+            val idIndex = cursor.getColumnIndexOrThrow(BaseColumns._ID)
+            val contentTypeIndex = cursor.getColumnIndexOrThrow("ct")
+            val nameIndex = cursor.getColumnIndexOrThrow("name")
+            val contentLocationIndex = cursor.getColumnIndexOrThrow("cl")
+            val textIndex = cursor.getColumnIndexOrThrow("text")
+            while (cursor.moveToNext()) {
+                val contentType = cursor.getString(contentTypeIndex).orEmpty()
+                if (contentType == "text/plain") {
+                    text = cursor.getString(textIndex).orEmpty()
+                    continue
+                }
+                if (attachment != null ||
+                    (!contentType.startsWith("image/") &&
+                        !contentType.startsWith("audio/"))
+                ) {
+                    continue
+                }
+                val partId = cursor.getLong(idIndex).toString()
+                val partUri = Uri.parse("content://mms/part/$partId")
+                val name = cursor.getString(nameIndex)
+                    ?: cursor.getString(contentLocationIndex)
+                attachment = if (contentType.startsWith("image/")) {
+                    val thumbnail = mediaThumbnail(partUri)
+                    val directory = File(cacheDir, "mms_images").apply { mkdirs() }
+                    val extension = when (contentType) {
+                        "image/png" -> "png"
+                        "image/gif" -> "gif"
+                        "image/webp" -> "webp"
+                        else -> "jpg"
+                    }
+                    val output = File(directory, "mms-$mmsId-$partId.$extension")
+                    if (!output.exists()) {
+                        contentResolver.openInputStream(partUri)?.use { input ->
+                            output.outputStream().use { target ->
+                                input.copyTo(target)
+                            }
+                        }
+                    }
+                    hashMapOf(
+                        "uri" to partUri.toString(),
+                        "mimeType" to contentType,
+                        "name" to name,
+                        "localPath" to output.takeIf { it.exists() }
+                            ?.absolutePath,
+                        "thumbnailBytes" to thumbnail,
+                    )
+                } else {
+                    val extension = when (contentType) {
+                        "audio/mp4", "audio/aac" -> "m4a"
+                        "audio/mpeg" -> "mp3"
+                        "audio/ogg" -> "ogg"
+                        else -> "audio"
+                    }
+                    val directory = File(cacheDir, "mms_audio").apply { mkdirs() }
+                    val output = File(directory, "mms-$mmsId-$partId.$extension")
+                    if (!output.exists()) {
+                        contentResolver.openInputStream(partUri)?.use { input ->
+                            output.outputStream().use { target ->
+                                input.copyTo(target)
+                            }
+                        }
+                    }
+                    val duration = runCatching {
+                        val retriever = MediaMetadataRetriever()
+                        try {
+                            retriever.setDataSource(output.absolutePath)
+                            retriever.extractMetadata(
+                                MediaMetadataRetriever.METADATA_KEY_DURATION,
+                            )?.toLongOrNull()
+                        } finally {
+                            retriever.release()
+                        }
+                    }.getOrNull()
+                    hashMapOf(
+                        "uri" to partUri.toString(),
+                        "localPath" to output.absolutePath,
+                        "mimeType" to contentType,
+                        "name" to name,
+                        "durationMilliseconds" to duration,
+                    )
+                }
+            }
+        }
+        return MmsContent(text = text, attachment = attachment)
     }
 
     private fun canonicalAddresses(recipientIds: Set<String>): Map<String, String> {
@@ -1100,6 +1646,31 @@ class MainActivity : FlutterActivity() {
                 resultCode == Activity.RESULT_OK && isDefaultSmsApp(),
             )
             pendingRoleResult = null
+            return
+        }
+        if (requestCode == CAMERA_REQUEST) {
+            val result = pendingCameraResult
+            val uri = pendingCameraUri
+            pendingCameraResult = null
+            pendingCameraUri = null
+            if (resultCode != Activity.RESULT_OK || uri == null) {
+                if (uri != null) contentResolver.delete(uri, null, null)
+                result?.success(null)
+                return
+            }
+            Thread {
+                val thumbnail = mediaThumbnail(uri)
+                runOnUiThread {
+                    result?.success(
+                        hashMapOf(
+                            "uri" to uri.toString(),
+                            "mimeType" to "image/jpeg",
+                            "name" to "BlueBubbles photo.jpg",
+                            "thumbnailBytes" to thumbnail,
+                        ),
+                    )
+                }
+            }.start()
         }
     }
 
@@ -1112,11 +1683,19 @@ class MainActivity : FlutterActivity() {
         if (requestCode == PERMISSION_REQUEST) {
             pendingPermissionResult?.success(hasCoreSmsPermissions())
             pendingPermissionResult = null
+            return
+        }
+        if (requestCode == MEDIA_PERMISSION_REQUEST) {
+            val kind = pendingMediaPermissionKind.orEmpty()
+            pendingMediaPermissionResult?.success(hasMediaPermission(kind))
+            pendingMediaPermissionResult = null
+            pendingMediaPermissionKind = null
         }
     }
 
     override fun onDestroy() {
         mainHandler.removeCallbacks(notifyMessagesChanged)
+        releaseVoiceRecorder(deleteFile = true)
         if (observerRegistered) contentResolver.unregisterContentObserver(smsObserver)
         super.onDestroy()
     }
@@ -1139,4 +1718,14 @@ private data class ThreadSummary(
 private data class ContactDetails(
     val name: String? = null,
     val avatarBytes: ByteArray? = null,
+)
+
+private data class MmsContent(
+    val text: String,
+    val attachment: Map<String, Any?>?,
+)
+
+private data class PreparedMmsAttachment(
+    val bytes: ByteArray,
+    val mimeType: String,
 )

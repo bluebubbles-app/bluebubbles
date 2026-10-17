@@ -32,6 +32,7 @@ class ConversationListScreen extends StatefulWidget {
     required this.loadingConversations,
     required this.loadError,
     required this.onSend,
+    this.onSendAttachment,
     required this.onRetrySend,
     required this.onReplaceConversations,
     required this.smsController,
@@ -55,6 +56,11 @@ class ConversationListScreen extends StatefulWidget {
   final bool loadingConversations;
   final String? loadError;
   final void Function(Conversation conversation, String text) onSend;
+  final void Function(
+    Conversation conversation,
+    MessageAttachment attachment,
+    String caption,
+  )? onSendAttachment;
   final void Function(Conversation conversation, ChatMessage message)
       onRetrySend;
   final ValueChanged<List<Conversation>> onReplaceConversations;
@@ -277,6 +283,14 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
             onLoadOlder: () => widget.onLoadOlderConversation(conversation),
             onSend: (text) {
               widget.onSend(conversation, text);
+              setState(() {});
+            },
+            onSendAttachment: (attachment, caption) {
+              widget.onSendAttachment?.call(
+                conversation,
+                attachment,
+                caption,
+              );
               setState(() {});
             },
             onRetrySend: (message) {

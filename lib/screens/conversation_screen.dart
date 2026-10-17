@@ -27,6 +27,7 @@ class ConversationScreen extends StatefulWidget {
     required this.onLoad,
     required this.onLoadOlder,
     required this.onSend,
+    this.onSendAttachment,
     required this.onRetrySend,
     required this.onCall,
     required this.onOpenContact,
@@ -41,6 +42,8 @@ class ConversationScreen extends StatefulWidget {
   final Future<int> Function() onLoad;
   final Future<int> Function() onLoadOlder;
   final ValueChanged<String> onSend;
+  final void Function(MessageAttachment attachment, String caption)?
+      onSendAttachment;
   final ValueChanged<ChatMessage> onRetrySend;
   final VoidCallback onCall;
   final VoidCallback onOpenContact;
@@ -898,7 +901,10 @@ class _ConversationScreenState extends State<ConversationScreen>
                   _MutedConversationNotice(
                     contactName: widget.conversation.title,
                   ),
-                MessageComposer(onSend: _send),
+                MessageComposer(
+                  onSend: _send,
+                  onSendAttachment: widget.onSendAttachment ?? (_, __) {},
+                ),
               ],
             ],
           ),

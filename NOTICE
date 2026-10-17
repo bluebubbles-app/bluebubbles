@@ -18,7 +18,12 @@ The generator source is MIT-licensed. Apple Color Emoji artwork and font assets
 belong to Apple Inc. and are not covered by that MIT license or this project's
 license.
 
-This prototype does not include Apple services, iMessage protocol code,
-authentication code, networking, or SMS access.
+The Android build includes the android-smsmms transport maintained by the
+QUIK project for carrier MMS sending. Its source and GPL-3.0 license are
+bundled under tool/vendor/android-smsmms.
+
+BlueBubbles does not include Apple services, iMessage protocol code, or Apple
+authentication code. SMS and MMS are handled locally through Android's
+telephony providers and the user's mobile carrier.
 Apple, iPhone, iMessage, and iOS are trademarks of Apple Inc. This project is
 not affiliated with or endorsed by Apple Inc.
