@@ -2387,8 +2387,7 @@ class ConversationRow extends StatelessWidget {
                 else
                   SizedBox(
                     width: 24,
-                    // Match the complete row height so the unread dot is
-                    // centered on the conversation, not just the avatar.
+                    // The dot and avatar share the same vertical center.
                     height: 78,
                     child: highlighted
                         ? const Center(
@@ -2402,14 +2401,20 @@ class ConversationRow extends StatelessWidget {
                           )
                         : null,
                   ),
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    selectionMode ? 10 : 0,
-                    10,
-                    selectionMode ? 13 : 15,
-                    10,
+                SizedBox(
+                  height: 78,
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      left: selectionMode ? 10 : 0,
+                      right: selectionMode ? 13 : 15,
+                    ),
+                    child: Center(
+                      child: ContactAvatar(
+                        conversation: conversation,
+                        size: 44,
+                      ),
+                    ),
                   ),
-                  child: ContactAvatar(conversation: conversation, size: 44),
                 ),
                 Expanded(
                   child: Container(
@@ -2429,9 +2434,7 @@ class ConversationRow extends StatelessWidget {
                                 style: MessagesText.headline(context).copyWith(
                                   fontSize: 18,
                                   height: 1.08,
-                                  fontWeight: highlighted
-                                      ? FontWeight.w700
-                                      : FontWeight.w600,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
                               const SizedBox(height: 3),
@@ -2458,9 +2461,7 @@ class ConversationRow extends StatelessWidget {
                                           .copyWith(
                                         fontSize: 15,
                                         height: 1.15,
-                                        fontWeight: highlighted
-                                            ? FontWeight.w600
-                                            : FontWeight.w400,
+                                        fontWeight: FontWeight.w400,
                                       ),
                                     ),
                                   ),
