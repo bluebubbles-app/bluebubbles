@@ -34,7 +34,7 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val CHANNEL = "bluebubbles/sms"
         private const val TAG = "BlueBubblesSms"
-        private const val NATIVE_BUILD = "2026-10-16-compose-and-contacts-v1"
+        private const val NATIVE_BUILD = "2026-10-17-message-retry-v1"
         private const val ROLE_REQUEST = 4701
         private const val PERMISSION_REQUEST = 4702
         private const val PROVIDER_LOAD_TIMEOUT_MS = 20_000L
@@ -122,6 +122,7 @@ class MainActivity : FlutterActivity() {
             "searchContacts" -> searchContacts(call, result)
             "sendSms" -> sendSms(call, result)
             "markThreadRead" -> markThreadRead(call, result)
+            "deleteMessage" -> deleteMessage(call, result)
             "deleteThread" -> deleteThread(call, result)
             "dialNumber" -> dialNumber(call, result)
             "openContact" -> openContact(call, result)
@@ -642,6 +643,33 @@ class MainActivity : FlutterActivity() {
                     Telephony.Mms.CONTENT_URI,
                     "${Telephony.Mms.THREAD_ID} = ?",
                     arrayOf(threadId),
+                )
+                runOnUiThread { result.success(null) }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    result.error("sms_delete_failed", error.message, null)
+                }
+            }
+        }.start()
+    }
+
+    private fun deleteMessage(call: MethodCall, result: MethodChannel.Result) {
+        if (!isDefaultSmsApp() || !hasCoreSmsPermissions()) {
+            result.error("sms_access_denied", "SMS access is not active.", null)
+            return
+        }
+        val threadId = call.argument<String>("threadId").orEmpty()
+        val messageId = call.argument<String>("messageId").orEmpty()
+        if (threadId.isEmpty() || messageId.toLongOrNull() == null) {
+            result.error("invalid_message", "A valid SMS message is required.", null)
+            return
+        }
+        Thread {
+            try {
+                contentResolver.delete(
+                    Telephony.Sms.CONTENT_URI,
+                    "${BaseColumns._ID} = ? AND ${Telephony.Sms.THREAD_ID} = ?",
+                    arrayOf(messageId, threadId),
                 )
                 runOnUiThread { result.success(null) }
             } catch (error: Exception) {

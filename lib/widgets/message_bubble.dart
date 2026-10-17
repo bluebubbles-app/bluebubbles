@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:characters/characters.dart';
 import 'package:flutter/cupertino.dart';
 
+import '../l10n/message_status_strings.dart';
 import '../models/conversation.dart';
 import '../theme/messages_theme.dart';
 
@@ -67,6 +68,7 @@ class MessageBubble extends StatefulWidget {
     required this.compactTop,
     this.showStatus = false,
     this.shadowElevation = 0,
+    this.onRetry,
   });
 
   final ChatMessage message;
@@ -74,6 +76,7 @@ class MessageBubble extends StatefulWidget {
   final bool compactTop;
   final bool showStatus;
   final double shadowElevation;
+  final VoidCallback? onRetry;
 
   @override
   State<MessageBubble> createState() => _MessageBubbleState();
@@ -166,17 +169,51 @@ class _MessageBubbleState extends State<MessageBubble> {
                 ),
               ),
             ),
-            if (widget.showStatus && isFromMe)
+            if ((widget.showStatus ||
+                    message.deliveryState == DeliveryState.failed) &&
+                isFromMe)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  _statusLabel(message.deliveryState),
-                  style: TextStyle(
-                    color: MessagesPalette.secondaryLabel(context),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
+                child: message.deliveryState == DeliveryState.failed &&
+                        widget.onRetry != null
+                    ? CupertinoButton(
+                        minSize: 20,
+                        padding: EdgeInsets.zero,
+                        onPressed: widget.onRetry,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              CupertinoIcons.exclamationmark_circle_fill,
+                              size: 13,
+                              color: CupertinoColors.systemRed,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              MessageStatusStrings.label(
+                                context,
+                                message.deliveryState,
+                              ),
+                              style: const TextStyle(
+                                color: CupertinoColors.systemRed,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : Text(
+                        MessageStatusStrings.label(
+                          context,
+                          message.deliveryState,
+                        ),
+                        style: TextStyle(
+                          color: MessagesPalette.secondaryLabel(context),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
               ),
           ],
         ),
@@ -184,15 +221,6 @@ class _MessageBubbleState extends State<MessageBubble> {
     );
   }
 
-  String _statusLabel(DeliveryState state) {
-    return switch (state) {
-      DeliveryState.sending => 'Sending…',
-      DeliveryState.sent => 'Sent',
-      DeliveryState.delivered => 'Delivered',
-      DeliveryState.read => 'Read',
-      DeliveryState.failed => 'Not Delivered',
-    };
-  }
 }
 
 /// Paints the tail outside the bubble's layout bounds so adding a new message

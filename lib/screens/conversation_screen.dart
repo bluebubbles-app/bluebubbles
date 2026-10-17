@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 
+import '../l10n/message_status_strings.dart';
 import '../models/conversation.dart';
 import '../models/notification_open_request.dart';
 import '../settings/app_settings.dart';
@@ -26,6 +27,7 @@ class ConversationScreen extends StatefulWidget {
     required this.onLoad,
     required this.onLoadOlder,
     required this.onSend,
+    required this.onRetrySend,
     required this.onCall,
     required this.onOpenContact,
   });
@@ -39,6 +41,7 @@ class ConversationScreen extends StatefulWidget {
   final Future<int> Function() onLoad;
   final Future<int> Function() onLoadOlder;
   final ValueChanged<String> onSend;
+  final ValueChanged<ChatMessage> onRetrySend;
   final VoidCallback onCall;
   final VoidCallback onOpenContact;
 
@@ -345,6 +348,36 @@ class _ConversationScreenState extends State<ConversationScreen>
     Timer(const Duration(milliseconds: 300), _scrollToBottom);
   }
 
+  Future<void> _retryFailedMessage(ChatMessage message) async {
+    if (message.deliveryState != DeliveryState.failed) return;
+    final shouldRetry = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: Text(MessageStatusStrings.retryTitle(context)),
+        content: Text(MessageStatusStrings.retryPrompt(context)),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(MessageStatusStrings.cancel(context)),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(MessageStatusStrings.retry(context)),
+          ),
+        ],
+      ),
+    );
+    if (shouldRetry != true || !mounted) return;
+    HapticFeedback.lightImpact();
+    widget.onRetrySend(message);
+    if (!mounted) return;
+    setState(() => _messageListKey = GlobalKey<AnimatedListState>());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _scrollToBottom();
+    });
+  }
+
   void _handleHorizontalDragUpdate(DragUpdateDetails details) {
     _timestampRevealController.value =
         (_timestampRevealController.value + details.delta.dx)
@@ -550,7 +583,10 @@ class _ConversationScreenState extends State<ConversationScreen>
             ),
             _PropertyRow(
               label: 'Status',
-              value: _deliveryStateLabel(message.deliveryState),
+              value: MessageStatusStrings.label(
+                context,
+                message.deliveryState,
+              ),
             ),
           ],
         ),
@@ -718,6 +754,11 @@ class _ConversationScreenState extends State<ConversationScreen>
                                       messageIndex ==
                                           widget.conversation.messages.length -
                                               1,
+                                  onRetry:
+                                      message.deliveryState ==
+                                          DeliveryState.failed
+                                      ? () => _retryFailedMessage(message)
+                                      : null,
                                 ),
                               );
                               final interactiveMessage = _MessageHoldRegion(
@@ -2036,14 +2077,4 @@ String _formatFullDateTime(BuildContext context, DateTime value) {
     localeCode: Localizations.localeOf(context).languageCode,
   );
   return '$date at ${_formatTime(context, value)}';
-}
-
-String _deliveryStateLabel(DeliveryState state) {
-  return switch (state) {
-    DeliveryState.sending => 'Sending',
-    DeliveryState.sent => 'Sent',
-    DeliveryState.delivered => 'Delivered',
-    DeliveryState.read => 'Read',
-    DeliveryState.failed => 'Not Delivered',
-  };
 }

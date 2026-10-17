@@ -31,6 +31,7 @@ class ConversationListScreen extends StatefulWidget {
     required this.loadingConversations,
     required this.loadError,
     required this.onSend,
+    required this.onRetrySend,
     required this.onReplaceConversations,
     required this.smsController,
     required this.onEnableSmsMode,
@@ -53,6 +54,8 @@ class ConversationListScreen extends StatefulWidget {
   final bool loadingConversations;
   final String? loadError;
   final void Function(Conversation conversation, String text) onSend;
+  final void Function(Conversation conversation, ChatMessage message)
+      onRetrySend;
   final ValueChanged<List<Conversation>> onReplaceConversations;
   final AndroidSmsController smsController;
   final Future<bool> Function() onEnableSmsMode;
@@ -270,6 +273,10 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
             onLoadOlder: () => widget.onLoadOlderConversation(conversation),
             onSend: (text) {
               widget.onSend(conversation, text);
+              setState(() {});
+            },
+            onRetrySend: (message) {
+              widget.onRetrySend(conversation, message);
               setState(() {});
             },
             onCall: () => widget.onCallConversation(conversation),

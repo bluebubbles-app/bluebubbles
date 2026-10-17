@@ -662,6 +662,83 @@ class _MessagesUiAppState extends State<MessagesUiApp>
     );
   }
 
+  void _retryMessage(
+    Conversation conversation,
+    ChatMessage failedMessage,
+  ) {
+    if (!_smsController.isActive ||
+        failedMessage.deliveryState != DeliveryState.failed) {
+      return;
+    }
+    final address = conversation.address;
+    if (address == null || address.isEmpty) return;
+    final failedIndex = conversation.messages.indexWhere(
+      (message) => message.id == failedMessage.id,
+    );
+    if (failedIndex == -1) return;
+
+    final now = DateTime.now();
+    final pendingId = 'sending-${now.microsecondsSinceEpoch}';
+    final pendingMessage = ChatMessage(
+      id: pendingId,
+      text: failedMessage.text,
+      sentAt: now,
+      isFromMe: true,
+      deliveryState: DeliveryState.sending,
+    );
+    setState(() {
+      conversation.messages
+        ..removeAt(failedIndex)
+        ..add(pendingMessage);
+      conversation
+        ..preview = pendingMessage.text
+        ..updatedAt = now;
+    });
+    unawaited(
+      _replaceFailedMessageAndRetry(
+        conversation,
+        address,
+        failedMessage,
+        pendingMessage,
+      ),
+    );
+  }
+
+  Future<void> _replaceFailedMessageAndRetry(
+    Conversation conversation,
+    String address,
+    ChatMessage failedMessage,
+    ChatMessage pendingMessage,
+  ) async {
+    try {
+      await _localSmsStore.deleteMessage(
+        conversation.id,
+        failedMessage.id,
+      );
+    } catch (error) {
+      debugPrint('Failed local message cleanup before retry failed: $error');
+    }
+    try {
+      await _smsController.deleteMessage(
+        conversation.id,
+        failedMessage.id,
+      );
+    } catch (error) {
+      debugPrint('Failed Android message cleanup before retry failed: $error');
+    }
+    try {
+      await _cacheOptimisticMessage(conversation, pendingMessage);
+    } catch (error) {
+      debugPrint('Retried message cache failed: $error');
+    }
+    await _sendPhoneMessage(
+      conversation,
+      address,
+      pendingMessage.text,
+      pendingMessage.id,
+    );
+  }
+
   Future<void> _cacheOptimisticMessage(
     Conversation conversation,
     ChatMessage message,
@@ -882,6 +959,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
             loadingConversations: _loadingPhoneMessages,
             loadError: _phoneLoadError,
             onSend: _sendMessage,
+            onRetrySend: _retryMessage,
             onReplaceConversations: _replaceConversations,
             smsController: _smsController,
             onEnableSmsMode: _enableSmsMode,

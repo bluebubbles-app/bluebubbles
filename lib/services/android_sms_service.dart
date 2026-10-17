@@ -259,6 +259,14 @@ class AndroidSmsController extends ChangeNotifier {
     });
   }
 
+  Future<void> deleteMessage(String threadId, String messageId) async {
+    if (!isActive || int.tryParse(messageId) == null) return;
+    await _channel.invokeMethod<void>('deleteMessage', {
+      'threadId': threadId,
+      'messageId': messageId,
+    });
+  }
+
   Future<void> openDefaultSmsSettings() async {
     if (kIsWeb || !Platform.isAndroid) return;
     await _channel.invokeMethod<void>('openDefaultSmsSettings');
