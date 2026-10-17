@@ -302,10 +302,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             CupertinoListSection.insetGrouped(
               header: const Text('APPEARANCE'),
-              footer: const Text(
-                'Turning transparency down also disables most of the blur '
-                'work, which can improve performance on older phones.',
-              ),
               children: [
                 _SliderSetting(
                   key: const ValueKey('header-transparency-setting'),
@@ -314,6 +310,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   min: 0,
                   max: 1,
                   leading: CupertinoIcons.drop,
+                  note: 'Higher levels require more graphics processing and '
+                      'may affect responsiveness on older devices.',
                   onChanged: settings.setHeaderTransparency,
                 ),
                 _SliderSetting(
@@ -488,6 +486,7 @@ class _SliderSetting extends StatelessWidget {
     required this.min,
     required this.max,
     required this.leading,
+    this.note,
     required this.onChanged,
   });
 
@@ -496,6 +495,7 @@ class _SliderSetting extends StatelessWidget {
   final double min;
   final double max;
   final IconData leading;
+  final String? note;
   final ValueChanged<double> onChanged;
 
   @override
@@ -529,6 +529,19 @@ class _SliderSetting extends StatelessWidget {
             max: max,
             onChanged: onChanged,
           ),
+          if (note != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(33, 0, 8, 4),
+              child: Text(
+                note!,
+                style: TextStyle(
+                  color: MessagesPalette.secondaryLabel(context),
+                  fontSize: 12,
+                  height: 1.25,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ),
         ],
       ),
     );
