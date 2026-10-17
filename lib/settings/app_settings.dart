@@ -12,6 +12,8 @@ enum ClockFormat { system, hour12, hour24 }
 
 enum EmojiStyle { apple, android }
 
+enum SentBubbleColor { blue, green }
+
 class AppSettingsController extends ChangeNotifier {
   static const _headerTransparencyKey = 'header_transparency';
   static const _fontScaleKey = 'font_scale';
@@ -19,6 +21,7 @@ class AppSettingsController extends ChangeNotifier {
   static const _dateOrderKey = 'date_order';
   static const _clockFormatKey = 'clock_format';
   static const _emojiStyleKey = 'emoji_style';
+  static const _sentBubbleColorKey = 'sent_bubble_color';
   static const _permissionsOnboardingShownKey =
       'permissions_onboarding_shown';
 
@@ -28,6 +31,7 @@ class AppSettingsController extends ChangeNotifier {
   DateOrder dateOrder = DateOrder.system;
   ClockFormat clockFormat = ClockFormat.system;
   EmojiStyle emojiStyle = EmojiStyle.android;
+  SentBubbleColor sentBubbleColor = SentBubbleColor.blue;
   bool permissionsOnboardingShown = false;
   bool _disposed = false;
   Timer? _headerSaveDebounce;
@@ -58,6 +62,11 @@ class AppSettingsController extends ChangeNotifier {
         EmojiStyle.values,
         preferences.getString(_emojiStyleKey),
         emojiStyle,
+      );
+      sentBubbleColor = _enumValue(
+        SentBubbleColor.values,
+        preferences.getString(_sentBubbleColorKey),
+        sentBubbleColor,
       );
       permissionsOnboardingShown =
           preferences.getBool(_permissionsOnboardingShownKey) ?? false;
@@ -121,6 +130,14 @@ class AppSettingsController extends ChangeNotifier {
     _notifyIfActive();
     await _persist(
       (preferences) => preferences.setString(_emojiStyleKey, value.name),
+    );
+  }
+
+  Future<void> setSentBubbleColor(SentBubbleColor value) async {
+    sentBubbleColor = value;
+    _notifyIfActive();
+    await _persist(
+      (preferences) => preferences.setString(_sentBubbleColorKey, value.name),
     );
   }
 
@@ -215,9 +232,13 @@ class AppSettingsScope extends InheritedNotifier<AppSettingsController> {
   }) : super(notifier: controller);
 
   static AppSettingsController of(BuildContext context) {
-    final scope =
-        context.dependOnInheritedWidgetOfExactType<AppSettingsScope>();
-    assert(scope != null, 'AppSettingsScope is missing above this context.');
-    return scope!.notifier!;
+    final controller = maybeOf(context);
+    assert(controller != null, 'AppSettingsScope is missing above this context.');
+    return controller!;
+  }
+
+  static AppSettingsController? maybeOf(BuildContext context) {
+    final scope = context.dependOnInheritedWidgetOfExactType<AppSettingsScope>();
+    return scope?.notifier;
   }
 }

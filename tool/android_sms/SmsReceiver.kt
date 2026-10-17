@@ -19,6 +19,7 @@ import android.graphics.BitmapFactory
 import android.graphics.drawable.Icon
 import android.net.Uri
 import android.os.Build
+import android.provider.BaseColumns
 import android.provider.ContactsContract
 import android.provider.Telephony
 import android.telephony.SmsManager
@@ -139,6 +140,7 @@ internal object MessageNotifier {
     internal const val EXTRA_NOTIFICATION_ID = "notification_id"
 
     private const val CHANNEL_ID = "bluebubbles_messages"
+    private const val MAX_NOTIFICATION_MESSAGES = 25
 
     fun show(
         context: Context,
@@ -167,6 +169,12 @@ internal object MessageNotifier {
             null
         }
         val notificationId = notificationId(resolvedThreadId, address)
+        val messages = resolvedThreadId?.let {
+            recentUnreadMessages(context, it)
+        }.orEmpty().ifEmpty {
+            listOf(NotificationMessage(body, timestamp))
+        }
+        val latestMessage = messages.last()
 
         val launchIntent = context.packageManager
             .getLaunchIntentForPackage(context.packageName)
@@ -200,18 +208,19 @@ internal object MessageNotifier {
         builder
             .setSmallIcon(context.applicationInfo.icon)
             .setContentTitle(displayName)
-            .setContentText(body)
+            .setContentText(latestMessage.body)
             .setContentIntent(contentIntent)
             .setCategory(Notification.CATEGORY_MESSAGE)
             .setAutoCancel(true)
             .setShowWhen(true)
-            .setWhen(timestamp)
+            .setWhen(latestMessage.timestamp)
+            .setNumber(messages.size)
             .setVisibility(Notification.VISIBILITY_PRIVATE)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && shortcutId != null) {
             builder.setShortcutId(shortcutId)
         }
         contact.avatar?.let(builder::setLargeIcon)
-        applyMessageStyle(builder, displayName, body, timestamp, contact.avatar)
+        applyMessageStyle(builder, displayName, messages, contact.avatar)
 
         if (enableActions && resolvedThreadId != null) {
             builder.addAction(
@@ -282,8 +291,7 @@ internal object MessageNotifier {
     private fun applyMessageStyle(
         builder: Notification.Builder,
         displayName: String,
-        body: String,
-        timestamp: Long,
+        messages: List<NotificationMessage>,
         avatar: Bitmap?,
     ) {
         when {
@@ -292,20 +300,57 @@ internal object MessageNotifier {
                 avatar?.let { senderBuilder.setIcon(Icon.createWithBitmap(it)) }
                 val sender = senderBuilder.build()
                 val user = Person.Builder().setName("You").build()
-                builder.setStyle(
-                    Notification.MessagingStyle(user)
-                        .addMessage(body, timestamp, sender),
-                )
+                val style = Notification.MessagingStyle(user)
+                messages.forEach { message ->
+                    style.addMessage(message.body, message.timestamp, sender)
+                }
+                builder.setStyle(style)
             }
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.N -> {
                 @Suppress("DEPRECATION")
-                builder.setStyle(
-                    Notification.MessagingStyle("You")
-                        .addMessage(body, timestamp, displayName),
+                val style = Notification.MessagingStyle("You")
+                messages.forEach { message ->
+                    @Suppress("DEPRECATION")
+                    style.addMessage(message.body, message.timestamp, displayName)
+                }
+                builder.setStyle(style)
+            }
+            else -> builder.setStyle(
+                Notification.BigTextStyle().bigText(
+                    messages.joinToString(separator = "\n") { it.body },
+                ),
+            )
+        }
+    }
+
+    private fun recentUnreadMessages(
+        context: Context,
+        threadId: Long,
+    ): List<NotificationMessage> = runCatching {
+        val messages = mutableListOf<NotificationMessage>()
+        context.contentResolver.query(
+            Telephony.Sms.CONTENT_URI,
+            arrayOf(Telephony.Sms.BODY, Telephony.Sms.DATE),
+            "${Telephony.Sms.THREAD_ID} = ? AND ${Telephony.Sms.TYPE} = ? AND " +
+                "${Telephony.Sms.READ} = 0",
+            arrayOf(threadId.toString(), Telephony.Sms.MESSAGE_TYPE_INBOX.toString()),
+            "${Telephony.Sms.DATE} DESC, ${BaseColumns._ID} DESC",
+        )?.use { cursor ->
+            val bodyIndex = cursor.getColumnIndexOrThrow(Telephony.Sms.BODY)
+            val dateIndex = cursor.getColumnIndexOrThrow(Telephony.Sms.DATE)
+            while (cursor.moveToNext() && messages.size < MAX_NOTIFICATION_MESSAGES) {
+                messages.add(
+                    NotificationMessage(
+                        body = cursor.getString(bodyIndex).orEmpty(),
+                        timestamp = cursor.getLong(dateIndex),
+                    ),
                 )
             }
-            else -> builder.setStyle(Notification.BigTextStyle().bigText(body))
         }
+        messages.reversed()
+    }.getOrElse { error ->
+        Log.w("BlueBubblesSms", "Could not load unread notification history", error)
+        emptyList()
     }
 
     private fun resolveContact(context: Context, address: String): NotificationContact {
@@ -449,4 +494,9 @@ internal object MessageNotifier {
 private data class NotificationContact(
     val name: String? = null,
     val avatar: Bitmap? = null,
+)
+
+private data class NotificationMessage(
+    val body: String,
+    val timestamp: Long,
 )

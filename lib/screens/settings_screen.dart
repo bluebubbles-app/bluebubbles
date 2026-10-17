@@ -326,6 +326,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onChanged: settings.setFontScale,
                 ),
                 _ChoiceRow(
+                  title: 'Sent Bubble Color',
+                  value: _bubbleColorLabel(settings.sentBubbleColor),
+                  icon: CupertinoIcons.chat_bubble_fill,
+                  onPressed: () async {
+                    final value = await _pick<SentBubbleColor>(
+                      title: 'Sent Bubble Color',
+                      current: settings.sentBubbleColor,
+                      options: const [
+                        (SentBubbleColor.blue, 'Blue'),
+                        (SentBubbleColor.green, 'Green'),
+                      ],
+                    );
+                    if (value != null) {
+                      await settings.setSentBubbleColor(value);
+                    }
+                  },
+                ),
+                _ChoiceRow(
                   title: 'Emoji Style',
                   value: _emojiLabel(settings.emojiStyle),
                   icon: CupertinoIcons.smiley,
@@ -454,6 +472,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _emojiLabel(EmojiStyle value) => switch (value) {
         EmojiStyle.apple => 'Apple',
         EmojiStyle.android => 'Android',
+      };
+
+  String _bubbleColorLabel(SentBubbleColor value) => switch (value) {
+        SentBubbleColor.blue => 'Blue',
+        SentBubbleColor.green => 'Green',
       };
 }
 

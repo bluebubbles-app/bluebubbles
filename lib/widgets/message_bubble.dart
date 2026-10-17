@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 
 import '../l10n/message_status_strings.dart';
 import '../models/conversation.dart';
+import '../settings/app_settings.dart';
 import '../theme/messages_theme.dart';
 
 double emojiOnlyTextScale(String text) {
@@ -96,10 +97,15 @@ class _MessageBubbleState extends State<MessageBubble> {
   Widget build(BuildContext context) {
     final message = widget.message;
     final isFromMe = message.isFromMe;
+    final useGreenBubble = isFromMe &&
+        AppSettingsScope.maybeOf(context)?.sentBubbleColor ==
+            SentBubbleColor.green;
     final emojiScale = emojiOnlyTextScale(message.text);
     final renderedTextScale = emojiScale == 2 ? 4.0 : emojiScale;
     final color = isFromMe
-        ? MessagesPalette.sentBubble(context)
+        ? useGreenBubble
+            ? MessagesPalette.customBubbleGreen
+            : MessagesPalette.sentBubble(context)
         : MessagesPalette.receivedBubble(context);
 
     return Semantics(
@@ -117,7 +123,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                 key: _paintKey,
                 painter: MessageBubblePainter(
                   color: color,
-                  gradient: isFromMe
+                  gradient: isFromMe && !useGreenBubble
                       ? const LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,

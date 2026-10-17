@@ -34,7 +34,7 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val CHANNEL = "bluebubbles/sms"
         private const val TAG = "BlueBubblesSms"
-        private const val NATIVE_BUILD = "2026-10-17-safe-sms-fragmentation-v1"
+        private const val NATIVE_BUILD = "2026-10-17-notification-history-v1"
         private const val ROLE_REQUEST = 4701
         private const val PERMISSION_REQUEST = 4702
         private const val PROVIDER_LOAD_TIMEOUT_MS = 20_000L
