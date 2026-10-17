@@ -10,6 +10,7 @@ import 'data/conversation_header_merge.dart';
 import 'data/demo_data.dart';
 import 'data/local_sms_store.dart';
 import 'data/message_repository.dart';
+import 'l10n/message_status_strings.dart';
 import 'models/conversation.dart';
 import 'models/notification_open_request.dart';
 import 'models/sms_sync_progress.dart';
@@ -922,7 +923,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
           title: 'BlueBubbles',
           debugShowCheckedModeBanner: false,
           locale: _settings.locale,
-          supportedLocales: const [Locale('en'), Locale('fr')],
+          supportedLocales: MessageStatusStrings.supportedLocales,
           localizationsDelegates: const [
             GlobalCupertinoLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,
