@@ -801,7 +801,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                   color: MessagesPalette.label(context),
                   fontFamily: 'SF Pro Text',
                   fontSize: 17,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w600,
                   letterSpacing: -.25,
                 ),
               ),
@@ -817,9 +817,9 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                   child: Text(
                     _selectingConversations ? 'Done' : 'Edit',
                     style: const TextStyle(
-                      color: MessagesPalette.blue,
+                      color: MessagesPalette.headerActionBlue,
                       fontFamily: 'SF Pro Text',
-                      fontSize: 14,
+                      fontSize: 15,
                       fontWeight: FontWeight.w400,
                     ),
                   ),
@@ -832,7 +832,11 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                   minSize: 44,
                   padding: EdgeInsets.zero,
                   onPressed: _selectingConversations ? null : _openSettings,
-                  child: const Icon(CupertinoIcons.ellipsis_circle, size: 20),
+                  child: const Icon(
+                    CupertinoIcons.ellipsis_circle,
+                    color: MessagesPalette.headerActionBlue,
+                    size: 21,
+                  ),
                 ),
               ),
               Positioned(
@@ -844,7 +848,11 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                   onPressed: _selectingConversations
                       ? null
                       : _composeNewMessage,
-                  child: const Icon(CupertinoIcons.square_pencil, size: 20),
+                  child: const Icon(
+                    CupertinoIcons.square_pencil,
+                    color: MessagesPalette.headerActionBlue,
+                    size: 22,
+                  ),
                 ),
               ),
             ],
@@ -2362,133 +2370,151 @@ class ConversationRow extends StatelessWidget {
     final highlighted = conversation.unreadCount > 0;
     return ColoredBox(
       color: MessagesPalette.background(context),
-      child: CupertinoButton(
-        pressedOpacity: .55,
-        padding: EdgeInsets.zero,
-        onPressed: onTap,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (selectionMode)
-              Padding(
-                padding: const EdgeInsets.only(left: 12, top: 27),
-                child: _SelectionCircle(selected: selected),
-              ),
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                selectionMode ? 10 : 26,
-                10,
-                13,
-                10,
-              ),
-              child: ContactAvatar(conversation: conversation, size: 44),
-            ),
-            Expanded(
-              child: Container(
-                constraints: const BoxConstraints(minHeight: 78),
-                padding: const EdgeInsets.fromLTRB(0, 9, 10, 8),
-                decoration: BoxDecoration(
-                  border: Border(
-                    top: BorderSide(
-                      color: MessagesPalette.hairline(context)
-                          .withValues(alpha: .55),
-                      width: .45,
-                    ),
-                  ),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (highlighted)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 8, right: 7),
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: MessagesPalette.blue,
-                            shape: BoxShape.circle,
-                          ),
-                          child: SizedBox(width: 9, height: 9),
-                        ),
-                      ),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            conversation.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: MessagesText.headline(context).copyWith(
-                              fontSize: 18,
-                              height: 1.08,
-                              fontWeight: highlighted
-                                  ? FontWeight.w700
-                                  : FontWeight.w600,
+      child: Stack(
+        children: [
+          CupertinoButton(
+            pressedOpacity: .55,
+            padding: EdgeInsets.zero,
+            onPressed: onTap,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (selectionMode)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 12, top: 27),
+                    child: _SelectionCircle(selected: selected),
+                  )
+                else
+                  SizedBox(
+                    width: 24,
+                    height: 64,
+                    child: highlighted
+                        ? const Center(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: MessagesPalette.blue,
+                                shape: BoxShape.circle,
+                              ),
+                              child: SizedBox(width: 11, height: 11),
                             ),
-                          ),
-                          const SizedBox(height: 3),
-                          Row(
+                          )
+                        : null,
+                  ),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    selectionMode ? 10 : 0,
+                    10,
+                    selectionMode ? 13 : 15,
+                    10,
+                  ),
+                  child: ContactAvatar(conversation: conversation, size: 44),
+                ),
+                Expanded(
+                  child: Container(
+                    constraints: const BoxConstraints(minHeight: 78),
+                    padding: const EdgeInsets.fromLTRB(0, 9, 10, 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              if (conversation.isMuted)
-                                Padding(
-                                  padding: const EdgeInsets.only(right: 4),
-                                  child: Icon(
-                                    CupertinoIcons.bell_slash_fill,
-                                    size: 12,
-                                    color: MessagesPalette.secondaryLabel(
-                                      context,
+                              Text(
+                                conversation.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: MessagesText.headline(context).copyWith(
+                                  fontSize: 18,
+                                  height: 1.08,
+                                  fontWeight: highlighted
+                                      ? FontWeight.w700
+                                      : FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Row(
+                                children: [
+                                  if (conversation.isMuted)
+                                    Padding(
+                                      padding: const EdgeInsets.only(right: 4),
+                                      child: Icon(
+                                        CupertinoIcons.bell_slash_fill,
+                                        size: 12,
+                                        color:
+                                            MessagesPalette.secondaryLabel(
+                                          context,
+                                        ),
+                                      ),
+                                    ),
+                                  Expanded(
+                                    child: Text(
+                                      conversation.preview,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: MessagesText.secondary(context)
+                                          .copyWith(
+                                        fontSize: 15,
+                                        height: 1.15,
+                                        fontWeight: highlighted
+                                            ? FontWeight.w600
+                                            : FontWeight.w400,
+                                      ),
                                     ),
                                   ),
-                                ),
-                              Expanded(
-                                child: Text(
-                                  conversation.preview,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style:
-                                      MessagesText.secondary(context).copyWith(
-                                    fontSize: 15,
-                                    height: 1.15,
-                                    fontWeight: highlighted
-                                        ? FontWeight.w600
-                                        : FontWeight.w400,
-                                  ),
-                                ),
+                                ],
                               ),
                             ],
                           ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 1),
-                      child: Row(
-                        children: [
-                          Text(
-                            _relativeTime(context, conversation.updatedAt),
-                            style: MessagesText.secondary(context).copyWith(
-                              fontSize: 13,
-                              fontWeight: highlighted
-                                  ? FontWeight.w600
-                                  : FontWeight.w400,
-                            ),
+                        ),
+                        const SizedBox(width: 6),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 1),
+                          child: Row(
+                            children: [
+                              Text(
+                                _relativeTime(
+                                  context,
+                                  conversation.updatedAt,
+                                ),
+                                style:
+                                    MessagesText.secondary(context).copyWith(
+                                  fontSize: 13,
+                                  fontWeight: highlighted
+                                      ? FontWeight.w600
+                                      : FontWeight.w400,
+                                ),
+                              ),
+                              const SizedBox(width: 3),
+                              Icon(
+                                CupertinoIcons.chevron_right,
+                                size: 13,
+                                color:
+                                    MessagesPalette.secondaryLabel(context),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 3),
-                          Icon(
-                            CupertinoIcons.chevron_right,
-                            size: 13,
-                            color: MessagesPalette.secondaryLabel(context),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
+              ],
+            ),
+          ),
+          Positioned(
+            left: 28,
+            right: 0,
+            bottom: 0,
+            child: IgnorePointer(
+              child: ColoredBox(
+                color: MessagesPalette.hairline(context)
+                    .withValues(alpha: .55),
+                child: const SizedBox(height: .45),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

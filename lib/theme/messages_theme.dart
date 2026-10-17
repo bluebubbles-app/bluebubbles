@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 
 abstract final class MessagesPalette {
   static const blue = Color(0xFF007AFF);
+  static const headerActionBlue = Color(0xFF3478F6);
   static const darkBlue = Color(0xFF0A84FF);
   static const green = Color(0xFF34C759);
   static const darkGreen = Color(0xFF30D158);
