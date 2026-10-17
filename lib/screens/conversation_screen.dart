@@ -22,6 +22,7 @@ class ConversationScreen extends StatefulWidget {
     required this.messagesPreloaded,
     this.initialMessageId,
     this.notificationOpenRequest,
+    required this.messagesChangedRevision,
     required this.onLoad,
     required this.onLoadOlder,
     required this.onSend,
@@ -34,6 +35,7 @@ class ConversationScreen extends StatefulWidget {
   final bool messagesPreloaded;
   final String? initialMessageId;
   final ValueListenable<NotificationOpenRequest?>? notificationOpenRequest;
+  final ValueListenable<int> messagesChangedRevision;
   final Future<int> Function() onLoad;
   final Future<int> Function() onLoadOlder;
   final ValueChanged<String> onSend;
@@ -67,6 +69,10 @@ class _ConversationScreenState extends State<ConversationScreen>
   int _initialMessagePositionAttempts = 0;
   int _lastNotificationOpenSequence = -1;
   bool _refreshingFromNotification = false;
+  bool _refreshingFromProvider = false;
+  bool _providerRefreshQueued = false;
+  Timer? _providerRefreshDebounce;
+  late int _lastMessagesChangedRevision;
 
   @override
   void initState() {
@@ -82,6 +88,8 @@ class _ConversationScreenState extends State<ConversationScreen>
     widget.notificationOpenRequest?.addListener(
       _handleNotificationOpenRequest,
     );
+    _lastMessagesChangedRevision = widget.messagesChangedRevision.value;
+    widget.messagesChangedRevision.addListener(_handleProviderMessagesChanged);
     unawaited(_loadMessages(showLoading: !widget.messagesPreloaded));
   }
 
@@ -95,6 +103,56 @@ class _ConversationScreenState extends State<ConversationScreen>
       widget.notificationOpenRequest?.addListener(
         _handleNotificationOpenRequest,
       );
+    }
+    if (oldWidget.messagesChangedRevision != widget.messagesChangedRevision) {
+      oldWidget.messagesChangedRevision.removeListener(
+        _handleProviderMessagesChanged,
+      );
+      _lastMessagesChangedRevision = widget.messagesChangedRevision.value;
+      widget.messagesChangedRevision.addListener(
+        _handleProviderMessagesChanged,
+      );
+    }
+  }
+
+  void _handleProviderMessagesChanged() {
+    final revision = widget.messagesChangedRevision.value;
+    if (revision == _lastMessagesChangedRevision) return;
+    _lastMessagesChangedRevision = revision;
+    _providerRefreshDebounce?.cancel();
+    _providerRefreshDebounce = Timer(
+      const Duration(milliseconds: 100),
+      () => unawaited(_refreshFromProvider()),
+    );
+  }
+
+  Future<void> _refreshFromProvider() async {
+    if (_refreshingFromProvider) {
+      _providerRefreshQueued = true;
+      return;
+    }
+    _refreshingFromProvider = true;
+    try {
+      do {
+        _providerRefreshQueued = false;
+        final wasNearBottom = !_scrollController.hasClients ||
+            _scrollController.position.pixels <= 120;
+        final previousLastId = widget.conversation.messages.isEmpty
+            ? null
+            : widget.conversation.messages.last.id;
+        await _loadMessages(showLoading: false);
+        if (!mounted) return;
+        final currentLastId = widget.conversation.messages.isEmpty
+            ? null
+            : widget.conversation.messages.last.id;
+        if (wasNearBottom && currentLastId != previousLastId) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _scrollToBottom();
+          });
+        }
+      } while (_providerRefreshQueued && mounted);
+    } finally {
+      _refreshingFromProvider = false;
     }
   }
 
@@ -537,6 +595,10 @@ class _ConversationScreenState extends State<ConversationScreen>
 
   @override
   void dispose() {
+    _providerRefreshDebounce?.cancel();
+    widget.messagesChangedRevision.removeListener(
+      _handleProviderMessagesChanged,
+    );
     widget.notificationOpenRequest?.removeListener(
       _handleNotificationOpenRequest,
     );

@@ -43,6 +43,7 @@ class ConversationListScreen extends StatefulWidget {
     required this.onCallConversation,
     required this.onOpenConversationContact,
     required this.onConversationVisibilityChanged,
+    required this.openConversationMessagesRevision,
     required this.syncProgress,
     required this.onSearchMessages,
     this.notificationOpenRequest,
@@ -63,7 +64,9 @@ class ConversationListScreen extends StatefulWidget {
   final Future<int> Function(Conversation) onLoadOlderConversation;
   final ValueChanged<Conversation> onCallConversation;
   final ValueChanged<Conversation> onOpenConversationContact;
-  final ValueChanged<bool> onConversationVisibilityChanged;
+  final void Function(bool visible, Conversation? conversation)
+      onConversationVisibilityChanged;
+  final ValueListenable<int> openConversationMessagesRevision;
   final ValueListenable<SmsSyncProgress> syncProgress;
   final Future<List<SmsSearchHit>> Function(String query) onSearchMessages;
   final ValueListenable<NotificationOpenRequest?>? notificationOpenRequest;
@@ -239,7 +242,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
   }) async {
     final targetMessageId = initialMessageId;
     _activeConversationId = conversation.id;
-    widget.onConversationVisibilityChanged(true);
+    widget.onConversationVisibilityChanged(true, conversation);
     try {
       setState(() => conversation.unreadCount = 0);
       unawaited(_markConversationRead(conversation));
@@ -255,6 +258,8 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                 conversation.messages.isNotEmpty,
             initialMessageId: targetMessageId,
             notificationOpenRequest: widget.notificationOpenRequest,
+            messagesChangedRevision:
+                widget.openConversationMessagesRevision,
             onLoad: () => targetMessageId == null
                 ? widget.onLoadConversation(conversation)
                 : widget.onLoadMessageContext?.call(
@@ -283,7 +288,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
       if (_activeConversationId == conversation.id) {
         _activeConversationId = null;
       }
-      widget.onConversationVisibilityChanged(false);
+      widget.onConversationVisibilityChanged(false, null);
     }
   }
 

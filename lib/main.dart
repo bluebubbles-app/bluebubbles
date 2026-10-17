@@ -47,6 +47,8 @@ class _MessagesUiAppState extends State<MessagesUiApp>
       ValueNotifier(SmsSyncProgress.idle);
   final ValueNotifier<NotificationOpenRequest?> _notificationOpenRequest =
       ValueNotifier(null);
+  final ValueNotifier<int> _openConversationMessagesRevision =
+      ValueNotifier<int>(0);
   bool _usingPhoneMessages = false;
   bool _loadingPhoneMessages = false;
   String? _phoneLoadError;
@@ -56,6 +58,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
   int _backgroundSyncGeneration = 0;
   int _foregroundThreadLoads = 0;
   bool _conversationRouteVisible = false;
+  Conversation? _activeConversation;
   final Map<String, ConversationEnrichment> _pendingEnrichments = {};
   Timer? _enrichmentTimer;
   DateTime _lastSyncProgressUpdate = DateTime.fromMillisecondsSinceEpoch(0);
@@ -66,8 +69,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _smsController.onMessagesChanged = () =>
-        unawaited(_reloadPhoneMessagesSilently());
+    _smsController.onMessagesChanged = _handleSmsProviderChanged;
     _smsController.onNotificationOpened = _handleNotificationOpened;
     _smsController.onConversationEnriched = _applyConversationEnrichment;
     unawaited(_initializeApp());
@@ -81,6 +83,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
     unawaited(_localSmsStore.close());
     _smsSyncProgress.dispose();
     _notificationOpenRequest.dispose();
+    _openConversationMessagesRevision.dispose();
     _smsController.dispose();
     _settings.dispose();
     super.dispose();
@@ -196,6 +199,14 @@ class _MessagesUiAppState extends State<MessagesUiApp>
     } catch (error) {
       debugPrint('Phone message reload failed: $error');
     }
+  }
+
+  void _handleSmsProviderChanged() {
+    if (_conversationRouteVisible && _activeConversation != null) {
+      _openConversationMessagesRevision.value++;
+      return;
+    }
+    unawaited(_reloadPhoneMessagesSilently());
   }
 
   Future<void> _loadPhoneMessages() {
@@ -418,6 +429,11 @@ class _MessagesUiAppState extends State<MessagesUiApp>
     try {
       await _localSmsStore.updateConversation(conversation);
       await _localSmsStore.markConversationRead(conversation.id);
+      try {
+        await _smsController.markThreadRead(conversation.id);
+      } catch (_) {
+        // Reading must continue even if Android is updating the same thread.
+      }
       final cached = await _localSmsStore.loadRecentMessages(conversation.id);
       if (cached.isNotEmpty) {
         if (!mounted) return 0;
@@ -447,7 +463,9 @@ class _MessagesUiAppState extends State<MessagesUiApp>
                           .compareTo(const Duration(minutes: 2)) <
                       0,
             );
-        final localOnlyMessages = cached.where(
+        // Read local-only rows at merge time, not when the provider query
+        // started. A reply may be added while that query is in flight.
+        final localOnlyMessages = conversation.messages.where(
           (message) =>
               (message.id.startsWith('sending-') ||
                   message.id.startsWith('failed-')) &&
@@ -460,6 +478,13 @@ class _MessagesUiAppState extends State<MessagesUiApp>
         conversation.messages
           ..clear()
           ..addAll(visibleMessages);
+        if (visibleMessages.isNotEmpty) {
+          final latest = visibleMessages.last;
+          conversation
+            ..preview = latest.text
+            ..updatedAt = latest.sentAt
+            ..unreadCount = 0;
+        }
         return visibleMessages.length;
       } catch (_) {
         if (cached.isNotEmpty) return cached.length;
@@ -796,11 +821,16 @@ class _MessagesUiAppState extends State<MessagesUiApp>
     }
   }
 
-  void _setConversationRouteVisible(bool visible) {
+  void _setConversationRouteVisible(
+    bool visible,
+    Conversation? conversation,
+  ) {
     _conversationRouteVisible = visible;
+    _activeConversation = visible ? conversation : null;
     if (visible) {
       _backgroundSyncGeneration++;
     } else if (_smsController.isActive) {
+      unawaited(_reloadPhoneMessagesSilently());
       _scheduleBackgroundMessageSync(_messageRepository.conversations);
     }
   }
@@ -867,6 +897,8 @@ class _MessagesUiAppState extends State<MessagesUiApp>
             syncProgress: _smsSyncProgress,
             onSearchMessages: _searchCachedMessages,
             notificationOpenRequest: _notificationOpenRequest,
+            openConversationMessagesRevision:
+                _openConversationMessagesRevision,
           ),
         ),
       ),
