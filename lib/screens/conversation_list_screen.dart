@@ -2398,40 +2398,45 @@ class ConversationRow extends StatelessWidget {
                   )
                 else
                   SizedBox(
-                    width: 24,
-                    // The dot and avatar share the same vertical center.
-                    height: 78,
+                    width: 23,
+                    height: 76,
                     child: highlighted
-                        ? const Center(
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                color: MessagesPalette.blue,
-                                shape: BoxShape.circle,
+                        ? Center(
+                            child: Transform.translate(
+                              offset: const Offset(0, .5),
+                              child: const DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: MessagesPalette.blue,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: SizedBox(width: 11, height: 11),
                               ),
-                              child: SizedBox(width: 11, height: 11),
                             ),
                           )
                         : null,
                   ),
                 SizedBox(
-                  height: 78,
+                  height: 76,
                   child: Padding(
                     padding: EdgeInsets.only(
-                      left: selectionMode ? 10 : 0,
-                      right: selectionMode ? 13 : 15,
+                      left: selectionMode ? 10 : 3,
+                      right: 13,
                     ),
                     child: Center(
-                      child: ContactAvatar(
-                        conversation: conversation,
-                        size: 48.4,
+                      child: Transform.translate(
+                        offset: const Offset(0, -.5),
+                        child: ContactAvatar(
+                          conversation: conversation,
+                          size: 45,
+                        ),
                       ),
                     ),
                   ),
                 ),
                 Expanded(
                   child: Container(
-                    constraints: const BoxConstraints(minHeight: 78),
-                    padding: const EdgeInsets.fromLTRB(0, 9, 10, 8),
+                    constraints: const BoxConstraints(minHeight: 76),
+                    padding: const EdgeInsets.fromLTRB(0, 9, 16, 7),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -2444,8 +2449,8 @@ class ConversationRow extends StatelessWidget {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: MessagesText.headline(context).copyWith(
-                                  fontSize: 18,
-                                  height: 1.08,
+                                  fontSize: 17,
+                                  height: 1,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -2472,7 +2477,7 @@ class ConversationRow extends StatelessWidget {
                                       style: MessagesText.secondary(context)
                                           .copyWith(
                                         fontSize: 15,
-                                        height: 1.15,
+                                        height: 4 / 3,
                                         fontWeight: FontWeight.w400,
                                       ),
                                     ),
@@ -2494,7 +2499,7 @@ class ConversationRow extends StatelessWidget {
                                 ),
                                 style:
                                     MessagesText.secondary(context).copyWith(
-                                  fontSize: 13,
+                                  fontSize: 15,
                                   fontWeight: highlighted
                                       ? FontWeight.w600
                                       : FontWeight.w400,
@@ -2504,8 +2509,9 @@ class ConversationRow extends StatelessWidget {
                               Icon(
                                 CupertinoIcons.chevron_right,
                                 size: 13,
-                                color:
-                                    MessagesPalette.secondaryLabel(context),
+                                color: MessagesPalette.isDark(context)
+                                    ? MessagesPalette.secondaryLabel(context)
+                                    : const Color(0x4D3C3C43),
                               ),
                             ],
                           ),
@@ -2523,9 +2529,10 @@ class ConversationRow extends StatelessWidget {
             bottom: 0,
             child: IgnorePointer(
               child: ColoredBox(
-                color: MessagesPalette.hairline(context)
-                    .withValues(alpha: .55),
-                child: const SizedBox(height: .45),
+                color: MessagesPalette.isDark(context)
+                    ? MessagesPalette.hairline(context).withValues(alpha: .55)
+                    : const Color(0x5C3C3C43),
+                child: const SizedBox(height: .5),
               ),
             ),
           ),
