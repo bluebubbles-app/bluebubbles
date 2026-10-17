@@ -19,6 +19,7 @@ import 'conversation_screen.dart';
 import 'settings_screen.dart';
 
 const maxPinnedConversations = 9;
+const _collapsedSearchExtent = 60.0;
 
 bool hasAvailablePinSlot(Iterable<Conversation> conversations) =>
     conversations.where((conversation) => conversation.isPinned).length <
@@ -81,6 +82,9 @@ class ConversationListScreen extends StatefulWidget {
 
 class _ConversationListScreenState extends State<ConversationListScreen> {
   final _searchController = TextEditingController();
+  final _conversationListController = ScrollController(
+    initialScrollOffset: _collapsedSearchExtent,
+  );
   String _query = '';
   bool _editingFavorites = false;
   bool _selectingConversations = false;
@@ -557,6 +561,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
     );
     _searchDebounce?.cancel();
     _searchController.dispose();
+    _conversationListController.dispose();
     _openSwipeConversationId.dispose();
     super.dispose();
   }
@@ -588,13 +593,17 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
           children: [
             SafeArea(
               bottom: false,
-              child: NotificationListener<ScrollNotification>(
-                onNotification: _handleConversationListScroll,
-                child: CustomScrollView(
-                  keyboardDismissBehavior:
-                      ScrollViewKeyboardDismissBehavior.onDrag,
-                  slivers: [
-              SliverToBoxAdapter(child: _buildHeader(context)),
+              child: Column(
+                children: [
+                  _buildHeader(context),
+                  Expanded(
+                    child: NotificationListener<ScrollNotification>(
+                      onNotification: _handleConversationListScroll,
+                      child: CustomScrollView(
+                        controller: _conversationListController,
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        slivers: [
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
@@ -735,8 +744,11 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                   bottom: _selectingConversations ? 96 : 28,
                 ),
               ),
-                  ],
-                ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
             Positioned(
@@ -2411,7 +2423,7 @@ class ConversationRow extends StatelessWidget {
                     child: Center(
                       child: ContactAvatar(
                         conversation: conversation,
-                        size: 44,
+                        size: 48.4,
                       ),
                     ),
                   ),
@@ -2434,7 +2446,7 @@ class ConversationRow extends StatelessWidget {
                                 style: MessagesText.headline(context).copyWith(
                                   fontSize: 18,
                                   height: 1.08,
-                                  fontWeight: FontWeight.w500,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                               const SizedBox(height: 3),
