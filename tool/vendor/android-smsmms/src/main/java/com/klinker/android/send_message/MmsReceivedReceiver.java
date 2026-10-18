@@ -86,6 +86,7 @@ public abstract class MmsReceivedReceiver extends BroadcastReceiver {
     @Override
     public final void onReceive(final Context context, final Intent intent) {
         Timber.v("MMS has finished downloading, persisting it to the database");
+        final PendingResult pendingResult = goAsync();
 
         final String path = intent.getStringExtra(EXTRA_FILE_PATH);
         final int subscriptionId = intent.getIntExtra(SUBSCRIPTION_ID, Utils.getDefaultSubscriptionId());
@@ -148,6 +149,7 @@ public abstract class MmsReceivedReceiver extends BroadcastReceiver {
                 if (errorMessage != null) {
                     onError(context, errorMessage);
                 }
+                pendingResult.finish();
             }
         }).start();
     }

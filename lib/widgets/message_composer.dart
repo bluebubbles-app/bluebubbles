@@ -713,7 +713,7 @@ class _AttachmentPreview extends StatelessWidget {
   Widget build(BuildContext context) => Align(
         alignment: Alignment.centerLeft,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(123, 7, 16, 2),
+          padding: const EdgeInsets.fromLTRB(12, 7, 16, 2),
           child: Stack(
             clipBehavior: Clip.none,
             children: [

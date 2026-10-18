@@ -171,8 +171,15 @@ internal object MessageNotifier {
         val notificationId = notificationId(resolvedThreadId, address)
         val messages = resolvedThreadId?.let {
             recentUnreadMessages(context, it)
-        }.orEmpty().ifEmpty {
-            listOf(NotificationMessage(body, timestamp))
+        }.orEmpty().let { history ->
+            val current = NotificationMessage(body, timestamp)
+            val includesCurrent = history.any { message ->
+                message.body == body &&
+                    kotlin.math.abs(message.timestamp - timestamp) < 5_000L
+            }
+            (if (includesCurrent) history else history + current)
+                .sortedBy(NotificationMessage::timestamp)
+                .takeLast(MAX_NOTIFICATION_MESSAGES)
         }
         val latestMessage = messages.last()
 

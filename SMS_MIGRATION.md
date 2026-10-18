@@ -18,6 +18,8 @@ required permissions.
 6. Preview Mode without changing the phone's current default SMS app.
 7. first-launch permission onboarding with a Preview Mode escape hatch, plus
    permissionless handoff to Android's phone dialer.
+8. carrier MMS image/audio sending and incoming MMS download, persistence,
+   conversation display, and contact-aware notifications.
 
 The generated Android wrapper is intentionally not committed. On each machine,
 `tool/setup_android.sh` copies the tracked manifest and Kotlin sources from
@@ -25,13 +27,11 @@ The generated Android wrapper is intentionally not committed. On each machine,
 
 ## Remaining before daily-driver use
 
-1. parse, store, display, and send MMS attachments instead of only preserving
-   incoming raw MMS payloads;
-2. support group threads and a complete new-conversation flow;
-3. persist pin/mute UI metadata independently of Android's SMS provider;
-4. add delivery broadcasts, SIM selection, failure recovery, and background
+1. support complete group-MMS composition and a complete new-conversation flow;
+2. persist pin/mute UI metadata independently of Android's SMS provider;
+3. add complete delivery receipts, SIM selection, failure recovery, and background
    migration tests;
-5. remove demo data only when Preview Mode is intentionally retired.
+4. remove demo data only when Preview Mode is intentionally retired.
 
 JSON import/export is a portable BlueBubbles backup format, not an Android
 system SMS database dump. RCS is not exposed through the public Android SMS

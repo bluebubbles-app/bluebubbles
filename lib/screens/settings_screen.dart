@@ -257,8 +257,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               header: const Text('MESSAGING MODE'),
               footer: const Text(
                 'Preview Mode keeps your current SMS app unchanged. The first '
-                'native build handles text SMS; MMS display and RCS are not '
-                'available yet.',
+                'native build handles SMS and carrier MMS. RCS is not '
+                'available through Android’s public SMS interface.',
               ),
               children: [
                 _StatusRow(
@@ -420,7 +420,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               header: const Text('MESSAGES'),
               footer: const Text(
                 'Backups use a portable JSON model. The same conversation '
-                'model is ready to receive Android SMS/MMS data later.',
+                'model stores imported data and Android SMS/MMS data.',
               ),
               children: [
                 _ActionRow(

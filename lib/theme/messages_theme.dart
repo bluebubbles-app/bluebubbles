@@ -6,7 +6,7 @@ abstract final class MessagesPalette {
   static const darkBlue = Color(0xFF0A84FF);
   static const green = Color(0xFF34C759);
   static const darkGreen = Color(0xFF30D158);
-  static const customBubbleGreen = Color(0xFF65C466);
+  static const customBubbleGreen = Color(0xFF00DD5B);
   static const secondary = Color(0xFF8E8E93);
   static const separator = Color(0xFFC6C6C8);
 

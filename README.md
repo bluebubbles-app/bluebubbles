@@ -24,12 +24,12 @@ by the OpenBubbles Cupertino appearance and the iPhone Messages experience.
 - Android default-SMS role request from Settings;
 - native reading, receiving, sending, deleting, and read-state updates for
   text SMS;
+- carrier MMS image/audio sending, receiving, storage, and display;
 - BlueBubbles launcher icon and application name.
 
 ## Current native limitations
 
-- MMS display and sending (incoming MMS payloads are only preserved locally and
-  reported by a notification in this first native build);
+- complete group-MMS composition and carrier-independent delivery receipts;
 - RCS access, because Android does not expose a general public RCS API to
   third-party SMS applications;
 - group-message composition and full delivery/read receipts;
@@ -67,9 +67,8 @@ You can switch back to the previous SMS app at any time in Android's
 default-app settings.
 
 The conversation call button opens Android's dialer with the recipient filled
-in, which does not require direct-call permission. Future MMS attachments will
-use Android's permissionless system photo picker. Microphone access will be
-requested in context when voice-message recording is implemented.
+in, which does not require direct-call permission. Photos use Android's media
+picker and voice recordings are sent as carrier MMS audio attachments.
 
 Sample data remains in `lib/data/demo_data.dart` for Preview Mode. Once the SMS
 role and permissions are active, the UI reloads lightweight conversation

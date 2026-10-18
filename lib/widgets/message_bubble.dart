@@ -5,6 +5,7 @@ import 'dart:ui';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:characters/characters.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/gestures.dart';
 
 import '../l10n/message_status_strings.dart';
 import '../models/conversation.dart';
@@ -375,6 +376,7 @@ class _AudioAttachmentState extends State<_AudioAttachment> {
   StreamSubscription<void>? _completionSubscription;
   bool _playing = false;
   bool _sourceReady = false;
+  bool _scrubbing = false;
   Duration _position = Duration.zero;
   late Duration _duration = Duration(
     milliseconds: widget.attachment.durationMilliseconds ?? 0,
@@ -385,7 +387,7 @@ class _AudioAttachmentState extends State<_AudioAttachment> {
     if (existing != null) return existing;
     final player = AudioPlayer();
     _positionSubscription = player.onPositionChanged.listen((position) {
-      if (mounted) setState(() => _position = position);
+      if (mounted && !_scrubbing) setState(() => _position = position);
     });
     _durationSubscription = player.onDurationChanged.listen((duration) {
       if (mounted && duration > Duration.zero) {
@@ -447,6 +449,24 @@ class _AudioAttachmentState extends State<_AudioAttachment> {
     }
   }
 
+  void _scrubTo(double localX, double width) {
+    if (_duration <= Duration.zero || width <= 0) return;
+    final fraction = (localX / width).clamp(0.0, 1.0);
+    setState(() {
+      _scrubbing = true;
+      _position = Duration(
+        milliseconds: (_duration.inMilliseconds * fraction).round(),
+      );
+    });
+  }
+
+  Future<void> _finishScrubbing() async {
+    if (!_scrubbing) return;
+    final milliseconds = _position.inMilliseconds.toDouble();
+    setState(() => _scrubbing = false);
+    await _seek(milliseconds);
+  }
+
   @override
   void dispose() {
     unawaited(_positionSubscription?.cancel());
@@ -482,20 +502,82 @@ class _AudioAttachmentState extends State<_AudioAttachment> {
             ),
           ),
           Expanded(
-            child: CupertinoSlider(
-              min: 0,
-              max: maximum,
-              value: value,
-              activeColor: widget.foregroundColor.withValues(alpha: .9),
-              thumbColor: widget.foregroundColor,
-              onChanged: totalMilliseconds <= 0
-                  ? null
-                  : (next) => setState(
-                        () => _position = Duration(
-                          milliseconds: next.round(),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final width = constraints.maxWidth;
+                final progress = totalMilliseconds <= 0
+                    ? 0.0
+                    : (value / maximum).clamp(0.0, 1.0);
+                return RawGestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  gestures: <Type, GestureRecognizerFactory>{
+                    EagerGestureRecognizer:
+                        GestureRecognizerFactoryWithHandlers<
+                            EagerGestureRecognizer>(
+                      EagerGestureRecognizer.new,
+                      (_) {},
+                    ),
+                  },
+                  child: Listener(
+                    behavior: HitTestBehavior.opaque,
+                    onPointerDown: totalMilliseconds <= 0
+                        ? null
+                        : (event) => _scrubTo(event.localPosition.dx, width),
+                    onPointerMove: totalMilliseconds <= 0
+                        ? null
+                        : (event) => _scrubTo(event.localPosition.dx, width),
+                    onPointerUp: totalMilliseconds <= 0
+                        ? null
+                        : (_) => unawaited(_finishScrubbing()),
+                    onPointerCancel: totalMilliseconds <= 0
+                        ? null
+                        : (_) => unawaited(_finishScrubbing()),
+                    child: Semantics(
+                      label: 'Audio position',
+                      value:
+                          '${_position.inSeconds} of ${_duration.inSeconds} seconds',
+                      child: SizedBox(
+                        height: 32,
+                        child: Stack(
+                          alignment: Alignment.centerLeft,
+                          children: [
+                            Container(
+                              height: 3,
+                              decoration: BoxDecoration(
+                                color: widget.foregroundColor
+                                    .withValues(alpha: .25),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                            FractionallySizedBox(
+                              widthFactor: progress,
+                              child: Container(
+                                height: 3,
+                                decoration: BoxDecoration(
+                                  color: widget.foregroundColor
+                                      .withValues(alpha: .9),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              left: progress * (width - 12),
+                              child: Container(
+                                width: 12,
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  color: widget.foregroundColor,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-              onChangeEnd: totalMilliseconds <= 0 ? null : _seek,
+                    ),
+                  ),
+                );
+              },
             ),
           ),
           const SizedBox(width: 4),
