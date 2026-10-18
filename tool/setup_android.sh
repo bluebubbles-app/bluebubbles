@@ -7,10 +7,33 @@ project_root="$(cd "$script_dir/.." && pwd)"
 manifest="$project_root/android/app/src/main/AndroidManifest.xml"
 native_source="$script_dir/android_sms"
 kotlin_target="$project_root/android/app/src/main/kotlin/io/github/bluebubblesapp/bluebubbles"
-app_gradle="$project_root/android/app/build.gradle.kts"
-settings_gradle="$project_root/android/settings.gradle.kts"
 vendor_source="$script_dir/vendor/android-smsmms"
 vendor_target="$project_root/android/android-smsmms"
+
+# Gradle prefers the Groovy file when both variants are present. Configure the
+# same file that Gradle will actually read instead of assuming a recent Flutter
+# template always uses Kotlin DSL.
+if [[ -f "$project_root/android/app/build.gradle" ]]; then
+  app_gradle="$project_root/android/app/build.gradle"
+  app_gradle_dsl="groovy"
+elif [[ -f "$project_root/android/app/build.gradle.kts" ]]; then
+  app_gradle="$project_root/android/app/build.gradle.kts"
+  app_gradle_dsl="kotlin"
+else
+  echo "Android app Gradle file is missing." >&2
+  exit 1
+fi
+
+if [[ -f "$project_root/android/settings.gradle" ]]; then
+  settings_gradle="$project_root/android/settings.gradle"
+  settings_gradle_dsl="groovy"
+elif [[ -f "$project_root/android/settings.gradle.kts" ]]; then
+  settings_gradle="$project_root/android/settings.gradle.kts"
+  settings_gradle_dsl="kotlin"
+else
+  echo "Android settings Gradle file is missing." >&2
+  exit 1
+fi
 
 if [[ ! -f "$manifest" ]]; then
   echo "Android project files are missing." >&2
@@ -34,20 +57,32 @@ cp "$native_source/SmsSendCompat.kt" "$kotlin_target/SmsSendCompat.kt"
 mkdir -p "$vendor_target"
 cp -R "$vendor_source/." "$vendor_target/"
 
-if [[ -f "$settings_gradle" ]] && \
-   ! grep -q 'include(":android-smsmms")' "$settings_gradle"; then
-  printf '\n%s\n' \
-    'include(":android-smsmms")' \
-    'project(":android-smsmms").projectDir = file("android-smsmms")' \
-    >> "$settings_gradle"
+if ! grep -q 'android-smsmms' "$settings_gradle"; then
+  if [[ "$settings_gradle_dsl" == "groovy" ]]; then
+    printf '\n%s\n' \
+      "include ':android-smsmms'" \
+      "project(':android-smsmms').projectDir = file('android-smsmms')" \
+      >> "$settings_gradle"
+  else
+    printf '\n%s\n' \
+      'include(":android-smsmms")' \
+      'project(":android-smsmms").projectDir = file("android-smsmms")' \
+      >> "$settings_gradle"
+  fi
 fi
 
-if [[ -f "$app_gradle" ]] && \
-   ! grep -q 'implementation(project(":android-smsmms"))' "$app_gradle"; then
-  printf '\n%s\n' \
-    'dependencies {' \
-    '    implementation(project(":android-smsmms"))' \
-    '}' >> "$app_gradle"
+if ! grep -q 'android-smsmms' "$app_gradle"; then
+  if [[ "$app_gradle_dsl" == "groovy" ]]; then
+    printf '\n%s\n' \
+      'dependencies {' \
+      "    implementation project(':android-smsmms')" \
+      '}' >> "$app_gradle"
+  else
+    printf '\n%s\n' \
+      'dependencies {' \
+      '    implementation(project(":android-smsmms"))' \
+      '}' >> "$app_gradle"
+  fi
 fi
 
 cd "$project_root"
