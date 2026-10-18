@@ -48,7 +48,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(CupertinoTextField), findsOneWidget);
     expect(find.text('Let me know when you leave'), findsOneWidget);
-    expect(find.byIcon(CupertinoIcons.mic), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('voice-message-button')),
+      findsOneWidget,
+    );
     expect(find.byIcon(CupertinoIcons.phone), findsOneWidget);
     expect(find.byIcon(CupertinoIcons.video_camera), findsNothing);
 
@@ -119,9 +122,6 @@ void main() {
 
     expect(find.text('Settings'), findsOneWidget);
     expect(find.text('Header Transparency'), findsOneWidget);
-    expect(find.text('Language'), findsOneWidget);
-    expect(find.text('Date Format'), findsOneWidget);
-    expect(find.text('Time Format'), findsOneWidget);
     expect(find.text('Emoji Style'), findsOneWidget);
     await tester.tap(find.text('Emoji Style'));
     await tester.pumpAndSettle();
@@ -133,6 +133,12 @@ void main() {
       app.theme?.textTheme.textStyle.fontFamilyFallback?.first,
       'Apple Color Emoji',
     );
+    await tester.drag(find.byType(ListView), const Offset(0, -400));
+    await tester.pumpAndSettle();
+    expect(find.text('Language'), findsOneWidget);
+    expect(find.text('Date Format'), findsOneWidget);
+    expect(find.text('Time Format'), findsOneWidget);
+
     await tester.drag(find.byType(ListView), const Offset(0, -500));
     await tester.pumpAndSettle();
     expect(find.text('Import Messages'), findsOneWidget);

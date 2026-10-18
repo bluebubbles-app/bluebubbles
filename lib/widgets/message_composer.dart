@@ -427,6 +427,9 @@ class _MessageComposerState extends State<MessageComposer> {
                                         duration:
                                             const Duration(milliseconds: 140),
                                         child: GestureDetector(
+                                          key: const ValueKey(
+                                            'voice-message-button',
+                                          ),
                                           onLongPress: canSend || _busy
                                               ? null
                                               : _startRecording,
