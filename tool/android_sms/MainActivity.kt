@@ -847,7 +847,6 @@ class MainActivity : FlutterActivity() {
         val mimeType = call.argument<String>("mimeType")
             ?.takeIf { it.isNotBlank() }
             ?: "application/octet-stream"
-        val name = call.argument<String>("name")
         val threadId = call.argument<String>("threadId")?.toLongOrNull()
         if (address.isEmpty() || (uriValue.isEmpty() && localPath.isEmpty())) {
             result.error("invalid_mms", "A recipient and attachment are required.", null)
@@ -871,7 +870,11 @@ class MainActivity : FlutterActivity() {
                             }
                         val message =
                             com.klinker.android.send_message.Message(text, address).apply {
-                                addMedia(prepared.bytes, prepared.mimeType, name)
+                                addMedia(
+                                    prepared.bytes,
+                                    prepared.mimeType,
+                                    mmsPartName(prepared.mimeType),
+                                )
                             }
                         val transaction =
                             com.klinker.android.send_message.Transaction(this, settings)
@@ -906,7 +909,12 @@ class MainActivity : FlutterActivity() {
         bytes: ByteArray,
         mimeType: String,
     ): PreparedMmsAttachment {
-        if (!mimeType.startsWith("image/") || bytes.size <= 600_000) {
+        val carrierSafeImage = mimeType.equals("image/jpeg", true) ||
+            mimeType.equals("image/png", true)
+        if (!mimeType.startsWith("image/") ||
+            mimeType.equals("image/gif", true) ||
+            (carrierSafeImage && bytes.size <= 600_000)
+        ) {
             return PreparedMmsAttachment(bytes, mimeType)
         }
         val bitmap = runCatching {
@@ -940,6 +948,21 @@ class MainActivity : FlutterActivity() {
             quality -= 8
         }
         return PreparedMmsAttachment(encoded, "image/jpeg")
+    }
+
+    private fun mmsPartName(mimeType: String): String = when {
+        mimeType.equals("image/jpeg", true) -> "image.jpg"
+        mimeType.equals("image/png", true) -> "image.png"
+        mimeType.equals("image/gif", true) -> "image.gif"
+        mimeType.equals("image/webp", true) -> "image.webp"
+        mimeType.equals("audio/mp4", true) -> "audio.m4a"
+        mimeType.equals("audio/aac", true) -> "audio.aac"
+        mimeType.equals("audio/mpeg", true) -> "audio.mp3"
+        mimeType.equals("audio/ogg", true) -> "audio.ogg"
+        mimeType.startsWith("image/", true) -> "image.jpg"
+        mimeType.startsWith("audio/", true) -> "audio.bin"
+        mimeType.startsWith("video/", true) -> "video.mp4"
+        else -> "attachment.bin"
     }
 
     private fun loadThreadMessages(call: MethodCall, result: MethodChannel.Result) {

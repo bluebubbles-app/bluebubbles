@@ -559,7 +559,14 @@ public class Transaction {
                     try {
                         PduPart partPdu = new PduPart();
                         partPdu.setName(part.Name.getBytes());
+                        partPdu.setFilename(part.Name.getBytes());
                         partPdu.setContentType(part.MimeType.getBytes());
+
+                        if (part.MimeType.startsWith("image/") ||
+                                part.MimeType.startsWith("audio/") ||
+                                part.MimeType.startsWith("video/")) {
+                            partPdu.setContentDisposition("inline".getBytes());
+                        }
 
                         if (part.MimeType.startsWith("text")) {
                             partPdu.setCharset(CharacterSets.UTF_8);
@@ -795,6 +802,13 @@ public class Transaction {
         }
         // Set Content-Type.
         part.setContentType(p.MimeType.getBytes());
+        part.setName(filename.getBytes());
+        part.setFilename(filename.getBytes());
+        if (p.MimeType.startsWith("image/") ||
+                p.MimeType.startsWith("audio/") ||
+                p.MimeType.startsWith("video/")) {
+            part.setContentDisposition("inline".getBytes());
+        }
         // Set Content-Location.
         part.setContentLocation(filename.getBytes());
         int index = filename.lastIndexOf(".");
