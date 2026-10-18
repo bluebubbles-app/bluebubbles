@@ -384,7 +384,7 @@ class _MessageComposerState extends State<MessageComposer> {
                               ? _AudioDraftControls(
                                   duration: Duration(
                                     milliseconds:
-                                        attachment.durationMilliseconds ?? 0,
+                                        attachment!.durationMilliseconds ?? 0,
                                   ),
                                   playing: _previewPlaying,
                                   onPlayPause: _togglePreviewPlayback,
