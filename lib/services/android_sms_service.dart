@@ -194,11 +194,11 @@ class AndroidSmsController extends ChangeNotifier {
     return count?.toInt() ?? 0;
   }
 
-  Future<void> sendText(String address, String text) async {
+  Future<String?> sendText(String address, String text) async {
     if (!isActive) {
       throw StateError('BlueBubbles is not the default SMS app.');
     }
-    await _channel.invokeMethod<void>('sendSms', {
+    return _channel.invokeMethod<String>('sendSms', {
       'address': address,
       'text': text,
     });

@@ -807,6 +807,8 @@ class MainActivity : FlutterActivity() {
         }
         Thread {
             try {
+                suppressProviderReloadUntil =
+                    SystemClock.elapsedRealtime() + 750L
                 val manager = SmsManager.getDefault()
                 SmsSendCompat.send(manager, address, text)
                 val values = ContentValues().apply {
@@ -821,7 +823,9 @@ class MainActivity : FlutterActivity() {
                     values,
                 ) ?: error("The SMS provider rejected the sent message.")
                 Log.i(TAG, "SMS queued and stored at $inserted")
-                runOnUiThread { result.success(null) }
+                mainHandler.removeCallbacks(notifyMessagesChanged)
+                mainHandler.postDelayed(notifyMessagesChanged, 800L)
+                runOnUiThread { result.success(inserted.lastPathSegment) }
             } catch (error: Exception) {
                 Log.e(TAG, "SMS send failed", error)
                 runOnUiThread {
@@ -874,13 +878,15 @@ class MainActivity : FlutterActivity() {
                         transaction.setExplicitBroadcastForSentMms(
                             Intent(this, BlueBubblesMmsSentReceiver::class.java),
                         )
+                        suppressProviderReloadUntil =
+                            SystemClock.elapsedRealtime() + 750L
                         transaction.sendNewMessage(
                             message,
                             threadId
                                 ?: com.klinker.android.send_message.Transaction.NO_THREAD_ID,
                         )
-                        suppressProviderReloadUntil =
-                            SystemClock.elapsedRealtime() + 1_000L
+                        mainHandler.removeCallbacks(notifyMessagesChanged)
+                        mainHandler.postDelayed(notifyMessagesChanged, 800L)
                         result.success(null)
                     } catch (error: Exception) {
                         Log.e(TAG, "MMS enqueue failed", error)

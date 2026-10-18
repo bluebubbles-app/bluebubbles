@@ -649,25 +649,21 @@ class _MessagesUiAppState extends State<MessagesUiApp>
     if (address == null || address.isEmpty || trimmed.isEmpty) return;
     final now = DateTime.now();
     final pendingId = 'sending-${now.microsecondsSinceEpoch}';
+    final pendingMessage = ChatMessage(
+      id: pendingId,
+      text: trimmed,
+      sentAt: now,
+      isFromMe: true,
+      deliveryState: DeliveryState.sending,
+    );
     setState(() {
-      conversation.messages.add(
-        ChatMessage(
-          id: pendingId,
-          text: trimmed,
-          sentAt: now,
-          isFromMe: true,
-          deliveryState: DeliveryState.sending,
-        ),
-      );
+      conversation.messages.add(pendingMessage);
       conversation
         ..preview = trimmed
         ..updatedAt = now;
     });
     unawaited(
-      _cacheOptimisticMessage(conversation, conversation.messages.last),
-    );
-    unawaited(
-      _sendPhoneMessage(conversation, address, trimmed, pendingId),
+      _sendPhoneMessage(conversation, address, pendingMessage),
     );
   }
 
@@ -858,16 +854,10 @@ class _MessagesUiAppState extends State<MessagesUiApp>
     } catch (error) {
       debugPrint('Failed Android message cleanup before retry failed: $error');
     }
-    try {
-      await _cacheOptimisticMessage(conversation, pendingMessage);
-    } catch (error) {
-      debugPrint('Retried message cache failed: $error');
-    }
     await _sendPhoneMessage(
       conversation,
       address,
-      pendingMessage.text,
-      pendingMessage.id,
+      pendingMessage,
     );
   }
 
@@ -890,11 +880,14 @@ class _MessagesUiAppState extends State<MessagesUiApp>
   Future<void> _sendPhoneMessage(
     Conversation conversation,
     String address,
-    String text,
-    String pendingId,
+    ChatMessage pendingMessage,
   ) async {
+    final pendingId = pendingMessage.id;
+    final text = pendingMessage.text;
+    await _cacheOptimisticMessage(conversation, pendingMessage);
+    String? providerId;
     try {
-      await _smsController.sendText(address, text);
+      providerId = await _smsController.sendText(address, text);
     } catch (error, stackTrace) {
       debugPrint('SMS send failed: $error');
       debugPrintStack(stackTrace: stackTrace);
@@ -927,34 +920,40 @@ class _MessagesUiAppState extends State<MessagesUiApp>
     }
 
     if (!mounted) return;
+    ChatMessage? sentMessage;
     setState(() {
       final pendingIndex = conversation.messages.indexWhere(
         (message) => message.id == pendingId,
       );
       if (pendingIndex != -1) {
         final pending = conversation.messages[pendingIndex];
-        conversation.messages[pendingIndex] = ChatMessage(
-          id: pending.id,
+        sentMessage = ChatMessage(
+          id: providerId?.trim().isNotEmpty == true
+              ? providerId!.trim()
+              : pending.id,
           text: pending.text,
           sentAt: pending.sentAt,
           isFromMe: true,
           deliveryState: DeliveryState.sent,
         );
+        conversation.messages[pendingIndex] = sentMessage!;
       }
     });
     try {
       await _localSmsStore.deleteMessage(conversation.id, pendingId);
+      final stableMessage = sentMessage;
+      if (stableMessage != null &&
+          !stableMessage.id.startsWith('sending-')) {
+        await _localSmsStore.storeMessagePage(
+          conversation.id,
+          [stableMessage],
+          reachedBeginning: false,
+        );
+      }
     } catch (error) {
       debugPrint('Sent message cache cleanup failed: $error');
     }
     unawaited(_refreshThreadHeadInCache(conversation.id));
-    // Reload only thread summaries here. Replacing the open AnimatedList
-    // would desynchronize its item count from the optimistic message row.
-    try {
-      await _loadPhoneMessages();
-    } catch (error) {
-      debugPrint('Conversation header refresh after send failed: $error');
-    }
   }
 
   Future<void> _cacheFailedMessage(
