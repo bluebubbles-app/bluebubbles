@@ -216,23 +216,10 @@ class _MessageComposerState extends State<MessageComposer> {
     setState(() => _busy = true);
     try {
       if (!await _requestMediaPermission('photos')) return;
-      final raw = await _channel.invokeListMethod<Object?>(
-        'loadRecentImages',
-        {'limit': 60},
-      );
       if (!mounted) return;
-      final images = (raw ?? const <Object?>[])
-          .whereType<Map>()
-          .map(
-            (value) => _attachmentFromNative(
-              Map<Object?, Object?>.from(value),
-            ),
-          )
-          .where((value) => value.thumbnailBytes != null)
-          .toList(growable: false);
       final selected = await showCupertinoModalPopup<MessageAttachment>(
         context: context,
-        builder: (context) => _MediaLibrarySheet(images: images),
+        builder: (context) => _MediaLibrarySheet(loadPage: _loadImagePage),
       );
       if (mounted && selected != null) {
         setState(() => _draftAttachment = selected);
@@ -247,6 +234,22 @@ class _MessageComposerState extends State<MessageComposer> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<List<MessageAttachment>> _loadImagePage(int offset) async {
+    final raw = await _channel.invokeListMethod<Object?>(
+      'loadRecentImages',
+      {'limit': 24, 'offset': offset},
+    );
+    return (raw ?? const <Object?>[])
+        .whereType<Map>()
+        .map(
+          (value) => _attachmentFromNative(
+            Map<Object?, Object?>.from(value),
+          ),
+        )
+        .where((value) => value.thumbnailBytes != null)
+        .toList(growable: false);
   }
 
   MessageAttachment _attachmentFromNative(Map<Object?, Object?> raw) {
@@ -752,16 +755,120 @@ class _AttachmentPreview extends StatelessWidget {
 }
 
 class _MediaLibrarySheet extends StatefulWidget {
-  const _MediaLibrarySheet({required this.images});
+  const _MediaLibrarySheet({required this.loadPage});
 
-  final List<MessageAttachment> images;
+  final Future<List<MessageAttachment>> Function(int offset) loadPage;
 
   @override
   State<_MediaLibrarySheet> createState() => _MediaLibrarySheetState();
 }
 
 class _MediaLibrarySheetState extends State<_MediaLibrarySheet> {
+  static const _pageSize = 24;
+  final _images = <MessageAttachment>[];
+  final _scrollController = ScrollController();
   double _height = 296;
+  bool _loading = false;
+  bool _hasMore = true;
+  int _nextOffset = 0;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+    unawaited(_loadNextPage());
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.extentAfter < 500) {
+      unawaited(_loadNextPage());
+    }
+  }
+
+  Future<void> _loadNextPage() async {
+    if (_loading || !_hasMore) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final page = await widget.loadPage(_nextOffset);
+      if (!mounted) return;
+      setState(() {
+        _images.addAll(page);
+        _nextOffset += _pageSize;
+        // A final empty page is cheaper than stopping early when MediaStore
+        // contains an unreadable or unsupported thumbnail in the current page.
+        _hasMore = page.isNotEmpty;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController
+      ..removeListener(_onScroll)
+      ..dispose();
+    super.dispose();
+  }
+
+  Widget _buildGallery(BuildContext context) {
+    if (_images.isEmpty && _loading) {
+      return const Center(child: CupertinoActivityIndicator());
+    }
+    if (_images.isEmpty && _error != null) {
+      return Center(
+        child: CupertinoButton(
+          onPressed: _loadNextPage,
+          child: const Text('Try Again'),
+        ),
+      );
+    }
+    if (_images.isEmpty) {
+      return Center(
+        child: Text(
+          'No photos available',
+          style: MessagesText.secondary(context),
+        ),
+      );
+    }
+    return GridView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.fromLTRB(6, 10, 6, 16),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 6,
+        mainAxisSpacing: 6,
+        childAspectRatio: 122 / 117,
+      ),
+      itemCount: _images.length + (_loading ? 1 : 0),
+      itemBuilder: (context, index) {
+        if (index == _images.length) {
+          return const Center(
+            child: CupertinoActivityIndicator(radius: 10),
+          );
+        }
+        final image = _images[index];
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => Navigator.pop(context, image),
+          child: Image.memory(
+            image.thumbnailBytes!,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+            filterQuality: FilterQuality.low,
+            cacheWidth: 360,
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -835,37 +942,7 @@ class _MediaLibrarySheetState extends State<_MediaLibrarySheet> {
               ),
             ),
           ),
-          Expanded(
-            child: widget.images.isEmpty
-                ? Center(
-                    child: Text(
-                      'No photos available',
-                      style: MessagesText.secondary(context),
-                    ),
-                  )
-                : GridView.builder(
-                    padding: const EdgeInsets.fromLTRB(6, 10, 6, 16),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 3,
-                      crossAxisSpacing: 6,
-                      mainAxisSpacing: 6,
-                      childAspectRatio: 122 / 117,
-                    ),
-                    itemCount: widget.images.length,
-                    itemBuilder: (context, index) => GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () =>
-                          Navigator.pop(context, widget.images[index]),
-                      child: Image.memory(
-                        widget.images[index].thumbnailBytes!,
-                        fit: BoxFit.cover,
-                        gaplessPlayback: true,
-                        filterQuality: FilterQuality.low,
-                      ),
-                    ),
-                  ),
-          ),
+          Expanded(child: _buildGallery(context)),
         ],
       ),
     );

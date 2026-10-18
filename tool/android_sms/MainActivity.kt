@@ -4,6 +4,9 @@ import android.Manifest
 import android.app.Activity
 import android.app.AppOpsManager
 import android.app.role.RoleManager
+import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ContentResolver
 import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -44,7 +47,7 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val CHANNEL = "bluebubbles/sms"
         private const val TAG = "BlueBubblesSms"
-        private const val NATIVE_BUILD = "2026-10-18-voice-media-mms-v1"
+        private const val NATIVE_BUILD = "2026-10-18-voice-media-mms-v2"
         private const val ROLE_REQUEST = 4701
         private const val PERMISSION_REQUEST = 4702
         private const val MEDIA_PERMISSION_REQUEST = 4703
@@ -334,7 +337,7 @@ class MainActivity : FlutterActivity() {
         }
         try {
             val directory = File(cacheDir, "voice_messages").apply { mkdirs() }
-            val output = File(directory, "voice-${System.currentTimeMillis()}.3ga")
+            val output = File(directory, "voice-${System.currentTimeMillis()}.m4a")
             @Suppress("DEPRECATION")
             val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 MediaRecorder(this)
@@ -343,10 +346,13 @@ class MainActivity : FlutterActivity() {
             }
             recorder.apply {
                 setAudioSource(MediaRecorder.AudioSource.MIC)
-                // QUIK uses wide-band AMR in a 3GPP container for maximum MMS
-                // carrier compatibility and much smaller voice attachments.
-                setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP)
-                setAudioEncoder(MediaRecorder.AudioEncoder.AMR_WB)
+                // AAC in an MPEG-4 container is natively playable by Android
+                // and iPhone. Keep the bitrate modest for carrier MMS limits.
+                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                setAudioChannels(1)
+                setAudioSamplingRate(24_000)
+                setAudioEncodingBitRate(32_000)
                 setMaxDuration(5 * 60 * 1000)
                 setOutputFile(output.absolutePath)
                 prepare()
@@ -381,7 +387,7 @@ class MainActivity : FlutterActivity() {
                 hashMapOf(
                     "uri" to Uri.fromFile(file).toString(),
                     "localPath" to file.absolutePath,
-                    "mimeType" to "audio/3gpp",
+                    "mimeType" to "audio/mp4",
                     "name" to file.name,
                     "durationMilliseconds" to duration,
                 ),
@@ -416,6 +422,8 @@ class MainActivity : FlutterActivity() {
         }
         val limit = (call.argument<Number>("limit")?.toInt() ?: 60)
             .coerceIn(1, 90)
+        val offset = (call.argument<Number>("offset")?.toInt() ?: 0)
+            .coerceAtLeast(0)
         Thread {
             try {
                 val images = mutableListOf<Map<String, Any?>>()
@@ -424,35 +432,60 @@ class MainActivity : FlutterActivity() {
                     MediaStore.Images.Media.DISPLAY_NAME,
                     MediaStore.Images.Media.MIME_TYPE,
                 )
-                contentResolver.query(
-                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                    projection,
-                    null,
-                    null,
-                    "${MediaStore.Images.Media.DATE_ADDED} DESC",
-                )?.use { cursor ->
-                    val idIndex = cursor.getColumnIndexOrThrow(
+                val pagedByProvider = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                val cursor = if (pagedByProvider) {
+                    val queryArgs = Bundle().apply {
+                        putStringArray(
+                            ContentResolver.QUERY_ARG_SORT_COLUMNS,
+                            arrayOf(MediaStore.Images.Media.DATE_ADDED),
+                        )
+                        putInt(
+                            ContentResolver.QUERY_ARG_SORT_DIRECTION,
+                            ContentResolver.QUERY_SORT_DIRECTION_DESCENDING,
+                        )
+                        putInt(ContentResolver.QUERY_ARG_LIMIT, limit)
+                        putInt(ContentResolver.QUERY_ARG_OFFSET, offset)
+                    }
+                    contentResolver.query(
+                        MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                        projection,
+                        queryArgs,
+                        null,
+                    )
+                } else {
+                    contentResolver.query(
+                        MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                        projection,
+                        null,
+                        null,
+                        "${MediaStore.Images.Media.DATE_ADDED} DESC",
+                    )
+                }
+                cursor?.use { mediaCursor ->
+                    val idIndex = mediaCursor.getColumnIndexOrThrow(
                         MediaStore.Images.Media._ID,
                     )
-                    val nameIndex = cursor.getColumnIndexOrThrow(
+                    val nameIndex = mediaCursor.getColumnIndexOrThrow(
                         MediaStore.Images.Media.DISPLAY_NAME,
                     )
-                    val mimeIndex = cursor.getColumnIndexOrThrow(
+                    val mimeIndex = mediaCursor.getColumnIndexOrThrow(
                         MediaStore.Images.Media.MIME_TYPE,
                     )
-                    while (cursor.moveToNext() && images.size < limit) {
+                    var skipped = 0
+                    while (mediaCursor.moveToNext() && images.size < limit) {
+                        if (!pagedByProvider && skipped++ < offset) continue
                         val uri = Uri.withAppendedPath(
                             MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                            cursor.getLong(idIndex).toString(),
+                            mediaCursor.getLong(idIndex).toString(),
                         )
                         val thumbnail = mediaThumbnail(uri) ?: continue
                         images.add(
                             hashMapOf(
                                 "uri" to uri.toString(),
-                                "mimeType" to cursor.getString(mimeIndex)
+                                "mimeType" to mediaCursor.getString(mimeIndex)
                                     .orEmpty()
                                     .ifEmpty { "image/jpeg" },
-                                "name" to cursor.getString(nameIndex),
+                                "name" to mediaCursor.getString(nameIndex),
                                 "thumbnailBytes" to thumbnail,
                             ),
                         )
@@ -471,7 +504,7 @@ class MainActivity : FlutterActivity() {
     private fun mediaThumbnail(uri: Uri): ByteArray? {
         val platformThumbnail = runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                contentResolver.loadThumbnail(uri, Size(360, 360), null)
+                contentResolver.loadThumbnail(uri, Size(320, 320), null)
             } else {
                 @Suppress("DEPRECATION")
                 MediaStore.Images.Thumbnails.getThumbnail(
@@ -536,14 +569,17 @@ class MainActivity : FlutterActivity() {
             addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        if (intent.resolveActivity(packageManager) == null) {
+        intent.clipData = ClipData.newRawUri("BlueBubbles photo", uri)
+        try {
+            pendingCameraResult = result
+            pendingCameraUri = uri
+            startActivityForResult(intent, CAMERA_REQUEST)
+        } catch (_: ActivityNotFoundException) {
+            pendingCameraResult = null
+            pendingCameraUri = null
             contentResolver.delete(uri, null, null)
             result.error("camera_unavailable", "No camera app is available.", null)
-            return
         }
-        pendingCameraResult = result
-        pendingCameraUri = uri
-        startActivityForResult(intent, CAMERA_REQUEST)
     }
 
     private fun loadConversations(result: MethodChannel.Result) {

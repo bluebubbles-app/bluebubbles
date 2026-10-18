@@ -295,8 +295,19 @@ class _ImageAttachment extends StatelessWidget {
     final path = attachment.localPath;
     final image = bytes != null
         ? Image.memory(bytes, fit: BoxFit.cover, gaplessPlayback: true)
-        : path != null && File(path).existsSync()
-            ? Image.file(File(path), fit: BoxFit.cover, gaplessPlayback: true)
+        : path != null
+            ? Image.file(
+                File(path),
+                fit: BoxFit.cover,
+                gaplessPlayback: true,
+                errorBuilder: (_, __, ___) => const Center(
+                  child: Icon(
+                    CupertinoIcons.photo,
+                    size: 42,
+                    color: CupertinoColors.systemGrey,
+                  ),
+                ),
+              )
             : const Center(
                 child: Icon(
                   CupertinoIcons.photo,
@@ -357,41 +368,107 @@ class _AudioAttachment extends StatefulWidget {
 }
 
 class _AudioAttachmentState extends State<_AudioAttachment> {
-  final _player = AudioPlayer();
+  AudioPlayer? _player;
+  StreamSubscription<Duration>? _positionSubscription;
+  StreamSubscription<Duration>? _durationSubscription;
+  StreamSubscription<PlayerState>? _stateSubscription;
+  StreamSubscription<void>? _completionSubscription;
   bool _playing = false;
+  bool _sourceReady = false;
+  Duration _position = Duration.zero;
+  late Duration _duration = Duration(
+    milliseconds: widget.attachment.durationMilliseconds ?? 0,
+  );
 
-  @override
-  void initState() {
-    super.initState();
-    _player.onPlayerComplete.listen((_) {
-      if (mounted) setState(() => _playing = false);
+  AudioPlayer _ensurePlayer() {
+    final existing = _player;
+    if (existing != null) return existing;
+    final player = AudioPlayer();
+    _positionSubscription = player.onPositionChanged.listen((position) {
+      if (mounted) setState(() => _position = position);
     });
+    _durationSubscription = player.onDurationChanged.listen((duration) {
+      if (mounted && duration > Duration.zero) {
+        setState(() => _duration = duration);
+      }
+    });
+    _stateSubscription = player.onPlayerStateChanged.listen((state) {
+      if (mounted) setState(() => _playing = state == PlayerState.playing);
+    });
+    _completionSubscription = player.onPlayerComplete.listen((_) {
+      if (mounted) {
+        setState(() {
+          _playing = false;
+          _position = Duration.zero;
+        });
+      }
+    });
+    return _player = player;
+  }
+
+  Future<AudioPlayer?> _ensureSource() async {
+    final path = widget.attachment.localPath;
+    if (path == null || path.isEmpty) return null;
+    final player = _ensurePlayer();
+    if (!_sourceReady) {
+      await player.setReleaseMode(ReleaseMode.stop);
+      await player.setSource(DeviceFileSource(path));
+      _sourceReady = true;
+    }
+    return player;
   }
 
   Future<void> _toggle() async {
-    final path = widget.attachment.localPath;
-    if (path == null || !File(path).existsSync()) return;
-    if (_playing) {
-      await _player.pause();
-    } else {
-      await _player.play(DeviceFileSource(path));
+    try {
+      final player = await _ensureSource();
+      if (player == null) return;
+      if (_playing) {
+        await player.pause();
+      } else {
+        if (_duration > Duration.zero && _position >= _duration) {
+          await player.seek(Duration.zero);
+        }
+        await player.resume();
+      }
+    } on Exception {
+      if (mounted) setState(() => _playing = false);
     }
-    if (mounted) setState(() => _playing = !_playing);
+  }
+
+  Future<void> _seek(double milliseconds) async {
+    try {
+      final player = await _ensureSource();
+      if (player == null) return;
+      final position = Duration(milliseconds: milliseconds.round());
+      await player.seek(position);
+      if (mounted) setState(() => _position = position);
+    } on Exception {
+      // Leave the existing position visible if Android rejects the seek.
+    }
   }
 
   @override
   void dispose() {
-    unawaited(_player.dispose());
+    unawaited(_positionSubscription?.cancel());
+    unawaited(_durationSubscription?.cancel());
+    unawaited(_stateSubscription?.cancel());
+    unawaited(_completionSubscription?.cancel());
+    final player = _player;
+    if (player != null) unawaited(player.dispose());
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final milliseconds = widget.attachment.durationMilliseconds ?? 0;
-    final duration = Duration(milliseconds: milliseconds);
+    final totalMilliseconds = _duration.inMilliseconds;
+    final maximum = totalMilliseconds > 0 ? totalMilliseconds.toDouble() : 1.0;
+    final value = _position.inMilliseconds
+        .toDouble()
+        .clamp(0.0, maximum)
+        .toDouble();
     return SizedBox(
       width: 220,
-      height: 34,
+      height: 42,
       child: Row(
         children: [
           CupertinoButton(
@@ -405,31 +482,32 @@ class _AudioAttachmentState extends State<_AudioAttachment> {
             ),
           ),
           Expanded(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                for (var index = 0; index < 22; index++)
-                  Container(
-                    width: 2,
-                    height: const [6.0, 13.0, 20.0, 10.0, 17.0, 8.0]
-                        [index % 6],
-                    decoration: BoxDecoration(
-                      color: widget.foregroundColor.withValues(alpha: .78),
-                      borderRadius: BorderRadius.circular(1),
-                    ),
-                  ),
-              ],
+            child: CupertinoSlider(
+              min: 0,
+              max: maximum,
+              value: value,
+              activeColor: widget.foregroundColor.withValues(alpha: .9),
+              thumbColor: widget.foregroundColor,
+              onChanged: totalMilliseconds <= 0
+                  ? null
+                  : (next) => setState(
+                        () => _position = Duration(
+                          milliseconds: next.round(),
+                        ),
+                      ),
+              onChangeEnd: totalMilliseconds <= 0 ? null : _seek,
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
           Text(
-            '${duration.inMinutes}:${duration.inSeconds.remainder(60).toString().padLeft(2, '0')}',
+            '${_position.inMinutes}:${_position.inSeconds.remainder(60).toString().padLeft(2, '0')}',
             style: TextStyle(
               color: widget.foregroundColor.withValues(alpha: .8),
               fontFamily: 'SF Pro Text',
               fontSize: 12,
             ),
           ),
+          const SizedBox(width: 4),
         ],
       ),
     );
