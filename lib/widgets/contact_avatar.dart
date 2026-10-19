@@ -74,13 +74,22 @@ class ContactAvatar extends StatelessWidget {
             stops: const [0, .48, 1],
           ),
         ),
-        child: Text(
-          conversation.initials,
-          style: TextStyle(
-            color: CupertinoColors.white,
-            fontSize: size * .34,
-            fontWeight: FontWeight.w600,
-            letterSpacing: -.4,
+        child: Transform.translate(
+          offset: Offset(0, size * .018),
+          child: Text(
+            conversation.initials,
+            textAlign: TextAlign.center,
+            textHeightBehavior: const TextHeightBehavior(
+              applyHeightToFirstAscent: false,
+              applyHeightToLastDescent: false,
+            ),
+            style: TextStyle(
+              color: CupertinoColors.white,
+              fontSize: size * .34,
+              height: 1,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0,
+            ),
           ),
         ),
       );

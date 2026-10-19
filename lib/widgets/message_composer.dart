@@ -884,7 +884,7 @@ class _MediaLibrarySheetState extends State<_MediaLibrarySheet> {
             onPressed: _pickingFromGallery ? null : _openFullGallery,
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: MessagesPalette.secondaryBackground(context),
+                color: MessagesPalette.fill(context),
                 borderRadius: BorderRadius.circular(3),
               ),
               child: Center(
