@@ -55,6 +55,7 @@ class ConversationScreen extends StatefulWidget {
 class _ConversationScreenState extends State<ConversationScreen>
     with TickerProviderStateMixin {
   static const _timestampRevealDistance = 58.0;
+  static const _messageInsertionDuration = Duration(milliseconds: 420);
   final _scrollController = ScrollController();
   final _initialMessageKey = GlobalKey();
   GlobalKey<AnimatedListState> _messageListKey = GlobalKey<AnimatedListState>();
@@ -204,6 +205,15 @@ class _ConversationScreenState extends State<ConversationScreen>
           .map((message) => message.id)
           .toList(growable: false);
       final messagesChanged = !_sameIds(previousIds, currentIds);
+      final appendedMessageCount = _appendedMessageCount(
+        previousIds,
+        currentIds,
+      );
+      final listState = _messageListKey.currentState;
+      final animateAppendedMessages = !showLoading &&
+          appendedMessageCount > 0 &&
+          listState != null;
+      final itemCountChanged = previousIds.length != currentIds.length;
       if (!showLoading && !messagesChanged && _loadError == null) {
         _hasOlderMessages = loadedCount > 0;
         return;
@@ -212,10 +222,21 @@ class _ConversationScreenState extends State<ConversationScreen>
         _loadingMessages = false;
         _hasOlderMessages = loadedCount > 0;
         _loadError = null;
-        if (messagesChanged || showLoading) {
+        // A provider refresh can replace a pending message with its persisted
+        // version without changing the number of rows. Keeping the list alive
+        // avoids flashing every existing bubble. Only rebuild the entire list
+        // when its item count changed in a way AnimatedList cannot describe.
+        if (showLoading || (itemCountChanged && !animateAppendedMessages)) {
           _messageListKey = GlobalKey<AnimatedListState>();
         }
       });
+      if (animateAppendedMessages) {
+        listState!.insertAllItems(
+          0,
+          appendedMessageCount,
+          duration: _messageInsertionDuration,
+        );
+      }
       _scheduleInitialMessagePosition();
     } catch (error) {
       if (!mounted) return;
@@ -232,6 +253,14 @@ class _ConversationScreenState extends State<ConversationScreen>
       if (first[index] != second[index]) return false;
     }
     return true;
+  }
+
+  int _appendedMessageCount(List<String> previous, List<String> current) {
+    if (current.length <= previous.length) return 0;
+    for (var index = 0; index < previous.length; index++) {
+      if (previous[index] != current[index]) return 0;
+    }
+    return current.length - previous.length;
   }
 
   void _scheduleInitialMessagePosition() {
@@ -345,10 +374,10 @@ class _ConversationScreenState extends State<ConversationScreen>
     if (widget.conversation.messages.length <= previousLength) return;
     _messageListKey.currentState?.insertItem(
       0,
-      duration: const Duration(milliseconds: 280),
+      duration: _messageInsertionDuration,
     );
     Timer(const Duration(milliseconds: 40), _scrollToBottom);
-    Timer(const Duration(milliseconds: 300), _scrollToBottom);
+    Timer(_messageInsertionDuration, _scrollToBottom);
   }
 
   Future<void> _retryFailedMessage(ChatMessage message) async {
@@ -776,17 +805,25 @@ class _ConversationScreenState extends State<ConversationScreen>
                                 ),
                               );
 
-                              final curvedAnimation = CurvedAnimation(
+                              final fadeAnimation = CurvedAnimation(
                                 parent: animation,
-                                curve: Curves.easeOutCubic,
+                                curve: const Interval(
+                                  0,
+                                  .82,
+                                  curve: Curves.easeOutCubic,
+                                ),
+                              );
+                              final motionAnimation = CurvedAnimation(
+                                parent: animation,
+                                curve: Curves.easeOutQuart,
                               );
                               final insertedMessage = FadeTransition(
-                                opacity: curvedAnimation,
+                                opacity: fadeAnimation,
                                 child: SlideTransition(
                                   position: Tween<Offset>(
-                                    begin: const Offset(.10, .10),
+                                    begin: const Offset(0, .035),
                                     end: Offset.zero,
-                                  ).animate(curvedAnimation),
+                                  ).animate(motionAnimation),
                                   child: _selectionMode
                                       ? Row(
                                           crossAxisAlignment:
