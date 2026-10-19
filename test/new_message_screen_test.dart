@@ -17,6 +17,10 @@ void main() {
     expect(find.text('New Message'), findsOneWidget);
     expect(find.text('Cancel'), findsOneWidget);
     expect(
+      tester.getRect(find.text('New Message')).right,
+      lessThanOrEqualTo(tester.getRect(find.text('Cancel')).left),
+    );
+    expect(
       tester.getSize(find.byKey(const ValueKey('new-message-header'))).height,
       44,
     );
@@ -38,6 +42,8 @@ void main() {
       find.byKey(const ValueKey('new-message-composer')),
       findsOneWidget,
     );
+    expect(find.byIcon(CupertinoIcons.camera_fill), findsOneWidget);
+    expect(find.byIcon(CupertinoIcons.photo_on_rectangle), findsOneWidget);
     expect(find.text('Mia Parker'), findsNothing);
 
     await tester.enterText(
@@ -52,7 +58,10 @@ void main() {
     expect(find.text('Mia Parker'), findsOneWidget);
 
     await tester.enterText(
-      find.byKey(const ValueKey('new-message-composer-field')),
+      find.descendant(
+        of: find.byKey(const ValueKey('new-message-composer')),
+        matching: find.byType(CupertinoTextField),
+      ),
       'Hi Rocky!',
     );
     await tester.pump();

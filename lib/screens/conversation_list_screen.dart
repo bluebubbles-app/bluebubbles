@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 
+import '../l10n/message_status_strings.dart';
 import '../models/conversation.dart';
 import '../models/notification_open_request.dart';
 import '../models/sms_sync_progress.dart';
@@ -1181,7 +1182,7 @@ class _NewMessageRecipientScreenState
     await showCupertinoDialog<void>(
       context: context,
       builder: (context) => CupertinoAlertDialog(
-        title: const Text('New Message'),
+        title: Text(MessageStatusStrings.newMessage(context)),
         content: Text(message),
         actions: [
           CupertinoDialogAction(
@@ -1222,15 +1223,24 @@ class _NewMessageRecipientScreenState
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    Text(
-                      'New Message',
-                      style: TextStyle(
-                        fontFamily: 'SF Pro Text',
-                        color: MessagesPalette.label(context),
-                        fontSize: 17,
-                        height: 1,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: -.25,
+                    Positioned.fill(
+                      left: 108,
+                      right: 108,
+                      child: Center(
+                        child: Text(
+                          MessageStatusStrings.newMessage(context),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontFamily: 'SF Pro Text',
+                            color: MessagesPalette.label(context),
+                            fontSize: 17,
+                            height: 1,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: -.25,
+                          ),
+                        ),
                       ),
                     ),
                     Positioned(
@@ -1240,9 +1250,9 @@ class _NewMessageRecipientScreenState
                         minSize: 44,
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                         onPressed: () => Navigator.of(context).pop(),
-                        child: const Text(
-                          'Cancel',
-                          style: TextStyle(
+                        child: Text(
+                          MessageStatusStrings.cancel(context),
+                          style: const TextStyle(
                             fontFamily: 'SF Pro Text',
                             color: MessagesPalette.headerActionBlue,
                             fontSize: 17,
@@ -1271,7 +1281,7 @@ class _NewMessageRecipientScreenState
                 child: Row(
                   children: [
                     Text(
-                      'To:',
+                      MessageStatusStrings.recipientLabel(context),
                       style: TextStyle(
                         fontFamily: 'SF Pro Text',
                         color: MessagesPalette.secondaryLabel(context),
@@ -1365,7 +1375,10 @@ class _NewMessageRecipientScreenState
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Text(
-                                  'Send to “$typedRecipient”',
+                                  MessageStatusStrings.sendTo(
+                                    context,
+                                    typedRecipient,
+                                  ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: MessagesText.body(context).copyWith(
@@ -1417,7 +1430,6 @@ class _NewMessageRecipientScreenState
               ),
               MessageComposer(
                 key: const ValueKey('new-message-composer'),
-                compactLeadingAction: true,
                 enabled: selectedConversation != null,
                 focusNode: _composerFocus,
                 onSend: _sendNewMessage,

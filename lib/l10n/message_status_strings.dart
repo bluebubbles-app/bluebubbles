@@ -14,6 +14,52 @@ abstract final class MessageStatusStrings {
     Locale('el'), Locale('he'), Locale('th'), Locale('vi'),
   ];
 
+  static const _newMessageTitles = <String, String>{
+    'en': 'New Message', 'fr': 'Nouveau message',
+    'de': 'Neue Nachricht', 'es': 'Nuevo mensaje',
+    'it': 'Nuovo messaggio', 'pt': 'Nova mensagem',
+    'nl': 'Nieuw bericht', 'pl': 'Nowa wiadomość',
+    'ru': 'Новое сообщение', 'uk': 'Нове повідомлення',
+    'tr': 'Yeni Mesaj', 'ar': 'رسالة جديدة',
+    'zh_Hans': '新信息', 'zh_Hant': '新訊息',
+    'ja': '新規メッセージ', 'ko': '새로운 메시지',
+    'hi': 'नया संदेश', 'id': 'Pesan Baru',
+    'sv': 'Nytt meddelande', 'da': 'Ny besked',
+    'nb': 'Ny melding', 'fi': 'Uusi viesti',
+    'cs': 'Nová zpráva', 'ro': 'Mesaj nou',
+    'el': 'Νέο μήνυμα', 'he': 'הודעה חדשה',
+    'th': 'ข้อความใหม่', 'vi': 'Tin nhắn mới',
+  };
+
+  static const _recipientLabels = <String, String>{
+    'en': 'To:', 'fr': 'À :', 'de': 'An:', 'es': 'Para:', 'it': 'A:',
+    'pt': 'Para:', 'nl': 'Aan:', 'pl': 'Do:', 'ru': 'Кому:',
+    'uk': 'Кому:', 'tr': 'Kime:', 'ar': 'إلى:',
+    'zh_Hans': '收件人:', 'zh_Hant': '收件人:', 'ja': '宛先:',
+    'ko': '받는 사람:', 'hi': 'प्रति:', 'id': 'Kepada:', 'sv': 'Till:',
+    'da': 'Til:', 'nb': 'Til:', 'fi': 'Vastaanottaja:', 'cs': 'Komu:',
+    'ro': 'Către:', 'el': 'Προς:', 'he': 'אל:', 'th': 'ถึง:',
+    'vi': 'Đến:',
+  };
+
+  static const _sendToTemplates = <String, String>{
+    'en': 'Send to “{recipient}”', 'fr': 'Envoyer à « {recipient} »',
+    'de': 'Senden an „{recipient}“', 'es': 'Enviar a “{recipient}”',
+    'it': 'Invia a “{recipient}”', 'pt': 'Enviar para “{recipient}”',
+    'nl': 'Stuur naar “{recipient}”', 'pl': 'Wyślij do „{recipient}”',
+    'ru': 'Отправить «{recipient}»', 'uk': 'Надіслати «{recipient}»',
+    'tr': '“{recipient}” kişisine gönder', 'ar': 'إرسال إلى «{recipient}»',
+    'zh_Hans': '发送给“{recipient}”', 'zh_Hant': '傳送給「{recipient}」',
+    'ja': '「{recipient}」に送信', 'ko': '“{recipient}”에게 보내기',
+    'hi': '“{recipient}” को भेजें', 'id': 'Kirim ke “{recipient}”',
+    'sv': 'Skicka till ”{recipient}”', 'da': 'Send til “{recipient}”',
+    'nb': 'Send til «{recipient}»',
+    'fi': 'Lähetä vastaanottajalle ”{recipient}”',
+    'cs': 'Odeslat „{recipient}“', 'ro': 'Trimite către „{recipient}”',
+    'el': 'Αποστολή σε «{recipient}»', 'he': 'שליחה אל „{recipient}”',
+    'th': 'ส่งถึง “{recipient}”', 'vi': 'Gửi đến “{recipient}”',
+  };
+
   static const _english = _MessageStatusCopy(
     sending: 'Sending…', sent: 'Sent', delivered: 'Delivered', read: 'Read',
     failed: 'Not Delivered', retryTitle: 'Message Not Delivered',
@@ -200,15 +246,18 @@ abstract final class MessageStatusStrings {
     ),
   };
 
-  static _MessageStatusCopy _copy(BuildContext context) {
+  static String _localeKey(BuildContext context) {
     final locale = Localizations.localeOf(context);
     if (locale.languageCode == 'zh') {
       final traditional = locale.scriptCode == 'Hant' ||
           const {'TW', 'HK', 'MO'}.contains(locale.countryCode);
-      return _copies[traditional ? 'zh_Hant' : 'zh_Hans']!;
+      return traditional ? 'zh_Hant' : 'zh_Hans';
     }
-    return _copies[locale.languageCode] ?? _english;
+    return locale.languageCode;
   }
+
+  static _MessageStatusCopy _copy(BuildContext context) =>
+      _copies[_localeKey(context)] ?? _english;
 
   static String label(BuildContext context, DeliveryState state) {
     final copy = _copy(context);
@@ -225,6 +274,13 @@ abstract final class MessageStatusStrings {
   static String retryPrompt(BuildContext context) => _copy(context).retryPrompt;
   static String cancel(BuildContext context) => _copy(context).cancel;
   static String retry(BuildContext context) => _copy(context).retry;
+  static String newMessage(BuildContext context) =>
+      _newMessageTitles[_localeKey(context)] ?? _newMessageTitles['en']!;
+  static String recipientLabel(BuildContext context) =>
+      _recipientLabels[_localeKey(context)] ?? _recipientLabels['en']!;
+  static String sendTo(BuildContext context, String recipient) =>
+      (_sendToTemplates[_localeKey(context)] ?? _sendToTemplates['en']!)
+          .replaceFirst('{recipient}', recipient);
 }
 
 class _MessageStatusCopy {
