@@ -614,9 +614,8 @@ class _MessagesUiAppState extends State<MessagesUiApp>
         if (enrichment.title.isNotEmpty) {
           conversation.title = enrichment.title;
         }
-        if (enrichment.avatarBytes != null) {
-          conversation.avatarBytes = enrichment.avatarBytes;
-        }
+        conversation.avatarBytes = enrichment.avatarBytes;
+        conversation.isKnownContact = enrichment.isKnownContact;
         unawaited(
           _cacheConversationEnrichment(enrichment),
         );
@@ -632,6 +631,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
         threadId: enrichment.id,
         address: enrichment.address,
         title: enrichment.title,
+        isKnownContact: enrichment.isKnownContact,
         avatarBytes: enrichment.avatarBytes,
       );
     } catch (error) {

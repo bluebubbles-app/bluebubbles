@@ -13,12 +13,14 @@ class ConversationEnrichment {
     required this.id,
     required this.address,
     required this.title,
+    required this.isKnownContact,
     this.avatarBytes,
   });
 
   final String id;
   final String address;
   final String title;
+  final bool isKnownContact;
   final Uint8List? avatarBytes;
 }
 
@@ -349,6 +351,7 @@ class AndroidSmsController extends ChangeNotifier {
           id: (raw['id'] ?? '').toString(),
           address: (raw['address'] ?? '').toString(),
           title: (raw['title'] ?? '').toString(),
+          isKnownContact: raw['isKnownContact'] == true,
           avatarBytes: raw['avatarBytes'] is Uint8List
               ? raw['avatarBytes'] as Uint8List
               : null,
@@ -384,6 +387,7 @@ class AndroidSmsController extends ChangeNotifier {
       updatedAt: DateTime.fromMillisecondsSinceEpoch(updatedAtMillis),
       avatarColors: contactAvatarColors(id),
       messages: messages,
+      isKnownContact: raw['isKnownContact'] as bool?,
       avatarBytes: raw['avatarBytes'] is Uint8List
           ? raw['avatarBytes'] as Uint8List
           : null,

@@ -1184,6 +1184,7 @@ class MainActivity : FlutterActivity() {
                     "updatedAt" to System.currentTimeMillis(),
                     "unreadCount" to 0,
                     "messages" to emptyList<Map<String, Any?>>(),
+                    "isKnownContact" to contact.isKnown,
                     "avatarBytes" to contact.avatarBytes,
                 )
                 runOnUiThread { result.success(conversation) }
@@ -1354,10 +1355,14 @@ class MainActivity : FlutterActivity() {
                 val title = contacts.mapIndexed { index, contact ->
                     contact.name ?: addresses[index]
                 }.joinToString(", ").ifEmpty { "Conversation" }
+                // Group threads keep their generated group avatar. The generic
+                // silhouette is reserved for unknown one-to-one recipients.
+                val isKnownContact = contacts.singleOrNull()?.isKnown ?: true
                 val update = hashMapOf<String, Any?>(
                     "id" to summary.id,
                     "address" to addresses.singleOrNull().orEmpty(),
                     "title" to title,
+                    "isKnownContact" to isKnownContact,
                     "avatarBytes" to contacts.singleOrNull()?.avatarBytes,
                 )
                 mainHandler.post {
@@ -1698,6 +1703,7 @@ class MainActivity : FlutterActivity() {
                 ContactDetails(
                     name = cursor.getString(0),
                     avatarBytes = avatarBytes,
+                    isKnown = true,
                 )
             } ?: ContactDetails()
         }.getOrDefault(ContactDetails())
@@ -1782,6 +1788,7 @@ private data class ThreadSummary(
 private data class ContactDetails(
     val name: String? = null,
     val avatarBytes: ByteArray? = null,
+    val isKnown: Boolean = false,
 )
 
 private data class MmsContent(

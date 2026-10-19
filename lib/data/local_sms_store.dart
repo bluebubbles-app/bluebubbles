@@ -13,7 +13,7 @@ import '../theme/contact_avatar_palette.dart';
 /// transitions and scrolling never wait for a ContentProvider query.
 class LocalSmsStore {
   static const _databaseName = 'bluebubbles_sms_cache.db';
-  static const _databaseVersion = 2;
+  static const _databaseVersion = 3;
 
   Database? _database;
   Future<Database>? _opening;
@@ -57,6 +57,7 @@ class LocalSmsStore {
             updated_at INTEGER NOT NULL,
             unread_count INTEGER NOT NULL DEFAULT 0,
             avatar_bytes BLOB,
+            is_known_contact INTEGER,
             is_pinned INTEGER NOT NULL DEFAULT 0,
             is_muted INTEGER NOT NULL DEFAULT 0
           )
@@ -112,6 +113,11 @@ class LocalSmsStore {
           );
           await db.execute(
             'ALTER TABLE messages ADD attachment_thumbnail BLOB',
+          );
+        }
+        if (oldVersion < 3) {
+          await db.execute(
+            'ALTER TABLE conversations ADD is_known_contact INTEGER',
           );
         }
       },
@@ -221,12 +227,14 @@ class LocalSmsStore {
     required String threadId,
     required String address,
     required String title,
+    required bool isKnownContact,
     Uint8List? avatarBytes,
   }) async {
     final values = <String, Object?>{};
     if (address.isNotEmpty) values['address'] = address;
     if (title.isNotEmpty) values['title'] = title;
-    if (avatarBytes != null) values['avatar_bytes'] = avatarBytes;
+    values['is_known_contact'] = isKnownContact ? 1 : 0;
+    values['avatar_bytes'] = avatarBytes;
     if (values.isEmpty) return;
     final db = await _db;
     await db.update(
@@ -432,6 +440,11 @@ class LocalSmsStore {
         'updated_at': conversation.updatedAt.millisecondsSinceEpoch,
         'unread_count': conversation.unreadCount,
         'avatar_bytes': conversation.avatarBytes,
+        'is_known_contact': switch (conversation.isKnownContact) {
+          true => 1,
+          false => 0,
+          null => null,
+        },
         'is_pinned': conversation.isPinned ? 1 : 0,
         'is_muted': conversation.isMuted ? 1 : 0,
       };
@@ -452,6 +465,11 @@ class LocalSmsStore {
       updatedAt: DateTime.fromMillisecondsSinceEpoch(row['updated_at'] as int),
       avatarColors: contactAvatarColors(id),
       avatarBytes: avatarBytes,
+      isKnownContact: switch (row['is_known_contact']) {
+        1 => true,
+        0 => false,
+        _ => null,
+      },
       unreadCount: row['unread_count'] as int,
       isPinned: row['is_pinned'] == 1,
       isMuted: row['is_muted'] == 1,

@@ -109,6 +109,7 @@ class Conversation {
     this.address,
     this.avatarBytes,
     this.avatarAsset,
+    this.isKnownContact,
     this.subtitle,
     this.unreadCount = 0,
     this.isPinned = false,
@@ -124,6 +125,7 @@ class Conversation {
   String? address;
   Uint8List? avatarBytes;
   final String? avatarAsset;
+  bool? isKnownContact;
   final String? subtitle;
   int unreadCount;
   bool isPinned;
@@ -137,6 +139,7 @@ class Conversation {
         'avatarColors': avatarColors.map((color) => color.value).toList(),
         'messages': messages.map((message) => message.toJson()).toList(),
         'address': address,
+        'isKnownContact': isKnownContact,
         'subtitle': subtitle,
         'unreadCount': unreadCount,
         'isPinned': isPinned,
@@ -167,6 +170,7 @@ class Conversation {
           : colors,
       messages: messages,
       address: json['address'] as String?,
+      isKnownContact: json['isKnownContact'] as bool?,
       subtitle: json['subtitle'] as String?,
       unreadCount: json['unreadCount'] as int? ?? 0,
       isPinned: json['isPinned'] as bool? ?? false,
