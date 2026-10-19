@@ -219,7 +219,10 @@ class _MessageComposerState extends State<MessageComposer> {
       if (!mounted) return;
       final selected = await showCupertinoModalPopup<MessageAttachment>(
         context: context,
-        builder: (context) => _MediaLibrarySheet(loadPage: _loadImagePage),
+        builder: (context) => _MediaLibrarySheet(
+          loadPage: _loadImagePage,
+          pickFromGallery: _pickGalleryImage,
+        ),
       );
       if (mounted && selected != null) {
         setState(() => _draftAttachment = selected);
@@ -250,6 +253,14 @@ class _MessageComposerState extends State<MessageComposer> {
         )
         .where((value) => value.thumbnailBytes != null)
         .toList(growable: false);
+  }
+
+  Future<MessageAttachment?> _pickGalleryImage() async {
+    final raw = await _channel.invokeMapMethod<Object?, Object?>(
+      'pickGalleryImage',
+    );
+    if (raw == null) return null;
+    return _attachmentFromNative(raw);
   }
 
   MessageAttachment _attachmentFromNative(Map<Object?, Object?> raw) {
@@ -755,9 +766,13 @@ class _AttachmentPreview extends StatelessWidget {
 }
 
 class _MediaLibrarySheet extends StatefulWidget {
-  const _MediaLibrarySheet({required this.loadPage});
+  const _MediaLibrarySheet({
+    required this.loadPage,
+    required this.pickFromGallery,
+  });
 
   final Future<List<MessageAttachment>> Function(int offset) loadPage;
+  final Future<MessageAttachment?> Function() pickFromGallery;
 
   @override
   State<_MediaLibrarySheet> createState() => _MediaLibrarySheetState();
@@ -769,6 +784,7 @@ class _MediaLibrarySheetState extends State<_MediaLibrarySheet> {
   final _scrollController = ScrollController();
   double _height = 296;
   bool _loading = false;
+  bool _pickingFromGallery = false;
   bool _hasMore = true;
   int _nextOffset = 0;
   String? _error;
@@ -810,6 +826,36 @@ class _MediaLibrarySheetState extends State<_MediaLibrarySheet> {
     }
   }
 
+  Future<void> _openFullGallery() async {
+    if (_pickingFromGallery) return;
+    setState(() {
+      _pickingFromGallery = true;
+      _error = null;
+    });
+    try {
+      final image = await widget.pickFromGallery();
+      if (!mounted || image == null) return;
+      Navigator.pop(context, image);
+    } catch (error) {
+      if (!mounted) return;
+      await showCupertinoDialog<void>(
+        context: context,
+        builder: (context) => CupertinoAlertDialog(
+          title: const Text('Photo Library Could Not Be Opened'),
+          content: Text(error.toString()),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _pickingFromGallery = false);
+    }
+  }
+
   @override
   void dispose() {
     _scrollController
@@ -819,25 +865,7 @@ class _MediaLibrarySheetState extends State<_MediaLibrarySheet> {
   }
 
   Widget _buildGallery(BuildContext context) {
-    if (_images.isEmpty && _loading) {
-      return const Center(child: CupertinoActivityIndicator());
-    }
-    if (_images.isEmpty && _error != null) {
-      return Center(
-        child: CupertinoButton(
-          onPressed: _loadNextPage,
-          child: const Text('Try Again'),
-        ),
-      );
-    }
-    if (_images.isEmpty) {
-      return Center(
-        child: Text(
-          'No photos available',
-          style: MessagesText.secondary(context),
-        ),
-      );
-    }
+    final showStatusTile = _loading || _error != null;
     return GridView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.fromLTRB(6, 10, 6, 16),
@@ -847,14 +875,58 @@ class _MediaLibrarySheetState extends State<_MediaLibrarySheet> {
         mainAxisSpacing: 6,
         childAspectRatio: 122 / 117,
       ),
-      itemCount: _images.length + (_loading ? 1 : 0),
+      itemCount: 1 + _images.length + (showStatusTile ? 1 : 0),
       itemBuilder: (context, index) {
-        if (index == _images.length) {
-          return const Center(
-            child: CupertinoActivityIndicator(radius: 10),
+        if (index == 0) {
+          return CupertinoButton(
+            key: const ValueKey('full-photo-library-picker'),
+            padding: EdgeInsets.zero,
+            onPressed: _pickingFromGallery ? null : _openFullGallery,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: MessagesPalette.secondaryBackground(context),
+                borderRadius: BorderRadius.circular(3),
+              ),
+              child: Center(
+                child: _pickingFromGallery
+                    ? const CupertinoActivityIndicator()
+                    : Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            CupertinoIcons.photo_on_rectangle,
+                            size: 29,
+                            color: MessagesPalette.blue,
+                          ),
+                          const SizedBox(height: 7),
+                          const Text(
+                            'Photo Library',
+                            style: TextStyle(
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: MessagesPalette.blue,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ),
           );
         }
-        final image = _images[index];
+        final imageIndex = index - 1;
+        if (imageIndex == _images.length) {
+          return Center(
+            child: _error == null
+                ? const CupertinoActivityIndicator(radius: 10)
+                : CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: _loadNextPage,
+                    child: const Text('Try Again'),
+                  ),
+          );
+        }
+        final image = _images[imageIndex];
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => Navigator.pop(context, image),

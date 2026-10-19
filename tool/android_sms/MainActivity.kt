@@ -27,6 +27,7 @@ import android.os.Process
 import android.os.SystemClock
 import android.provider.BaseColumns
 import android.provider.ContactsContract
+import android.provider.OpenableColumns
 import android.provider.Settings
 import android.provider.MediaStore
 import android.provider.Telephony
@@ -47,11 +48,12 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val CHANNEL = "bluebubbles/sms"
         private const val TAG = "BlueBubblesSms"
-        private const val NATIVE_BUILD = "2026-10-18-voice-media-mms-v2"
+        private const val NATIVE_BUILD = "2026-10-19-full-gallery-picker-v1"
         private const val ROLE_REQUEST = 4701
         private const val PERMISSION_REQUEST = 4702
         private const val MEDIA_PERMISSION_REQUEST = 4703
         private const val CAMERA_REQUEST = 4704
+        private const val GALLERY_REQUEST = 4705
         private const val PROVIDER_LOAD_TIMEOUT_MS = 20_000L
         private const val METHOD_REPLY_TIMEOUT_MS = 30_000L
     }
@@ -63,6 +65,7 @@ class MainActivity : FlutterActivity() {
     private var pendingMediaPermissionKind: String? = null
     private var pendingCameraResult: MethodChannel.Result? = null
     private var pendingCameraUri: Uri? = null
+    private var pendingGalleryResult: MethodChannel.Result? = null
     private var voiceRecorder: MediaRecorder? = null
     private var voiceRecordingFile: File? = null
     private var voiceRecordingStartedAt = 0L
@@ -149,6 +152,7 @@ class MainActivity : FlutterActivity() {
             "stopVoiceRecording" -> stopVoiceRecording(result)
             "cancelVoiceRecording" -> cancelVoiceRecording(result)
             "loadRecentImages" -> loadRecentImages(call, result)
+            "pickGalleryImage" -> pickGalleryImage(result)
             "takePhoto" -> takePhoto(result)
             "markThreadRead" -> markThreadRead(call, result)
             "deleteMessage" -> deleteMessage(call, result)
@@ -576,6 +580,34 @@ class MainActivity : FlutterActivity() {
             pendingCameraUri = null
             contentResolver.delete(uri, null, null)
             result.error("camera_unavailable", "No camera app is available.", null)
+        }
+    }
+
+    private fun pickGalleryImage(result: MethodChannel.Result) {
+        if (pendingGalleryResult != null) {
+            result.error("gallery_active", "The photo library is already open.", null)
+            return
+        }
+        val systemPicker = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Intent(MediaStore.ACTION_PICK_IMAGES).apply { type = "image/*" }
+        } else {
+            null
+        }
+        val documentPicker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            type = "image/*"
+            addCategory(Intent.CATEGORY_OPENABLE)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+        }
+        val intent = systemPicker?.takeIf {
+            it.resolveActivity(packageManager) != null
+        } ?: documentPicker
+        try {
+            pendingGalleryResult = result
+            startActivityForResult(intent, GALLERY_REQUEST)
+        } catch (_: ActivityNotFoundException) {
+            pendingGalleryResult = null
+            result.error("gallery_unavailable", "No photo library is available.", null)
         }
     }
 
@@ -1741,6 +1773,55 @@ class MainActivity : FlutterActivity() {
                     )
                 }
             }.start()
+            return
+        }
+        if (requestCode == GALLERY_REQUEST) {
+            val result = pendingGalleryResult
+            pendingGalleryResult = null
+            val uri = data?.data
+            if (resultCode != Activity.RESULT_OK || uri == null) {
+                result?.success(null)
+                return
+            }
+            val persistableFlags = data.flags and
+                (Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            if (persistableFlags != 0) {
+                runCatching {
+                    contentResolver.takePersistableUriPermission(
+                        uri,
+                        persistableFlags,
+                    )
+                }
+            }
+            Thread {
+                val thumbnail = mediaThumbnail(uri)
+                val mimeType = contentResolver.getType(uri)
+                    .orEmpty()
+                    .ifEmpty { "image/jpeg" }
+                val name = runCatching {
+                    contentResolver.query(
+                        uri,
+                        arrayOf(OpenableColumns.DISPLAY_NAME),
+                        null,
+                        null,
+                        null,
+                    )?.use { cursor ->
+                        if (cursor.moveToFirst()) cursor.getString(0) else null
+                    }
+                }.getOrNull() ?: "Photo"
+                runOnUiThread {
+                    result?.success(
+                        hashMapOf(
+                            "uri" to uri.toString(),
+                            "mimeType" to mimeType,
+                            "name" to name,
+                            "thumbnailBytes" to thumbnail,
+                        ),
+                    )
+                }
+            }.start()
+            return
         }
     }
 
