@@ -1430,6 +1430,7 @@ class _NewMessageRecipientScreenState
               ),
               MessageComposer(
                 key: const ValueKey('new-message-composer'),
+                compactLeadingAction: true,
                 enabled: selectedConversation != null,
                 focusNode: _composerFocus,
                 onSend: _sendNewMessage,

@@ -15,6 +15,7 @@ class MessageComposer extends StatefulWidget {
     super.key,
     required this.onSend,
     required this.onSendAttachment,
+    this.compactLeadingAction = false,
     this.enabled = true,
     this.focusNode,
   });
@@ -22,6 +23,7 @@ class MessageComposer extends StatefulWidget {
   final ValueChanged<String> onSend;
   final void Function(MessageAttachment attachment, String caption)
       onSendAttachment;
+  final bool compactLeadingAction;
   final bool enabled;
   final FocusNode? focusNode;
 
@@ -253,6 +255,35 @@ class _MessageComposerState extends State<MessageComposer> {
     }
   }
 
+  Future<void> _showCompactAttachmentMenu() async {
+    if (_busy || _recording) return;
+    final action = await showCupertinoModalPopup<String>(
+      context: context,
+      builder: (context) => CupertinoActionSheet(
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(context, 'camera'),
+            child: const Text('Camera'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(context, 'photos'),
+            child: const Text('Photo Library'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (action == 'camera') {
+      await _takePhoto();
+    } else if (action == 'photos') {
+      await _openMediaLibrary();
+    }
+  }
+
   Future<List<MessageAttachment>> _loadImagePage(int offset) async {
     final raw = await _channel.invokeListMethod<Object?>(
       'loadRecentImages',
@@ -350,42 +381,68 @@ class _MessageComposerState extends State<MessageComposer> {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   if (!_recording && !isAudioDraft) ...[
-                    SizedBox(
-                      width: 64,
-                      child: CupertinoButton(
-                        minSize: 48,
-                        padding: EdgeInsets.zero,
-                        onPressed: _busy ? null : _takePhoto,
-                        child: Icon(
-                          CupertinoIcons.camera_fill,
-                          size: 31,
-                          color: MessagesPalette.label(context)
-                              .withValues(alpha: .45),
+                    if (widget.compactLeadingAction)
+                      SizedBox(
+                        width: 58,
+                        child: CupertinoButton(
+                          key: const ValueKey('new-message-attachment-button'),
+                          minSize: 48,
+                          padding: EdgeInsets.zero,
+                          onPressed:
+                              _busy ? null : _showCompactAttachmentMenu,
+                          child: Container(
+                            width: 34,
+                            height: 34,
+                            decoration: BoxDecoration(
+                              color: MessagesPalette.fill(context),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              CupertinoIcons.plus,
+                              size: 25,
+                              color: MessagesPalette.secondaryLabel(context),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 59,
-                      child: CupertinoButton(
-                        minSize: 48,
-                        padding: EdgeInsets.zero,
-                        onPressed: _busy ? null : _openMediaLibrary,
-                        child: Container(
-                          width: 32,
-                          height: 26,
-                          decoration: BoxDecoration(
+                      )
+                    else ...[
+                      SizedBox(
+                        width: 64,
+                        child: CupertinoButton(
+                          minSize: 48,
+                          padding: EdgeInsets.zero,
+                          onPressed: _busy ? null : _takePhoto,
+                          child: Icon(
+                            CupertinoIcons.camera_fill,
+                            size: 31,
                             color: MessagesPalette.label(context)
                                 .withValues(alpha: .45),
-                            borderRadius: BorderRadius.circular(13),
-                          ),
-                          child: const Icon(
-                            CupertinoIcons.photo_on_rectangle,
-                            size: 17,
-                            color: CupertinoColors.white,
                           ),
                         ),
                       ),
-                    ),
+                      SizedBox(
+                        width: 59,
+                        child: CupertinoButton(
+                          minSize: 48,
+                          padding: EdgeInsets.zero,
+                          onPressed: _busy ? null : _openMediaLibrary,
+                          child: Container(
+                            width: 32,
+                            height: 26,
+                            decoration: BoxDecoration(
+                              color: MessagesPalette.label(context)
+                                  .withValues(alpha: .45),
+                              borderRadius: BorderRadius.circular(13),
+                            ),
+                            child: const Icon(
+                              CupertinoIcons.photo_on_rectangle,
+                              size: 17,
+                              color: CupertinoColors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ] else
                     const SizedBox(width: 12),
                   Expanded(
@@ -426,7 +483,6 @@ class _MessageComposerState extends State<MessageComposer> {
                                       child: CupertinoTextField(
                                         controller: _controller,
                                         focusNode: _focusNode,
-                                        enabled: widget.enabled,
                                         placeholder: 'iMessage',
                                         placeholderStyle: const TextStyle(
                                           fontFamily: 'SF Pro Text',

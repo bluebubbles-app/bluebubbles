@@ -42,8 +42,12 @@ void main() {
       find.byKey(const ValueKey('new-message-composer')),
       findsOneWidget,
     );
-    expect(find.byIcon(CupertinoIcons.camera_fill), findsOneWidget);
-    expect(find.byIcon(CupertinoIcons.photo_on_rectangle), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('new-message-attachment-button')),
+      findsOneWidget,
+    );
+    expect(find.byIcon(CupertinoIcons.camera_fill), findsNothing);
+    expect(find.byIcon(CupertinoIcons.photo_on_rectangle), findsNothing);
     expect(find.text('Mia Parker'), findsNothing);
 
     await tester.enterText(
