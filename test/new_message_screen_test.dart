@@ -18,7 +18,7 @@ void main() {
     expect(find.text('Cancel'), findsOneWidget);
     expect(
       tester.getSize(find.byKey(const ValueKey('new-message-header'))).height,
-      77,
+      44,
     );
     expect(
       find.byKey(const ValueKey('new-message-recipient-row')),
