@@ -7,18 +7,24 @@ class IosSearchField extends StatelessWidget {
     super.key,
     required this.controller,
     required this.onChanged,
+    this.height = 36,
+    this.backgroundColor,
+    this.borderRadius = 10,
   });
 
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
+  final double height;
+  final Color? backgroundColor;
+  final double borderRadius;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 36,
+      height: height,
       decoration: BoxDecoration(
-        color: MessagesPalette.fill(context),
-        borderRadius: BorderRadius.circular(10),
+        color: backgroundColor ?? MessagesPalette.fill(context),
+        borderRadius: BorderRadius.circular(borderRadius),
       ),
       child: CupertinoTextField(
         controller: controller,

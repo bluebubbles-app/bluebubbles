@@ -16,6 +16,7 @@ import '../services/android_sms_service.dart';
 import '../theme/messages_theme.dart';
 import '../widgets/contact_avatar.dart';
 import '../widgets/ios_search_field.dart';
+import '../widgets/liquid_glass_surface.dart';
 import '../widgets/message_composer.dart';
 import 'conversation_screen.dart';
 import 'settings_screen.dart';
@@ -595,6 +596,8 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final useIos26 =
+        AppSettingsScope.of(context).interfaceStyle == InterfaceStyle.ios26;
     final searchActive = _query.trim().isNotEmpty;
     final filtered = _filtered;
     final pinned =
@@ -624,13 +627,15 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                             ScrollViewKeyboardDismissBehavior.onDrag,
                         slivers: [
               SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                  child: IosSearchField(
-                    controller: _searchController,
-                    onChanged: _onSearchChanged,
-                  ),
-                ),
+                child: useIos26
+                    ? const SizedBox(height: _collapsedSearchExtent)
+                    : Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                        child: IosSearchField(
+                          controller: _searchController,
+                          onChanged: _onSearchChanged,
+                        ),
+                      ),
               ),
               if (!searchActive && pinned.isNotEmpty)
                 SliverToBoxAdapter(
@@ -760,7 +765,9 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                 ),
               SliverPadding(
                 padding: EdgeInsets.only(
-                  bottom: _selectingConversations ? 96 : 28,
+                  bottom: _selectingConversations
+                      ? 96
+                      : (useIos26 ? 104 : 28),
                 ),
               ),
                         ],
@@ -791,6 +798,17 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                 ),
               ),
             ),
+            if (useIos26 && !_selectingConversations)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: MediaQuery.paddingOf(context).bottom + 12,
+                child: _Ios26BottomBar(
+                  searchController: _searchController,
+                  onSearchChanged: _onSearchChanged,
+                  onCompose: _composeNewMessage,
+                ),
+              ),
             if (_selectingConversations)
               Positioned(
                 left: 0,
@@ -809,10 +827,89 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
   }
 
   Widget _buildHeader(BuildContext context) {
+    final settings = AppSettingsScope.of(context);
     final topCompensation =
         (44.0 - MediaQuery.paddingOf(context).top)
             .clamp(0.0, 44.0)
             .toDouble();
+    if (settings.interfaceStyle == InterfaceStyle.ios26) {
+      final blur = settings.headerBlurSigma.clamp(0, 20).toDouble();
+      return SizedBox(
+        height: 72 + topCompensation,
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: SizedBox(
+            height: 72,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Text(
+                  _selectingConversations
+                      ? '${_selectedConversationIds.length} Selected'
+                      : 'Messages',
+                  key: const ValueKey('messages-title'),
+                  style: TextStyle(
+                    color: MessagesPalette.label(context),
+                    fontFamily: 'SF Pro Text',
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -.25,
+                  ),
+                ),
+                Positioned(
+                  left: 16,
+                  child: LiquidGlassSurface(
+                    borderRadius: BorderRadius.circular(22),
+                    blurSigma: blur,
+                    transparency: settings.headerTransparency,
+                    child: SizedBox(
+                      width: 64,
+                      height: 44,
+                      child: CupertinoButton(
+                        key: const ValueKey('edit-conversations-button'),
+                        minSize: 44,
+                        padding: EdgeInsets.zero,
+                        onPressed: _toggleConversationSelectionMode,
+                        child: Text(
+                          _selectingConversations ? 'Done' : 'Edit',
+                          style: TextStyle(
+                            color: MessagesPalette.label(context),
+                            fontFamily: 'SF Pro Text',
+                            fontSize: 16,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  right: 16,
+                  child: LiquidGlassSurface(
+                    borderRadius: BorderRadius.circular(22),
+                    blurSigma: blur,
+                    transparency: settings.headerTransparency,
+                    child: SizedBox.square(
+                      dimension: 44,
+                      child: CupertinoButton(
+                        key: const ValueKey('open-settings-button'),
+                        minSize: 44,
+                        padding: EdgeInsets.zero,
+                        onPressed:
+                            _selectingConversations ? null : _openSettings,
+                        child: _Ios26MenuGlyph(
+                          color: MessagesPalette.label(context),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     return SizedBox(
       height: 44 + topCompensation,
       child: Align(
@@ -892,6 +989,97 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
       ),
     );
   }
+}
+
+class _Ios26BottomBar extends StatelessWidget {
+  const _Ios26BottomBar({
+    required this.searchController,
+    required this.onSearchChanged,
+    required this.onCompose,
+  });
+
+  final TextEditingController searchController;
+  final ValueChanged<String> onSearchChanged;
+  final VoidCallback onCompose;
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = AppSettingsScope.of(context);
+    final blur = settings.headerBlurSigma.clamp(0, 20).toDouble();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 28),
+      child: Row(
+        children: [
+          Expanded(
+            child: LiquidGlassSurface(
+              borderRadius: BorderRadius.circular(24),
+              blurSigma: blur,
+              transparency: settings.headerTransparency,
+              child: IosSearchField(
+                controller: searchController,
+                onChanged: onSearchChanged,
+                height: 48,
+                borderRadius: 24,
+                backgroundColor: CupertinoColors.transparent,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          LiquidGlassSurface(
+            borderRadius: BorderRadius.circular(24),
+            blurSigma: blur,
+            transparency: settings.headerTransparency,
+            child: SizedBox.square(
+              dimension: 48,
+              child: CupertinoButton(
+                key: const ValueKey('new-message-button'),
+                minSize: 48,
+                padding: EdgeInsets.zero,
+                onPressed: onCompose,
+                child: Icon(
+                  CupertinoIcons.square_pencil,
+                  color: MessagesPalette.label(context),
+                  size: 25,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Ios26MenuGlyph extends StatelessWidget {
+  const _Ios26MenuGlyph({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: 24,
+        height: 20,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _line(24),
+            _line(18),
+            _line(12),
+          ],
+        ),
+      );
+
+  Widget _line(double width) => Align(
+        alignment: Alignment.center,
+        child: Container(
+          width: width,
+          height: 2.5,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+      );
 }
 
 class _SelectionCircle extends StatelessWidget {
@@ -2524,6 +2712,9 @@ class ConversationRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final highlighted = conversation.unreadCount > 0;
+    final useIos26 =
+        AppSettingsScope.of(context).interfaceStyle == InterfaceStyle.ios26;
+    final rowHeight = useIos26 ? 88.0 : 76.0;
     return ColoredBox(
       color: MessagesPalette.background(context),
       child: Stack(
@@ -2537,13 +2728,16 @@ class ConversationRow extends StatelessWidget {
               children: [
                 if (selectionMode)
                   Padding(
-                    padding: const EdgeInsets.only(left: 12, top: 27),
+                    padding: EdgeInsets.only(
+                      left: 12,
+                      top: useIos26 ? 33 : 27,
+                    ),
                     child: _SelectionCircle(selected: selected),
                   )
                 else
                   SizedBox(
-                    width: 23,
-                    height: 76,
+                    width: useIos26 ? 27 : 23,
+                    height: rowHeight,
                     child: highlighted
                         ? Center(
                             child: Transform.translate(
@@ -2560,11 +2754,11 @@ class ConversationRow extends StatelessWidget {
                         : null,
                   ),
                 SizedBox(
-                  height: 76,
+                  height: rowHeight,
                   child: Padding(
                     padding: EdgeInsets.only(
-                      left: selectionMode ? 10 : 3,
-                      right: 13,
+                      left: selectionMode ? 10 : (useIos26 ? 0 : 3),
+                      right: useIos26 ? 12 : 13,
                     ),
                     child: Center(
                       child: Transform.translate(
@@ -2579,8 +2773,13 @@ class ConversationRow extends StatelessWidget {
                 ),
                 Expanded(
                   child: Container(
-                    constraints: const BoxConstraints(minHeight: 76),
-                    padding: const EdgeInsets.fromLTRB(0, 9, 16, 7),
+                    constraints: BoxConstraints(minHeight: rowHeight),
+                    padding: EdgeInsets.fromLTRB(
+                      0,
+                      useIos26 ? 14 : 9,
+                      16,
+                      useIos26 ? 10 : 7,
+                    ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -2668,7 +2867,7 @@ class ConversationRow extends StatelessWidget {
             ),
           ),
           Positioned(
-            left: 28,
+            left: useIos26 ? 84 : 28,
             right: 0,
             bottom: 0,
             child: IgnorePointer(

@@ -12,6 +12,7 @@ import '../models/notification_open_request.dart';
 import '../settings/app_settings.dart';
 import '../theme/messages_theme.dart';
 import '../widgets/contact_avatar.dart';
+import '../widgets/liquid_glass_surface.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/message_composer.dart';
 
@@ -678,6 +679,8 @@ class _ConversationScreenState extends State<ConversationScreen>
 
   @override
   Widget build(BuildContext context) {
+    final useIos26 =
+        AppSettingsScope.of(context).interfaceStyle == InterfaceStyle.ios26;
     final topCompensation =
         (44.0 - MediaQuery.paddingOf(context).top)
             .clamp(0.0, 44.0)
@@ -715,7 +718,7 @@ class _ConversationScreenState extends State<ConversationScreen>
                               10,
                               _selectionMode
                                   ? 64
-                                  : 92 + topCompensation,
+                                  : (useIos26 ? 106 : 92) + topCompensation,
                               14,
                               10,
                             ),
@@ -773,6 +776,11 @@ class _ConversationScreenState extends State<ConversationScreen>
                                           .difference(previous.sentAt)
                                           .inMinutes <=
                                       3;
+                              final showDateSeparator = previous != null &&
+                                  !_isSameCalendarDay(
+                                    previous.sentAt,
+                                    message.sentAt,
+                                  );
 
                               final messageBubble = _TimestampRevealMessage(
                                 revealAnimation: _timestampRevealController,
@@ -853,13 +861,21 @@ class _ConversationScreenState extends State<ConversationScreen>
                                       : interactiveMessage,
                                 ),
                               );
+                              final groupedMessage = showDateSeparator
+                                  ? Column(
+                                      children: [
+                                        _DateSeparator(value: message.sentAt),
+                                        insertedMessage,
+                                      ],
+                                    )
+                                  : insertedMessage;
                               final positionedMessage =
                                   message.id == widget.initialMessageId
                                       ? KeyedSubtree(
                                           key: _initialMessageKey,
-                                          child: insertedMessage,
+                                          child: groupedMessage,
                                         )
-                                      : insertedMessage;
+                                      : groupedMessage;
                               return RepaintBoundary(
                                 child: _ElasticMessageMotion(
                                   animation: _scrollElasticController,
@@ -914,6 +930,15 @@ class _ConversationScreenState extends State<ConversationScreen>
                           : _ConversationHeader(
                               conversation: widget.conversation,
                               topCompensation: topCompensation,
+                              backUnreadCount: widget.allConversations
+                                  .where(
+                                    (item) =>
+                                        item.id != widget.conversation.id,
+                                  )
+                                  .fold<int>(
+                                    0,
+                                    (sum, item) => sum + item.unreadCount,
+                                  ),
                               onCall: widget.onCall,
                               onOpenContact: widget.onOpenContact,
                             ),
@@ -1301,18 +1326,23 @@ class _ConversationHeader extends StatelessWidget {
   const _ConversationHeader({
     required this.conversation,
     required this.topCompensation,
+    required this.backUnreadCount,
     required this.onCall,
     required this.onOpenContact,
   });
 
   final Conversation conversation;
   final double topCompensation;
+  final int backUnreadCount;
   final VoidCallback onCall;
   final VoidCallback onOpenContact;
 
   @override
   Widget build(BuildContext context) {
     final settings = AppSettingsScope.of(context);
+    if (settings.interfaceStyle == InterfaceStyle.ios26) {
+      return _buildIos26(context, settings);
+    }
     final tint = MessagesPalette.isDark(context)
         ? const Color(0xFF1C1C1E)
         : const Color(0xFFF1F1F2);
@@ -1453,6 +1483,205 @@ class _ConversationHeader extends StatelessWidget {
           ),
         );
     return RepaintBoundary(child: addGlass(header));
+  }
+
+  Widget _buildIos26(
+    BuildContext context,
+    AppSettingsController settings,
+  ) {
+    final blur = settings.headerBlurSigma.clamp(0, 20).toDouble();
+    final labelColor = MessagesPalette.label(context);
+    final secondaryColor = MessagesPalette.secondaryLabel(context);
+    return SizedBox(
+      key: const ValueKey('conversation-header-ios26'),
+      height: 96 + topCompensation,
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: SizedBox(
+          height: 96,
+          child: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.topCenter,
+            children: [
+              Positioned(
+                left: 16,
+                top: 8,
+                child: LiquidGlassSurface(
+                  borderRadius: BorderRadius.circular(22),
+                  blurSigma: blur,
+                  transparency: settings.headerTransparency,
+                  child: SizedBox(
+                    width: backUnreadCount > 0 ? 67 : 44,
+                    height: 44,
+                    child: CupertinoButton(
+                      key: const ValueKey('conversation-back-button'),
+                      minSize: 44,
+                      padding: EdgeInsets.zero,
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            CupertinoIcons.chevron_left,
+                            size: 27,
+                            color: labelColor,
+                          ),
+                          if (backUnreadCount > 0) ...[
+                            const SizedBox(width: 4),
+                            Container(
+                              width: 28,
+                              height: 28,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: labelColor.withValues(alpha: .82),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Text(
+                                backUnreadCount > 99
+                                    ? '99+'
+                                    : '$backUnreadCount',
+                                style: TextStyle(
+                                  color: MessagesPalette.background(context),
+                                  fontFamily: 'SF Pro Text',
+                                  fontSize: backUnreadCount > 99 ? 10 : 15,
+                                  height: 1,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 16,
+                top: 8,
+                child: LiquidGlassSurface(
+                  borderRadius: BorderRadius.circular(22),
+                  blurSigma: blur,
+                  transparency: settings.headerTransparency,
+                  child: SizedBox.square(
+                    dimension: 44,
+                    child: CupertinoButton(
+                      key: const ValueKey('conversation-call-button'),
+                      minSize: 44,
+                      padding: EdgeInsets.zero,
+                      onPressed: () {
+                        HapticFeedback.selectionClick();
+                        onCall();
+                      },
+                      child: Icon(
+                        CupertinoIcons.phone,
+                        size: 23,
+                        color: labelColor,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 63,
+                child: CupertinoButton(
+                  minSize: 0,
+                  padding: EdgeInsets.zero,
+                  onPressed: () {
+                    HapticFeedback.selectionClick();
+                    onOpenContact();
+                  },
+                  child: LiquidGlassSurface(
+                    borderRadius: BorderRadius.circular(16),
+                    blurSigma: blur,
+                    transparency: settings.headerTransparency,
+                    child: IntrinsicWidth(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          minWidth: 108,
+                          maxWidth: 190,
+                        ),
+                        child: SizedBox(
+                          height: 32,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 24),
+                                child: Text(
+                                  conversation.title,
+                                  key: const ValueKey(
+                                    'conversation-contact-name',
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: labelColor,
+                                    fontFamily: 'SF Pro Text',
+                                    fontSize: 17,
+                                    height: 1,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: -.25,
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                right: 10,
+                                child: Icon(
+                                  CupertinoIcons.chevron_right,
+                                  size: 14,
+                                  color: secondaryColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 2,
+                child: CupertinoButton(
+                  minSize: 0,
+                  padding: EdgeInsets.zero,
+                  onPressed: () {
+                    HapticFeedback.selectionClick();
+                    onOpenContact();
+                  },
+                  child: Container(
+                    key: const ValueKey('conversation-contact-avatar'),
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: CupertinoColors.white.withValues(alpha: .7),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: CupertinoColors.black.withValues(alpha: .18),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: ContactAvatar(
+                      conversation: conversation,
+                      size: 60,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -2097,6 +2326,9 @@ String _formatTime(BuildContext context, DateTime value) {
     platformUses24Hour: MediaQuery.alwaysUse24HourFormatOf(context),
   );
 }
+
+bool _isSameCalendarDay(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month && a.day == b.day;
 
 (String, String) _dateSeparatorParts(BuildContext context, DateTime value) {
   final now = DateTime.now();

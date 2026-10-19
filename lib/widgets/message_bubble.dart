@@ -101,11 +101,12 @@ class _MessageBubbleState extends State<MessageBubble> {
   Widget build(BuildContext context) {
     final message = widget.message;
     final isFromMe = message.isFromMe;
+    final settings = AppSettingsScope.maybeOf(context);
+    final useIos26 = settings?.interfaceStyle == InterfaceStyle.ios26;
     final isImageAttachment =
         message.attachment?.kind == MessageAttachmentKind.image;
     final useGreenBubble = isFromMe &&
-        AppSettingsScope.maybeOf(context)?.sentBubbleColor ==
-            SentBubbleColor.green;
+        settings?.sentBubbleColor == SentBubbleColor.green;
     final emojiScale = emojiOnlyTextScale(message.text);
     final renderedTextScale = emojiScale == 2 ? 4.0 : emojiScale;
     final Color color;
@@ -127,7 +128,11 @@ class _MessageBubbleState extends State<MessageBubble> {
     return Semantics(
       label: isFromMe ? 'Sent message' : 'Received message',
       child: Padding(
-        padding: EdgeInsets.only(top: widget.compactTop ? 2 : 8),
+        padding: EdgeInsets.only(
+          top: widget.compactTop
+              ? (useIos26 ? 4 : 2)
+              : (useIos26 ? 10 : 8),
+        ),
         child: Column(
           crossAxisAlignment:
               isFromMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
@@ -140,15 +145,19 @@ class _MessageBubbleState extends State<MessageBubble> {
                 painter: MessageBubblePainter(
                   color: color,
                   gradient: isFromMe && !useGreenBubble && !isImageAttachment
-                      ? const LinearGradient(
+                      ? LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
-                          colors: [
-                            Color(0xFF00B7FF),
-                            MessagesPalette.blue,
-                          ],
+                          colors: useIos26
+                              ? const [Color(0xFF4EBAFF), Color(0xFF0088FF)]
+                              : const [
+                                  Color(0xFF00B7FF),
+                                  MessagesPalette.blue,
+                                ],
                         )
                       : null,
+                  fixedGradient: useIos26,
+                  useIos26Shape: useIos26,
                   scrollPosition: _scrollPosition,
                   paintKey: _paintKey,
                   screenHeight: MediaQuery.sizeOf(context).height,
@@ -158,15 +167,15 @@ class _MessageBubbleState extends State<MessageBubble> {
                 ),
                 child: Container(
                   constraints: BoxConstraints(
-                    minHeight: 36,
-                    // 274 pt on the 375 pt-wide SVG artboard.
-                    maxWidth: MediaQuery.sizeOf(context).width * (274 / 375),
+                    minHeight: useIos26 ? 40 : 36,
+                    maxWidth: MediaQuery.sizeOf(context).width *
+                        (useIos26 ? (280 / 402) : (274 / 375)),
                   ),
                   padding: isImageAttachment
                       ? EdgeInsets.zero
-                      : const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 7,
+                      : EdgeInsets.symmetric(
+                          horizontal: useIos26 ? 13 : 12,
+                          vertical: useIos26 ? 9 : 7,
                         ),
                   child: Align(
                     alignment: Alignment.center,
@@ -602,16 +611,22 @@ class MessageBubblePainter extends CustomPainter {
   MessageBubblePainter({
     required this.color,
     required this.gradient,
+    required this.fixedGradient,
+    required this.useIos26Shape,
     required this.scrollPosition,
     required this.paintKey,
     required this.screenHeight,
     required this.isFromMe,
     required this.showTail,
     required this.shadowElevation,
-  }) : super(repaint: gradient == null ? null : scrollPosition);
+  }) : super(
+          repaint: gradient == null || fixedGradient ? null : scrollPosition,
+        );
 
   final Color color;
   final LinearGradient? gradient;
+  final bool fixedGradient;
+  final bool useIos26Shape;
   final ScrollPosition? scrollPosition;
   final GlobalKey paintKey;
   final double screenHeight;
@@ -626,7 +641,11 @@ class MessageBubblePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = color;
-    if (gradient != null && screenHeight > 0) {
+    if (gradient != null && fixedGradient) {
+      paint.shader = gradient!.createShader(
+        Rect.fromLTWH(0, 0, size.width, size.height + 7),
+      );
+    } else if (gradient != null && screenHeight > 0) {
       if (_referenceScreenTop == null) {
         final renderObject =
             paintKey.currentContext?.findRenderObject() as RenderBox?;
@@ -658,8 +677,10 @@ class MessageBubblePainter extends CustomPainter {
       bubble = body;
 
       if (showTail) {
-        final tail = Path();
-        if (isFromMe) {
+        final tail = useIos26Shape
+            ? _ios26Tail(size, isFromMe: isFromMe)
+            : Path();
+        if (!useIos26Shape && isFromMe) {
           tail
           ..moveTo(size.width - 1, size.height - 6.5)
           ..cubicTo(
@@ -690,7 +711,7 @@ class MessageBubblePainter extends CustomPainter {
             size.width - 1,
             size.height - 6.5,
           );
-        } else {
+        } else if (!useIos26Shape) {
           tail
           ..moveTo(1, size.height - 6.5)
           ..cubicTo(
@@ -747,10 +768,100 @@ class MessageBubblePainter extends CustomPainter {
   bool shouldRepaint(MessageBubblePainter oldDelegate) =>
       oldDelegate.color != color ||
       oldDelegate.gradient != gradient ||
+      oldDelegate.fixedGradient != fixedGradient ||
+      oldDelegate.useIos26Shape != useIos26Shape ||
       oldDelegate.scrollPosition != scrollPosition ||
       oldDelegate.paintKey != paintKey ||
       oldDelegate.screenHeight != screenHeight ||
       oldDelegate.isFromMe != isFromMe ||
       oldDelegate.showTail != showTail ||
       oldDelegate.shadowElevation != shadowElevation;
+
+  static Path _ios26Tail(Size size, {required bool isFromMe}) {
+    const designWidth = 70.0;
+    final path = Path();
+    double x(double value) => isFromMe
+        ? size.width - designWidth + value
+        : designWidth - value;
+
+    path
+      ..moveTo(x(47.78), size.height)
+      ..cubicTo(
+        x(48.77),
+        size.height,
+        x(49.42),
+        size.height + .31,
+        x(50.75),
+        size.height + 1.24,
+      )
+      ..cubicTo(
+        x(51.46),
+        size.height + 1.74,
+        x(54.2),
+        size.height + 3.84,
+        x(56.47),
+        size.height + 5.09,
+      )
+      ..cubicTo(
+        x(58.43),
+        size.height + 6.17,
+        x(60.11),
+        size.height + 6.91,
+        x(60.53),
+        size.height + 6.94,
+      )
+      ..cubicTo(
+        x(61.79),
+        size.height + 7.04,
+        x(61.95),
+        size.height + 5.85,
+        x(61.46),
+        size.height + 5.21,
+      )
+      ..cubicTo(
+        x(60.97),
+        size.height + 4.57,
+        x(60.41),
+        size.height + 3.74,
+        x(60.19),
+        size.height + 3.29,
+      )
+      ..cubicTo(
+        x(59.71),
+        size.height + 2.28,
+        x(59.56),
+        size.height + 1.75,
+        x(59.56),
+        size.height + .24,
+      )
+      ..cubicTo(
+        x(59.56),
+        size.height - 1.62,
+        x(60.88),
+        size.height - 3,
+        x(61.92),
+        size.height - 3.92,
+      )
+      ..cubicTo(
+        x(62.01),
+        size.height - 4,
+        x(62.13),
+        size.height - 4.1,
+        x(62.27),
+        size.height - 4.21,
+      )
+      ..cubicTo(
+        x(62.51),
+        size.height - 4.4,
+        x(62.74),
+        size.height - 4.59,
+        x(62.97),
+        size.height - 4.78,
+      )
+      ..lineTo(x(62.97), size.height - 11)
+      ..lineTo(x(45.98), size.height - 11)
+      ..lineTo(x(45.98), size.height)
+      ..close();
+    return path;
+  }
 }

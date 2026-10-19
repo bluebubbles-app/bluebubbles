@@ -303,6 +303,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
             CupertinoListSection.insetGrouped(
               header: const Text('APPEARANCE'),
               children: [
+                _ChoiceRow(
+                  key: const ValueKey('interface-style-setting'),
+                  title: 'Interface',
+                  value: settings.interfaceStyle == InterfaceStyle.ios26
+                      ? 'iOS 26'
+                      : 'iOS 17',
+                  icon: CupertinoIcons.paintbrush,
+                  onPressed: () async {
+                    final value = await _pick<InterfaceStyle>(
+                      title: 'Interface',
+                      current: settings.interfaceStyle,
+                      options: const [
+                        (InterfaceStyle.ios17, 'iOS 17'),
+                        (InterfaceStyle.ios26, 'iOS 26'),
+                      ],
+                    );
+                    if (value != null) {
+                      await settings.setInterfaceStyle(value);
+                    }
+                  },
+                ),
                 _SliderSetting(
                   key: const ValueKey('header-transparency-setting'),
                   title: 'Header Transparency',

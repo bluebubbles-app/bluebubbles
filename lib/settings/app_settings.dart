@@ -14,6 +14,8 @@ enum EmojiStyle { apple, android }
 
 enum SentBubbleColor { blue, green }
 
+enum InterfaceStyle { ios17, ios26 }
+
 class AppSettingsController extends ChangeNotifier {
   static const _headerTransparencyKey = 'header_transparency';
   static const _fontScaleKey = 'font_scale';
@@ -22,6 +24,7 @@ class AppSettingsController extends ChangeNotifier {
   static const _clockFormatKey = 'clock_format';
   static const _emojiStyleKey = 'emoji_style';
   static const _sentBubbleColorKey = 'sent_bubble_color';
+  static const _interfaceStyleKey = 'interface_style';
   static const _permissionsOnboardingShownKey =
       'permissions_onboarding_shown';
 
@@ -32,6 +35,7 @@ class AppSettingsController extends ChangeNotifier {
   ClockFormat clockFormat = ClockFormat.system;
   EmojiStyle emojiStyle = EmojiStyle.android;
   SentBubbleColor sentBubbleColor = SentBubbleColor.blue;
+  InterfaceStyle interfaceStyle = InterfaceStyle.ios17;
   bool permissionsOnboardingShown = false;
   bool _disposed = false;
   Timer? _headerSaveDebounce;
@@ -67,6 +71,11 @@ class AppSettingsController extends ChangeNotifier {
         SentBubbleColor.values,
         preferences.getString(_sentBubbleColorKey),
         sentBubbleColor,
+      );
+      interfaceStyle = _enumValue(
+        InterfaceStyle.values,
+        preferences.getString(_interfaceStyleKey),
+        interfaceStyle,
       );
       permissionsOnboardingShown =
           preferences.getBool(_permissionsOnboardingShownKey) ?? false;
@@ -138,6 +147,14 @@ class AppSettingsController extends ChangeNotifier {
     _notifyIfActive();
     await _persist(
       (preferences) => preferences.setString(_sentBubbleColorKey, value.name),
+    );
+  }
+
+  Future<void> setInterfaceStyle(InterfaceStyle value) async {
+    interfaceStyle = value;
+    _notifyIfActive();
+    await _persist(
+      (preferences) => preferences.setString(_interfaceStyleKey, value.name),
     );
   }
 
