@@ -835,11 +835,11 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
     if (settings.interfaceStyle == InterfaceStyle.ios26) {
       final blur = settings.headerBlurSigma.clamp(0, 20).toDouble();
       return SizedBox(
-        height: 72 + topCompensation,
+        height: 96 + topCompensation,
         child: Align(
           alignment: Alignment.bottomCenter,
           child: SizedBox(
-            height: 72,
+            height: 96,
             child: Stack(
               alignment: Alignment.center,
               children: [

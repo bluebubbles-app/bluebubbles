@@ -8,7 +8,9 @@ import 'package:flutter/services.dart';
 
 import '../models/conversation.dart';
 import '../services/message_sounds.dart';
+import '../settings/app_settings.dart';
 import '../theme/messages_theme.dart';
+import 'liquid_glass_surface.dart';
 
 class MessageComposer extends StatefulWidget {
   const MessageComposer({
@@ -233,11 +235,18 @@ class _MessageComposerState extends State<MessageComposer> {
     try {
       if (!await _requestMediaPermission('photos')) return;
       if (!mounted) return;
+      final useIos26 =
+          AppSettingsScope.maybeOf(context)?.interfaceStyle ==
+              InterfaceStyle.ios26;
       final selected = await showCupertinoModalPopup<MessageAttachment>(
         context: context,
+        barrierColor: useIos26
+            ? CupertinoColors.transparent
+            : const Color(0x33000000),
         builder: (context) => _MediaLibrarySheet(
           loadPage: _loadImagePage,
           pickFromGallery: _pickGalleryImage,
+          useIos26: useIos26,
         ),
       );
       if (mounted && selected != null) {
@@ -362,6 +371,17 @@ class _MessageComposerState extends State<MessageComposer> {
         attachment?.kind == MessageAttachmentKind.audio && !_recording;
     final canSend = widget.enabled && (_hasText || attachment != null);
     final isDark = MessagesPalette.isDark(context);
+    final settings = AppSettingsScope.maybeOf(context);
+
+    if (settings?.interfaceStyle == InterfaceStyle.ios26) {
+      return _buildIos26Composer(
+        context,
+        settings!,
+        attachment: attachment,
+        isAudioDraft: isAudioDraft,
+        canSend: canSend,
+      );
+    }
 
     return SafeArea(
       top: false,
@@ -556,6 +576,177 @@ class _MessageComposerState extends State<MessageComposer> {
                     const SizedBox(width: 16)
                   else
                     const SizedBox(width: 12),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildIos26Composer(
+    BuildContext context,
+    AppSettingsController settings, {
+    required MessageAttachment? attachment,
+    required bool isAudioDraft,
+    required bool canSend,
+  }) {
+    final blur = settings.headerBlurSigma.clamp(0, 20).toDouble();
+    return SafeArea(
+      top: false,
+      child: ColoredBox(
+        color: MessagesPalette.background(context).withValues(alpha: .9),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (attachment?.kind == MessageAttachmentKind.image)
+              _AttachmentPreview(
+                attachment: attachment!,
+                onRemove: _cancelRecording,
+              ),
+            SizedBox(
+              height: 66,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  if (!_recording && !isAudioDraft)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 16),
+                      child: LiquidGlassSurface(
+                        borderRadius: BorderRadius.circular(20),
+                        blurSigma: blur,
+                        transparency: settings.headerTransparency,
+                        child: SizedBox.square(
+                          dimension: 40,
+                          child: CupertinoButton(
+                            key: const ValueKey(
+                              'new-message-attachment-button',
+                            ),
+                            minSize: 40,
+                            padding: EdgeInsets.zero,
+                            onPressed: _busy ? null : _openMediaLibrary,
+                            child: Icon(
+                              CupertinoIcons.plus,
+                              size: 25,
+                              color: MessagesPalette.label(context)
+                                  .withValues(alpha: .78),
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    const SizedBox(width: 16),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: LiquidGlassSurface(
+                      borderRadius: BorderRadius.circular(20),
+                      blurSigma: blur,
+                      transparency: settings.headerTransparency,
+                      child: SizedBox(
+                        height: 40,
+                        child: _recording
+                            ? _RecordingControls(
+                                duration: _recordingDuration,
+                                onCancel: _cancelRecording,
+                                onStop: _stopRecording,
+                                busy: _busy,
+                              )
+                            : isAudioDraft
+                                ? _AudioDraftControls(
+                                    duration: Duration(
+                                      milliseconds:
+                                          attachment!.durationMilliseconds ??
+                                              0,
+                                    ),
+                                    playing: _previewPlaying,
+                                    onPlayPause: _togglePreviewPlayback,
+                                    onCancel: _cancelRecording,
+                                    onSend: _send,
+                                  )
+                                : Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    children: [
+                                      Expanded(
+                                        child: CupertinoTextField(
+                                          controller: _controller,
+                                          focusNode: _focusNode,
+                                          placeholder: 'iMessage',
+                                          placeholderStyle: TextStyle(
+                                            fontFamily: 'SF Pro Text',
+                                            color: MessagesPalette
+                                                .secondaryLabel(context)
+                                                .withValues(alpha: .55),
+                                            fontSize: 17,
+                                            height: 1.2,
+                                          ),
+                                          style: MessagesText.body(context),
+                                          minLines: 1,
+                                          maxLines: 1,
+                                          textCapitalization:
+                                              TextCapitalization.sentences,
+                                          keyboardType:
+                                              TextInputType.multiline,
+                                          decoration: null,
+                                          padding: const EdgeInsets.fromLTRB(
+                                            18,
+                                            8,
+                                            4,
+                                            8,
+                                          ),
+                                        ),
+                                      ),
+                                      SizedBox(
+                                        width: 38,
+                                        height: 38,
+                                        child: AnimatedSwitcher(
+                                          duration: const Duration(
+                                            milliseconds: 140,
+                                          ),
+                                          child: GestureDetector(
+                                            key: const ValueKey(
+                                              'voice-message-button',
+                                            ),
+                                            onLongPress: canSend || _busy
+                                                ? null
+                                                : (widget.enabled
+                                                    ? _startRecording
+                                                    : null),
+                                            child: CupertinoButton(
+                                              key: ValueKey(canSend),
+                                              minSize: 38,
+                                              padding: EdgeInsets.zero,
+                                              onPressed: canSend
+                                                  ? _send
+                                                  : (_busy || !widget.enabled
+                                                      ? null
+                                                      : _startRecording),
+                                              child: canSend
+                                                  ? const Icon(
+                                                      CupertinoIcons
+                                                          .arrow_up_circle_fill,
+                                                      size: 32,
+                                                      color: Color(0xFF0088FF),
+                                                    )
+                                                  : _VoiceWaveIcon(
+                                                      color: MessagesPalette
+                                                          .secondaryLabel(
+                                                        context,
+                                                      ),
+                                                    ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 1),
+                                    ],
+                                  ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
                 ],
               ),
             ),
@@ -842,10 +1033,12 @@ class _MediaLibrarySheet extends StatefulWidget {
   const _MediaLibrarySheet({
     required this.loadPage,
     required this.pickFromGallery,
+    required this.useIos26,
   });
 
   final Future<List<MessageAttachment>> Function(int offset) loadPage;
   final Future<MessageAttachment?> Function() pickFromGallery;
+  final bool useIos26;
 
   @override
   State<_MediaLibrarySheet> createState() => _MediaLibrarySheetState();
@@ -865,6 +1058,7 @@ class _MediaLibrarySheetState extends State<_MediaLibrarySheet> {
   @override
   void initState() {
     super.initState();
+    if (widget.useIos26) _height = 340;
     _scrollController.addListener(_onScroll);
     unawaited(_loadNextPage());
   }
@@ -939,14 +1133,22 @@ class _MediaLibrarySheetState extends State<_MediaLibrarySheet> {
 
   Widget _buildGallery(BuildContext context) {
     final showStatusTile = _loading || _error != null;
+    final panelWidth = (MediaQuery.sizeOf(context).width - 12)
+        .clamp(0.0, double.infinity)
+        .toDouble();
+    final ios26Spacing = ((panelWidth - 20 - 300) / 2)
+        .clamp(6.0, 35.0)
+        .toDouble();
     return GridView.builder(
       controller: _scrollController,
-      padding: const EdgeInsets.fromLTRB(6, 10, 6, 16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+      padding: widget.useIos26
+          ? const EdgeInsets.fromLTRB(10, 0, 10, 16)
+          : const EdgeInsets.fromLTRB(6, 10, 6, 16),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
-        crossAxisSpacing: 6,
-        mainAxisSpacing: 6,
-        childAspectRatio: 122 / 117,
+        crossAxisSpacing: widget.useIos26 ? ios26Spacing : 6,
+        mainAxisSpacing: widget.useIos26 ? 19 : 6,
+        childAspectRatio: widget.useIos26 ? 1.0 : 122 / 117,
       ),
       itemCount: 1 + _images.length + (showStatusTile ? 1 : 0),
       itemBuilder: (context, index) {
@@ -1020,13 +1222,12 @@ class _MediaLibrarySheetState extends State<_MediaLibrarySheet> {
     final maximumHeight = MediaQuery.sizeOf(context).height -
         MediaQuery.paddingOf(context).top -
         8;
-    final minimumHeight = maximumHeight < 296 ? maximumHeight : 296.0;
-    return Container(
+    final desiredMinimumHeight = widget.useIos26 ? 340.0 : 296.0;
+    final minimumHeight = maximumHeight < desiredMinimumHeight
+        ? maximumHeight
+        : desiredMinimumHeight;
+    final content = SizedBox(
       height: _height.clamp(minimumHeight, maximumHeight),
-      decoration: BoxDecoration(
-        color: MessagesPalette.background(context),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
-      ),
       child: Column(
         children: [
           GestureDetector(
@@ -1047,7 +1248,7 @@ class _MediaLibrarySheetState extends State<_MediaLibrarySheet> {
               });
             },
             child: SizedBox(
-              height: 54,
+              height: widget.useIos26 ? 20 : 54,
               child: Stack(
                 children: [
                   Align(
@@ -1061,28 +1262,29 @@ class _MediaLibrarySheetState extends State<_MediaLibrarySheet> {
                       ),
                     ),
                   ),
-                  Positioned(
-                    right: 16,
-                    top: 15,
-                    child: CupertinoButton(
-                      minSize: 30,
-                      padding: EdgeInsets.zero,
-                      onPressed: () => Navigator.pop(context),
-                      child: Container(
-                        width: 30,
-                        height: 30,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFEEEEEF),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          CupertinoIcons.xmark,
-                          size: 17,
-                          color: Color(0xFF838388),
+                  if (!widget.useIos26)
+                    Positioned(
+                      right: 16,
+                      top: 15,
+                      child: CupertinoButton(
+                        minSize: 30,
+                        padding: EdgeInsets.zero,
+                        onPressed: () => Navigator.pop(context),
+                        child: Container(
+                          width: 30,
+                          height: 30,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFEEEEEF),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            CupertinoIcons.xmark,
+                            size: 17,
+                            color: Color(0xFF838388),
+                          ),
                         ),
                       ),
                     ),
-                  ),
                 ],
               ),
             ),
@@ -1090,6 +1292,26 @@ class _MediaLibrarySheetState extends State<_MediaLibrarySheet> {
           Expanded(child: _buildGallery(context)),
         ],
       ),
+    );
+    if (widget.useIos26) {
+      final settings = AppSettingsScope.of(context);
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        child: LiquidGlassSurface(
+          borderRadius: BorderRadius.circular(34),
+          blurSigma: settings.headerBlurSigma.clamp(0, 20).toDouble(),
+          transparency: settings.headerTransparency,
+          child: content,
+        ),
+      );
+    }
+    return Container(
+      height: _height.clamp(minimumHeight, maximumHeight),
+      decoration: BoxDecoration(
+        color: MessagesPalette.background(context),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
+      ),
+      child: content,
     );
   }
 }
