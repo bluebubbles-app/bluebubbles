@@ -974,6 +974,37 @@ public class PduComposer {
                 appendTextString(contentLocation);
             }
 
+            // Content-Disposition is optional in MMS, but explicitly marking
+            // visual and audio parts as inline prevents strict clients from
+            // presenting them as generic downloadable files.
+            byte[] contentDisposition = part.getContentDisposition();
+            if (contentDisposition != null) {
+                mStack.newbuf();
+                PositionMarker dispositionStart = mStack.mark();
+                String disposition = new String(contentDisposition);
+                if ("from-data".equalsIgnoreCase(disposition)) {
+                    appendOctet(PduPart.P_DISPOSITION_FROM_DATA);
+                } else if ("attachment".equalsIgnoreCase(disposition)) {
+                    appendOctet(PduPart.P_DISPOSITION_ATTACHMENT);
+                } else if ("inline".equalsIgnoreCase(disposition)) {
+                    appendOctet(PduPart.P_DISPOSITION_INLINE);
+                } else {
+                    appendTextString(contentDisposition);
+                }
+
+                byte[] filename = part.getFilename();
+                if (filename != null) {
+                    appendOctet(PduPart.P_FILENAME);
+                    appendTextString(filename);
+                }
+
+                int dispositionLength = dispositionStart.getLength();
+                mStack.pop();
+                appendOctet(PduPart.P_CONTENT_DISPOSITION);
+                appendValueLength(dispositionLength);
+                mStack.copy();
+            }
+
             // content
             int headerLength = attachment.getLength();
 

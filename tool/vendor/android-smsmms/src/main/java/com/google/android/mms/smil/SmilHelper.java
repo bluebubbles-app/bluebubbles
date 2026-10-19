@@ -33,6 +33,40 @@ public class SmilHelper {
         SMILLayoutElement layout = (SMILLayoutElement) document.createElement("layout");
         head.appendChild(layout);
 
+        boolean hasTextPart = false;
+        boolean hasVisualPart = false;
+        for (int i = 0; i < pb.getPartsNum(); i++) {
+            String type = new String(pb.getPart(i).getContentType());
+            hasTextPart |= type.equals(ContentType.TEXT_PLAIN)
+                    || type.equalsIgnoreCase(ContentType.APP_WAP_XHTML)
+                    || type.equals(ContentType.TEXT_HTML);
+            hasVisualPart |= ContentType.isImageType(type) || ContentType.isVideoType(type);
+        }
+
+        SMILElement rootLayout = (SMILElement) document.createElement("root-layout");
+        layout.appendChild(rootLayout);
+
+        if (hasVisualPart) {
+            SMILElement imageRegion = (SMILElement) document.createElement("region");
+            imageRegion.setAttribute("id", "Image");
+            imageRegion.setAttribute("fit", "meet");
+            imageRegion.setAttribute("left", "0");
+            imageRegion.setAttribute("top", "0");
+            imageRegion.setAttribute("width", "100%");
+            imageRegion.setAttribute("height", hasTextPart ? "80%" : "100%");
+            layout.appendChild(imageRegion);
+        }
+
+        if (hasTextPart) {
+            SMILElement textRegion = (SMILElement) document.createElement("region");
+            textRegion.setAttribute("id", "Text");
+            textRegion.setAttribute("left", "0");
+            textRegion.setAttribute("top", hasVisualPart ? "80%" : "0");
+            textRegion.setAttribute("width", "100%");
+            textRegion.setAttribute("height", hasVisualPart ? "20%" : "100%");
+            layout.appendChild(textRegion);
+        }
+
         // Create <body> element and add a empty <par>.
         SMILElement body = (SMILElement) document.createElement("body");
         smil.appendChild(body);
@@ -105,6 +139,11 @@ public class SmilHelper {
         SMILMediaElement mediaElement =
                 (SMILMediaElement) document.createElement(tag);
         mediaElement.setSrc(escapeXML(src));
+        if (tag.equals(ELEMENT_TAG_IMAGE) || tag.equals(ELEMENT_TAG_VIDEO)) {
+            mediaElement.setAttribute("region", "Image");
+        } else if (tag.equals(ELEMENT_TAG_TEXT)) {
+            mediaElement.setAttribute("region", "Text");
+        }
         return mediaElement;
     }
 

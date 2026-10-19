@@ -337,7 +337,7 @@ class MainActivity : FlutterActivity() {
         }
         try {
             val directory = File(cacheDir, "voice_messages").apply { mkdirs() }
-            val output = File(directory, "voice-${System.currentTimeMillis()}.m4a")
+            val output = File(directory, "voice-${System.currentTimeMillis()}.3gp")
             @Suppress("DEPRECATION")
             val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 MediaRecorder(this)
@@ -346,13 +346,10 @@ class MainActivity : FlutterActivity() {
             }
             recorder.apply {
                 setAudioSource(MediaRecorder.AudioSource.MIC)
-                // AAC in an MPEG-4 container is natively playable by Android
-                // and iPhone. Keep the bitrate modest for carrier MMS limits.
-                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-                setAudioChannels(1)
-                setAudioSamplingRate(24_000)
-                setAudioEncodingBitRate(32_000)
+                // 3GP + AMR-WB is the interoperable carrier-MMS voice format
+                // used by QUIK. AAC/MP4 is commonly presented as a generic file.
+                setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP)
+                setAudioEncoder(MediaRecorder.AudioEncoder.AMR_WB)
                 setMaxDuration(5 * 60 * 1000)
                 setOutputFile(output.absolutePath)
                 prepare()
@@ -387,7 +384,7 @@ class MainActivity : FlutterActivity() {
                 hashMapOf(
                     "uri" to Uri.fromFile(file).toString(),
                     "localPath" to file.absolutePath,
-                    "mimeType" to "audio/mp4",
+                    "mimeType" to "audio/3gpp",
                     "name" to file.name,
                     "durationMilliseconds" to duration,
                 ),
@@ -956,6 +953,7 @@ class MainActivity : FlutterActivity() {
         mimeType.equals("image/gif", true) -> "image.gif"
         mimeType.equals("image/webp", true) -> "image.webp"
         mimeType.equals("audio/mp4", true) -> "audio.m4a"
+        mimeType.equals("audio/3gpp", true) -> "voice.3gp"
         mimeType.equals("audio/aac", true) -> "audio.aac"
         mimeType.equals("audio/mpeg", true) -> "audio.mp3"
         mimeType.equals("audio/ogg", true) -> "audio.ogg"
@@ -1587,6 +1585,7 @@ class MainActivity : FlutterActivity() {
                 } else {
                     val extension = when (contentType) {
                         "audio/mp4", "audio/aac" -> "m4a"
+                        "audio/3gpp" -> "3gp"
                         "audio/mpeg" -> "mp3"
                         "audio/ogg" -> "ogg"
                         else -> "audio"
