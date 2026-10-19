@@ -15,6 +15,7 @@ import '../services/android_sms_service.dart';
 import '../theme/messages_theme.dart';
 import '../widgets/contact_avatar.dart';
 import '../widgets/ios_search_field.dart';
+import '../widgets/message_composer.dart';
 import 'conversation_screen.dart';
 import 'settings_screen.dart';
 
@@ -560,6 +561,8 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
           conversations: widget.conversations,
           onResolveConversation: widget.onResolveConversation,
           smsController: widget.smsController,
+          onSend: widget.onSend,
+          onSendAttachment: widget.onSendAttachment,
         ),
       ),
     );
@@ -1001,11 +1004,19 @@ class _NewMessageRecipientScreen extends StatefulWidget {
     required this.conversations,
     this.onResolveConversation,
     required this.smsController,
+    required this.onSend,
+    this.onSendAttachment,
   });
 
   final List<Conversation> conversations;
   final Future<Conversation> Function(String address)? onResolveConversation;
   final AndroidSmsController smsController;
+  final void Function(Conversation conversation, String text) onSend;
+  final void Function(
+    Conversation conversation,
+    MessageAttachment attachment,
+    String caption,
+  )? onSendAttachment;
 
   @override
   State<_NewMessageRecipientScreen> createState() =>
@@ -1016,7 +1027,9 @@ class _NewMessageRecipientScreenState
     extends State<_NewMessageRecipientScreen> {
   final _recipientController = TextEditingController();
   final _recipientFocus = FocusNode();
+  final _composerFocus = FocusNode();
   String _query = '';
+  Conversation? _selectedConversation;
   bool _resolving = false;
   Timer? _contactSearchDebounce;
   int _contactSearchGeneration = 0;
@@ -1035,6 +1048,7 @@ class _NewMessageRecipientScreenState
     _contactSearchDebounce?.cancel();
     _recipientController.dispose();
     _recipientFocus.dispose();
+    _composerFocus.dispose();
     super.dispose();
   }
 
@@ -1042,7 +1056,9 @@ class _NewMessageRecipientScreenState
     final query = _query.trim().toLowerCase();
     final conversations = [...widget.conversations]
       ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-    if (query.isEmpty) return conversations.take(12).toList();
+    if (query.isEmpty || _selectedConversation != null) {
+      return const <Conversation>[];
+    }
     return conversations
         .where(
           (conversation) =>
@@ -1063,7 +1079,7 @@ class _NewMessageRecipientScreenState
     if (address.isEmpty) return;
     for (final conversation in widget.conversations) {
       if (_sameAddress(conversation.address, address)) {
-        Navigator.of(context).pop(conversation);
+        _selectConversation(conversation);
         return;
       }
     }
@@ -1075,7 +1091,7 @@ class _NewMessageRecipientScreenState
     setState(() => _resolving = true);
     try {
       final conversation = await resolver(address);
-      if (mounted) Navigator.of(context).pop(conversation);
+      if (mounted) _selectConversation(conversation);
     } catch (_) {
       if (mounted) {
         setState(() => _resolving = false);
@@ -1084,7 +1100,55 @@ class _NewMessageRecipientScreenState
     }
   }
 
+  void _selectConversation(Conversation conversation) {
+    _contactSearchDebounce?.cancel();
+    _recipientController.value = TextEditingValue(
+      text: conversation.title,
+      selection: TextSelection.collapsed(offset: conversation.title.length),
+    );
+    setState(() {
+      _selectedConversation = conversation;
+      _query = '';
+      _contactMatches = const <SmsContact>[];
+      _resolving = false;
+    });
+    _recipientFocus.unfocus();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _composerFocus.requestFocus();
+    });
+  }
+
+  void _clearRecipient() {
+    _recipientController.clear();
+    setState(() {
+      _selectedConversation = null;
+      _query = '';
+      _contactMatches = const <SmsContact>[];
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _recipientFocus.requestFocus();
+    });
+  }
+
+  void _sendNewMessage(String text) {
+    final conversation = _selectedConversation;
+    if (conversation == null) return;
+    widget.onSend(conversation, text);
+    Navigator.of(context).pop(conversation);
+  }
+
+  void _sendNewAttachment(
+    MessageAttachment attachment,
+    String caption,
+  ) {
+    final conversation = _selectedConversation;
+    if (conversation == null) return;
+    widget.onSendAttachment?.call(conversation, attachment, caption);
+    Navigator.of(context).pop(conversation);
+  }
+
   void _onRecipientChanged(String value) {
+    if (_selectedConversation != null) return;
     setState(() {
       _query = value;
       if (value.trim().isEmpty) _contactMatches = const <SmsContact>[];
@@ -1132,124 +1196,86 @@ class _NewMessageRecipientScreenState
   Widget build(BuildContext context) {
     final matches = _matches;
     final typedRecipient = _query.trim();
+    final selectedConversation = _selectedConversation;
+    final isDark = MessagesPalette.isDark(context);
     return CupertinoPageScaffold(
-      backgroundColor: MessagesPalette.background(context),
-      navigationBar: CupertinoNavigationBar(
-        middle: const Text('New Message'),
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        border: Border(
-          bottom: BorderSide(
-            color: MessagesPalette.hairline(context),
-            width: .5,
-          ),
-        ),
-      ),
+      backgroundColor: CupertinoColors.black,
       child: SafeArea(
-        child: Column(
+        bottom: false,
+        child: Stack(
           children: [
-            Container(
-              constraints: const BoxConstraints(minHeight: 50),
-              padding: const EdgeInsets.fromLTRB(16, 5, 12, 5),
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(
-                    color: MessagesPalette.hairline(context),
-                    width: .5,
-                  ),
+            Positioned.fill(
+              left: 15,
+              right: 16,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xFF3A3A3C)
+                      : const Color(0xFFE0E0E0),
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(9)),
                 ),
               ),
-              child: Row(
-                children: [
-                  Text(
-                    'To:',
-                    style: MessagesText.body(context).copyWith(
-                      color: MessagesPalette.secondaryLabel(context),
-                      fontSize: 16,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: CupertinoTextField.borderless(
-                      key: const ValueKey('new-message-recipient-field'),
-                      controller: _recipientController,
-                      focusNode: _recipientFocus,
-                      enabled: !_resolving,
-                      placeholder: 'Name or phone number',
-                      textInputAction: TextInputAction.done,
-                      keyboardType: TextInputType.text,
-                      style: MessagesText.body(context).copyWith(fontSize: 16),
-                      onChanged: _onRecipientChanged,
-                      onSubmitted: (_) => _useTypedRecipient(),
-                    ),
-                  ),
-                  if (_resolving)
-                    const Padding(
-                      padding: EdgeInsets.only(left: 8),
-                      child: CupertinoActivityIndicator(radius: 9),
-                    ),
-                ],
-              ),
             ),
-            Expanded(
-              child: ListView(
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
-                children: [
-                  if (typedRecipient.isNotEmpty &&
-                      !matches.any(
-                        (item) => _sameAddress(item.address, typedRecipient),
-                      ))
-                    CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      onPressed: _resolving ? null : _useTypedRecipient,
-                      child: Container(
-                        height: 58,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        decoration: BoxDecoration(
-                          border: Border(
-                            bottom: BorderSide(
-                              color: MessagesPalette.hairline(context),
-                              width: .5,
-                            ),
-                          ),
-                        ),
-                        child: Row(
+            Positioned.fill(
+              top: 13,
+              child: ClipRRect(
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(10)),
+                child: ColoredBox(
+                  color: MessagesPalette.background(context),
+                  child: Column(
+                    children: [
+                      Container(
+                        key: const ValueKey('new-message-header'),
+                        height: 77,
+                        color: isDark
+                            ? const Color(0xFF1C1C1E)
+                            : const Color(0xFFF5F5F3),
+                        child: Stack(
+                          alignment: Alignment.center,
                           children: [
-                            const Icon(
-                              CupertinoIcons.arrow_up_circle_fill,
-                              color: MessagesPalette.blue,
-                              size: 31,
+                            Text(
+                              'New Message',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro Text',
+                                color: MessagesPalette.label(context),
+                                fontSize: 17.5,
+                                height: 1,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: -.2,
+                              ),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                'Send to “$typedRecipient”',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: MessagesText.body(context).copyWith(
-                                  color: MessagesPalette.blue,
-                                  fontSize: 16,
+                            Positioned(
+                              right: 16,
+                              child: CupertinoButton(
+                                key: const ValueKey(
+                                  'new-message-cancel-button',
+                                ),
+                                minSize: 44,
+                                padding: EdgeInsets.zero,
+                                onPressed: () => Navigator.of(context).pop(),
+                                child: const Text(
+                                  'Cancel',
+                                  style: TextStyle(
+                                    fontFamily: 'SF Pro Text',
+                                    color: MessagesPalette.headerActionBlue,
+                                    fontSize: 17.5,
+                                    fontWeight: FontWeight.w400,
+                                    letterSpacing: -.2,
+                                  ),
                                 ),
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ),
-                  for (final conversation in matches)
-                    CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      onPressed: _resolving
-                          ? null
-                          : () => Navigator.of(context).pop(conversation),
-                      child: Container(
-                        height: 66,
-                        padding: const EdgeInsets.fromLTRB(16, 7, 12, 7),
+                      Container(
+                        key: const ValueKey('new-message-recipient-row'),
+                        height: 47,
+                        padding: const EdgeInsets.only(left: 17, right: 15),
                         decoration: BoxDecoration(
+                          color: MessagesPalette.background(context),
                           border: Border(
                             bottom: BorderSide(
                               color: MessagesPalette.hairline(context),
@@ -1259,116 +1285,172 @@ class _NewMessageRecipientScreenState
                         ),
                         child: Row(
                           children: [
-                            ContactAvatar(
-                              conversation: conversation,
-                              size: 44,
+                            Text(
+                              'To:',
+                              style: TextStyle(
+                                fontFamily: 'SF Pro Text',
+                                color: MessagesPalette.secondaryLabel(context),
+                                fontSize: 16,
+                                height: 1,
+                                fontWeight: FontWeight.w400,
+                                letterSpacing: -.2,
+                              ),
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(width: 6),
                             Expanded(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    conversation.title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: MessagesText.headline(context)
-                                        .copyWith(fontSize: 16),
+                              child: CupertinoTextField.borderless(
+                                key: const ValueKey(
+                                  'new-message-recipient-field',
+                                ),
+                                controller: _recipientController,
+                                focusNode: _recipientFocus,
+                                enabled: !_resolving,
+                                readOnly: selectedConversation != null,
+                                textInputAction: TextInputAction.done,
+                                keyboardType: TextInputType.text,
+                                cursorColor: MessagesPalette.headerActionBlue,
+                                padding: EdgeInsets.zero,
+                                style: TextStyle(
+                                  fontFamily: 'SF Pro Text',
+                                  color: selectedConversation == null
+                                      ? MessagesPalette.label(context)
+                                      : MessagesPalette.headerActionBlue,
+                                  fontSize: 16,
+                                  height: 1.2,
+                                  fontWeight: FontWeight.w400,
+                                  letterSpacing: -.2,
+                                ),
+                                onChanged: _onRecipientChanged,
+                                onSubmitted: (_) => _useTypedRecipient(),
+                              ),
+                            ),
+                            if (_resolving)
+                              const Padding(
+                                padding: EdgeInsets.only(left: 8, right: 5),
+                                child: CupertinoActivityIndicator(radius: 9),
+                              )
+                            else
+                              CupertinoButton(
+                                key: const ValueKey(
+                                  'new-message-add-recipient-button',
+                                ),
+                                minSize: 44,
+                                padding: EdgeInsets.zero,
+                                onPressed: selectedConversation == null
+                                    ? () => _recipientFocus.requestFocus()
+                                    : _clearRecipient,
+                                child: const Icon(
+                                  CupertinoIcons.add_circled,
+                                  size: 26,
+                                  color: MessagesPalette.headerActionBlue,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        child: ListView(
+                          keyboardDismissBehavior:
+                              ScrollViewKeyboardDismissBehavior.onDrag,
+                          children: [
+                            if (typedRecipient.isNotEmpty &&
+                                !matches.any(
+                                  (item) => _sameAddress(
+                                    item.address,
+                                    typedRecipient,
                                   ),
-                                  if ((conversation.address ?? '').isNotEmpty)
-                                    Text(
-                                      conversation.address!,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: MessagesText.secondary(context)
-                                          .copyWith(fontSize: 13),
+                                ))
+                              CupertinoButton(
+                                padding: EdgeInsets.zero,
+                                onPressed:
+                                    _resolving ? null : _useTypedRecipient,
+                                child: Container(
+                                  height: 58,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      bottom: BorderSide(
+                                        color:
+                                            MessagesPalette.hairline(context),
+                                        width: .5,
+                                      ),
                                     ),
-                                ],
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(
+                                        CupertinoIcons.arrow_up_circle_fill,
+                                        color: MessagesPalette.blue,
+                                        size: 31,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          'Send to “$typedRecipient”',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: MessagesText.body(context)
+                                              .copyWith(
+                                            color: MessagesPalette.blue,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
-                            ),
-                            Icon(
-                              CupertinoIcons.chevron_right,
-                              size: 15,
-                              color: MessagesPalette.secondaryLabel(context),
-                            ),
+                            for (final conversation in matches)
+                              _NewMessageRecipientResult(
+                                conversation: conversation,
+                                onPressed: _resolving
+                                    ? null
+                                    : () =>
+                                        _selectConversation(conversation),
+                              ),
+                            for (final contact in _contactMatches.where(
+                              (contact) => !matches.any(
+                                (conversation) => _sameAddress(
+                                  conversation.address,
+                                  contact.address,
+                                ),
+                              ),
+                            ))
+                              _NewMessageRecipientResult(
+                                conversation: Conversation(
+                                  id: 'contact-${contact.address}',
+                                  address: contact.address,
+                                  title: contact.name,
+                                  preview: '',
+                                  updatedAt: DateTime.now(),
+                                  avatarColors: const [
+                                    Color(0xFF8E8E93),
+                                    Color(0xFF636366),
+                                  ],
+                                  avatarBytes: contact.avatarBytes,
+                                  isKnownContact: true,
+                                  messages: <ChatMessage>[],
+                                ),
+                                onPressed: _resolving
+                                    ? null
+                                    : () => _useRecipient(contact.address),
+                              ),
                           ],
                         ),
                       ),
-                    ),
-                  for (final contact in _contactMatches.where(
-                    (contact) => !matches.any(
-                      (conversation) =>
-                          _sameAddress(conversation.address, contact.address),
-                    ),
-                  ))
-                    CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      onPressed: _resolving
-                          ? null
-                          : () => _useRecipient(contact.address),
-                      child: Container(
-                        height: 66,
-                        padding: const EdgeInsets.fromLTRB(16, 7, 12, 7),
-                        decoration: BoxDecoration(
-                          border: Border(
-                            bottom: BorderSide(
-                              color: MessagesPalette.hairline(context),
-                              width: .5,
-                            ),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            ContactAvatar(
-                              conversation: Conversation(
-                                id: 'contact-${contact.address}',
-                                address: contact.address,
-                                title: contact.name,
-                                preview: '',
-                                updatedAt: DateTime.now(),
-                                avatarColors: const [
-                                  Color(0xFF8E8E93),
-                                  Color(0xFF636366),
-                                ],
-                                avatarBytes: contact.avatarBytes,
-                                messages: <ChatMessage>[],
-                              ),
-                              size: 44,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    contact.name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: MessagesText.headline(context)
-                                        .copyWith(fontSize: 16),
-                                  ),
-                                  Text(
-                                    contact.address,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: MessagesText.secondary(context)
-                                        .copyWith(fontSize: 13),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Icon(
-                              CupertinoIcons.chevron_right,
-                              size: 15,
-                              color: MessagesPalette.secondaryLabel(context),
-                            ),
-                          ],
-                        ),
+                      MessageComposer(
+                        key: const ValueKey('new-message-composer'),
+                        compactLeadingAction: true,
+                        enabled: selectedConversation != null,
+                        focusNode: _composerFocus,
+                        onSend: _sendNewMessage,
+                        onSendAttachment: _sendNewAttachment,
                       ),
-                    ),
-                ],
+                    ],
+                  ),
+                ),
               ),
             ),
           ],
@@ -1376,6 +1458,70 @@ class _NewMessageRecipientScreenState
       ),
     );
   }
+}
+
+class _NewMessageRecipientResult extends StatelessWidget {
+  const _NewMessageRecipientResult({
+    required this.conversation,
+    required this.onPressed,
+  });
+
+  final Conversation conversation;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) => CupertinoButton(
+        padding: EdgeInsets.zero,
+        onPressed: onPressed,
+        child: Container(
+          height: 66,
+          padding: const EdgeInsets.fromLTRB(16, 7, 12, 7),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: MessagesPalette.hairline(context),
+                width: .5,
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              ContactAvatar(conversation: conversation, size: 44),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      conversation.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: MessagesText.headline(context).copyWith(
+                        fontSize: 16,
+                      ),
+                    ),
+                    if ((conversation.address ?? '').isNotEmpty)
+                      Text(
+                        conversation.address!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: MessagesText.secondary(context).copyWith(
+                          fontSize: 13,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              Icon(
+                CupertinoIcons.chevron_right,
+                size: 15,
+                color: MessagesPalette.secondaryLabel(context),
+              ),
+            ],
+          ),
+        ),
+      );
 }
 
 class _MessageSearchResultRow extends StatelessWidget {

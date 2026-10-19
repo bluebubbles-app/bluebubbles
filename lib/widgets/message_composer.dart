@@ -15,11 +15,17 @@ class MessageComposer extends StatefulWidget {
     super.key,
     required this.onSend,
     required this.onSendAttachment,
+    this.compactLeadingAction = false,
+    this.enabled = true,
+    this.focusNode,
   });
 
   final ValueChanged<String> onSend;
   final void Function(MessageAttachment attachment, String caption)
       onSendAttachment;
+  final bool compactLeadingAction;
+  final bool enabled;
+  final FocusNode? focusNode;
 
   @override
   State<MessageComposer> createState() => _MessageComposerState();
@@ -28,7 +34,8 @@ class MessageComposer extends StatefulWidget {
 class _MessageComposerState extends State<MessageComposer> {
   static const _channel = MethodChannel('bluebubbles/sms');
   final _controller = TextEditingController();
-  final _focusNode = FocusNode();
+  late final FocusNode _focusNode;
+  late final bool _ownsFocusNode;
   final _previewPlayer = AudioPlayer();
   bool _hasText = false;
   bool _busy = false;
@@ -42,6 +49,8 @@ class _MessageComposerState extends State<MessageComposer> {
   @override
   void initState() {
     super.initState();
+    _ownsFocusNode = widget.focusNode == null;
+    _focusNode = widget.focusNode ?? FocusNode();
     _controller.addListener(_onTextChanged);
     _previewPlayer.onPlayerComplete.listen((_) {
       if (mounted) setState(() => _previewPlaying = false);
@@ -54,6 +63,7 @@ class _MessageComposerState extends State<MessageComposer> {
   }
 
   void _send() {
+    if (!widget.enabled) return;
     final text = _controller.text.trim();
     final attachment = _draftAttachment;
     if (text.isEmpty && attachment == null) return;
@@ -89,7 +99,13 @@ class _MessageComposerState extends State<MessageComposer> {
   }
 
   Future<void> _startRecording() async {
-    if (_busy || _recording || _hasText || _draftAttachment != null) return;
+    if (!widget.enabled ||
+        _busy ||
+        _recording ||
+        _hasText ||
+        _draftAttachment != null) {
+      return;
+    }
     setState(() => _busy = true);
     try {
       if (!await _requestMediaPermission('audio')) return;
@@ -239,6 +255,35 @@ class _MessageComposerState extends State<MessageComposer> {
     }
   }
 
+  Future<void> _showCompactAttachmentMenu() async {
+    if (_busy || _recording) return;
+    final action = await showCupertinoModalPopup<String>(
+      context: context,
+      builder: (context) => CupertinoActionSheet(
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(context, 'camera'),
+            child: const Text('Camera'),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(context, 'photos'),
+            child: const Text('Photo Library'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (action == 'camera') {
+      await _takePhoto();
+    } else if (action == 'photos') {
+      await _openMediaLibrary();
+    }
+  }
+
   Future<List<MessageAttachment>> _loadImagePage(int offset) async {
     final raw = await _channel.invokeListMethod<Object?>(
       'loadRecentImages',
@@ -306,7 +351,7 @@ class _MessageComposerState extends State<MessageComposer> {
     _controller
       ..removeListener(_onTextChanged)
       ..dispose();
-    _focusNode.dispose();
+    if (_ownsFocusNode) _focusNode.dispose();
     super.dispose();
   }
 
@@ -315,7 +360,7 @@ class _MessageComposerState extends State<MessageComposer> {
     final attachment = _draftAttachment;
     final isAudioDraft =
         attachment?.kind == MessageAttachmentKind.audio && !_recording;
-    final canSend = _hasText || attachment != null;
+    final canSend = widget.enabled && (_hasText || attachment != null);
     final isDark = MessagesPalette.isDark(context);
 
     return SafeArea(
@@ -336,54 +381,84 @@ class _MessageComposerState extends State<MessageComposer> {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   if (!_recording && !isAudioDraft) ...[
-                    SizedBox(
-                      width: 64,
-                      child: CupertinoButton(
-                        minSize: 48,
-                        padding: EdgeInsets.zero,
-                        onPressed: _busy ? null : _takePhoto,
-                        child: Icon(
-                          CupertinoIcons.camera_fill,
-                          size: 31,
-                          color: MessagesPalette.label(context)
-                              .withValues(alpha: .45),
+                    if (widget.compactLeadingAction)
+                      SizedBox(
+                        width: 58,
+                        child: CupertinoButton(
+                          key: const ValueKey('new-message-attachment-button'),
+                          minSize: 48,
+                          padding: EdgeInsets.zero,
+                          onPressed:
+                              _busy ? null : _showCompactAttachmentMenu,
+                          child: Container(
+                            width: 34,
+                            height: 34,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFE8E9EB),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              CupertinoIcons.plus,
+                              size: 25,
+                              color: Color(0xFF7D7F85),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 59,
-                      child: CupertinoButton(
-                        minSize: 48,
-                        padding: EdgeInsets.zero,
-                        onPressed: _busy ? null : _openMediaLibrary,
-                        child: Container(
-                          width: 32,
-                          height: 26,
-                          decoration: BoxDecoration(
+                      )
+                    else ...[
+                      SizedBox(
+                        width: 64,
+                        child: CupertinoButton(
+                          minSize: 48,
+                          padding: EdgeInsets.zero,
+                          onPressed: _busy ? null : _takePhoto,
+                          child: Icon(
+                            CupertinoIcons.camera_fill,
+                            size: 31,
                             color: MessagesPalette.label(context)
                                 .withValues(alpha: .45),
-                            borderRadius: BorderRadius.circular(13),
-                          ),
-                          child: const Icon(
-                            CupertinoIcons.photo_on_rectangle,
-                            size: 17,
-                            color: CupertinoColors.white,
                           ),
                         ),
                       ),
-                    ),
+                      SizedBox(
+                        width: 59,
+                        child: CupertinoButton(
+                          minSize: 48,
+                          padding: EdgeInsets.zero,
+                          onPressed: _busy ? null : _openMediaLibrary,
+                          child: Container(
+                            width: 32,
+                            height: 26,
+                            decoration: BoxDecoration(
+                              color: MessagesPalette.label(context)
+                                  .withValues(alpha: .45),
+                              borderRadius: BorderRadius.circular(13),
+                            ),
+                            child: const Icon(
+                              CupertinoIcons.photo_on_rectangle,
+                              size: 17,
+                              color: CupertinoColors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ] else
                     const SizedBox(width: 12),
                   Expanded(
                     child: Container(
                       height: 35,
                       decoration: BoxDecoration(
-                        color: CupertinoColors.white.withValues(
-                          alpha: isDark ? .08 : .5,
-                        ),
+                        color: widget.compactLeadingAction && !isDark
+                            ? CupertinoColors.white
+                            : CupertinoColors.white.withValues(
+                                alpha: isDark ? .08 : .5,
+                              ),
                         border: Border.all(
-                          color: MessagesPalette.hairline(context),
-                          width: .7,
+                          color: widget.compactLeadingAction && !isDark
+                              ? const Color(0xFFC5C5C7)
+                              : MessagesPalette.hairline(context),
+                          width: widget.compactLeadingAction ? 1 : .7,
                         ),
                         borderRadius: BorderRadius.circular(18),
                       ),
@@ -410,12 +485,20 @@ class _MessageComposerState extends State<MessageComposer> {
                                   children: [
                                     Expanded(
                                       child: CupertinoTextField(
+                                        key: widget.compactLeadingAction
+                                            ? const ValueKey(
+                                                'new-message-composer-field',
+                                              )
+                                            : null,
                                         controller: _controller,
                                         focusNode: _focusNode,
+                                        enabled: widget.enabled,
                                         placeholder: 'iMessage',
-                                        placeholderStyle: const TextStyle(
+                                        placeholderStyle: TextStyle(
                                           fontFamily: 'SF Pro Text',
-                                          color: Color(0x4D3C3C43),
+                                          color: widget.compactLeadingAction
+                                              ? const Color(0xFFC5C5C7)
+                                              : const Color(0x4D3C3C43),
                                           fontSize: 17,
                                           height: 1.2,
                                         ),
@@ -446,30 +529,43 @@ class _MessageComposerState extends State<MessageComposer> {
                                           ),
                                           onLongPress: canSend || _busy
                                               ? null
-                                              : _startRecording,
+                                              : (widget.enabled
+                                                  ? _startRecording
+                                                  : null),
                                           child: CupertinoButton(
                                             key: ValueKey(canSend),
                                             minSize: 34,
                                             padding: EdgeInsets.zero,
                                             onPressed: canSend
                                                 ? _send
-                                                : (_busy
+                                                : (_busy || !widget.enabled
                                                     ? null
                                                     : _startRecording),
                                             child: canSend
-                                                ? const Icon(
+                                                ? Icon(
                                                     CupertinoIcons
                                                         .arrow_up_circle_fill,
                                                     size: 30,
-                                                    color:
-                                                        MessagesPalette.blue,
+                                                    color: widget
+                                                            .compactLeadingAction
+                                                        ? MessagesPalette
+                                                            .headerActionBlue
+                                                        : MessagesPalette.blue,
                                                   )
-                                                : _VoiceWaveIcon(
-                                                    color:
-                                                        MessagesPalette.label(
-                                                      context,
-                                                    ).withValues(alpha: .45),
-                                                  ),
+                                                : widget.compactLeadingAction
+                                                    ? const Icon(
+                                                        CupertinoIcons.mic,
+                                                        size: 25,
+                                                        color:
+                                                            Color(0xFFB4B8BF),
+                                                      )
+                                                    : _VoiceWaveIcon(
+                                                        color: MessagesPalette
+                                                            .label(context)
+                                                            .withValues(
+                                                              alpha: .45,
+                                                            ),
+                                                      ),
                                           ),
                                         ),
                                       ),
@@ -480,7 +576,9 @@ class _MessageComposerState extends State<MessageComposer> {
                     ),
                   ),
                   if (!_recording && !isAudioDraft)
-                    const SizedBox(width: 16)
+                    SizedBox(
+                      width: widget.compactLeadingAction ? 15 : 16,
+                    )
                   else
                     const SizedBox(width: 12),
                 ],
