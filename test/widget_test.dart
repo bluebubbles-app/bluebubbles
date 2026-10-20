@@ -123,6 +123,7 @@ void main() {
     expect(find.text('Settings'), findsOneWidget);
     expect(find.text('Header Transparency'), findsOneWidget);
     expect(find.text('Emoji Style'), findsOneWidget);
+    await tester.ensureVisible(find.text('Emoji Style'));
     await tester.tap(find.text('Emoji Style'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Apple'));
