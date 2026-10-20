@@ -1086,6 +1086,7 @@ class _MessagesUiAppState extends State<MessagesUiApp>
           home: !_initialMessagingModeResolved
               ? const _MessagesLaunchScreen()
               : ConversationListScreen(
+            interfaceStyle: _settings.interfaceStyle,
             conversations: _messageRepository.conversations,
             loadingConversations: _loadingPhoneMessages,
             loadError: _phoneLoadError,

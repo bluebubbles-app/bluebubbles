@@ -53,6 +53,7 @@ class ConversationListScreen extends StatefulWidget {
     required this.syncProgress,
     required this.onSearchMessages,
     this.notificationOpenRequest,
+    this.interfaceStyle = InterfaceStyle.ios17,
   });
 
   final List<Conversation> conversations;
@@ -83,6 +84,7 @@ class ConversationListScreen extends StatefulWidget {
   final ValueListenable<SmsSyncProgress> syncProgress;
   final Future<List<SmsSearchHit>> Function(String query) onSearchMessages;
   final ValueListenable<NotificationOpenRequest?>? notificationOpenRequest;
+  final InterfaceStyle interfaceStyle;
 
   @override
   State<ConversationListScreen> createState() =>
@@ -91,9 +93,7 @@ class ConversationListScreen extends StatefulWidget {
 
 class _ConversationListScreenState extends State<ConversationListScreen> {
   final _searchController = TextEditingController();
-  final _conversationListController = ScrollController(
-    initialScrollOffset: _collapsedSearchExtent,
-  );
+  late final ScrollController _conversationListController;
   String _query = '';
   bool _editingFavorites = false;
   bool _selectingConversations = false;
@@ -115,6 +115,11 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
   @override
   void initState() {
     super.initState();
+    _conversationListController = ScrollController(
+      initialScrollOffset: widget.interfaceStyle == InterfaceStyle.ios26
+          ? 0
+          : _collapsedSearchExtent,
+    );
     _syncWasActive = widget.syncProgress.value.active;
     widget.syncProgress.addListener(_handleSyncProgress);
     widget.notificationOpenRequest?.addListener(
@@ -128,6 +133,20 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
   @override
   void didUpdateWidget(ConversationListScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.interfaceStyle != widget.interfaceStyle) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_conversationListController.hasClients) return;
+        final target = widget.interfaceStyle == InterfaceStyle.ios26
+            ? 0.0
+            : _collapsedSearchExtent;
+        _conversationListController.jumpTo(
+          target.clamp(
+            0.0,
+            _conversationListController.position.maxScrollExtent,
+          ).toDouble(),
+        );
+      });
+    }
     if (oldWidget.syncProgress != widget.syncProgress) {
       oldWidget.syncProgress.removeListener(_handleSyncProgress);
       _syncWasActive = widget.syncProgress.value.active;
@@ -596,8 +615,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final useIos26 =
-        AppSettingsScope.of(context).interfaceStyle == InterfaceStyle.ios26;
+    final useIos26 = widget.interfaceStyle == InterfaceStyle.ios26;
     final searchActive = _query.trim().isNotEmpty;
     final filtered = _filtered;
     final pinned =
@@ -628,7 +646,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                         slivers: [
               SliverToBoxAdapter(
                 child: useIos26
-                    ? const SizedBox(height: _collapsedSearchExtent)
+                    ? const SizedBox.shrink()
                     : Padding(
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                         child: IosSearchField(
@@ -839,6 +857,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
         child: Align(
           alignment: Alignment.bottomCenter,
           child: SizedBox(
+            width: double.infinity,
             height: 96,
             child: Stack(
               alignment: Alignment.center,
