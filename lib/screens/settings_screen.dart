@@ -598,6 +598,7 @@ class _StatusRow extends StatelessWidget {
 
 class _ChoiceRow extends StatelessWidget {
   const _ChoiceRow({
+    super.key,
     required this.title,
     required this.value,
     required this.icon,
