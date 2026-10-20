@@ -14,6 +14,7 @@ class LiquidGlassSurface extends StatelessWidget {
     this.blurSigma = 18,
     this.transparency = 1,
     this.padding = EdgeInsets.zero,
+    this.boxShadows,
   });
 
   final BorderRadius borderRadius;
@@ -21,6 +22,7 @@ class LiquidGlassSurface extends StatelessWidget {
   final double blurSigma;
   final double transparency;
   final EdgeInsetsGeometry padding;
+  final List<BoxShadow>? boxShadows;
 
   @override
   Widget build(BuildContext context) {
@@ -41,14 +43,15 @@ class LiquidGlassSurface extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: borderRadius,
-          boxShadow: [
-            BoxShadow(
-              color: CupertinoColors.black.withValues(alpha: .11),
-              blurRadius: 18,
-              spreadRadius: 1,
-              offset: const Offset(0, 5),
-            ),
-          ],
+          boxShadow: boxShadows ??
+              [
+                BoxShadow(
+                  color: CupertinoColors.black.withValues(alpha: .11),
+                  blurRadius: 18,
+                  spreadRadius: 1,
+                  offset: const Offset(0, 5),
+                ),
+              ],
         ),
         child: ClipRRect(
           borderRadius: borderRadius,

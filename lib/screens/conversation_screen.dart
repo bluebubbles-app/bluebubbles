@@ -2293,8 +2293,13 @@ class _DateSeparator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final label = _dateSeparatorParts(context, value);
+    final useIos26 =
+        AppSettingsScope.of(context).interfaceStyle == InterfaceStyle.ios26;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: EdgeInsets.only(
+        top: useIos26 ? 22 : 0,
+        bottom: useIos26 ? 14 : 10,
+      ),
       child: Text.rich(
         TextSpan(
           children: [

@@ -802,7 +802,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
               Positioned(
                 left: 0,
                 right: 0,
-                bottom: MediaQuery.paddingOf(context).bottom + 12,
+                bottom: MediaQuery.paddingOf(context).bottom,
                 child: _Ios26BottomBar(
                   searchController: _searchController,
                   onSearchChanged: _onSearchChanged,
@@ -1006,45 +1006,129 @@ class _Ios26BottomBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final settings = AppSettingsScope.of(context);
     final blur = settings.headerBlurSigma.clamp(0, 20).toDouble();
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 28),
-      child: Row(
-        children: [
-          Expanded(
-            child: LiquidGlassSurface(
-              borderRadius: BorderRadius.circular(24),
-              blurSigma: blur,
-              transparency: settings.headerTransparency,
-              child: IosSearchField(
-                controller: searchController,
-                onChanged: onSearchChanged,
+    final halo = <BoxShadow>[
+      BoxShadow(
+        color: CupertinoColors.black.withValues(alpha: .12),
+        blurRadius: 30,
+        spreadRadius: 5,
+        offset: const Offset(0, 8),
+      ),
+      BoxShadow(
+        color: CupertinoColors.white.withValues(alpha: .72),
+        blurRadius: 14,
+        spreadRadius: 2,
+        offset: const Offset(0, -2),
+      ),
+    ];
+    return SizedBox(
+      height: 102,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 402),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned(
+                left: 28,
+                right: 88,
+                top: 26,
                 height: 48,
-                borderRadius: 24,
-                backgroundColor: CupertinoColors.transparent,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          LiquidGlassSurface(
-            borderRadius: BorderRadius.circular(24),
-            blurSigma: blur,
-            transparency: settings.headerTransparency,
-            child: SizedBox.square(
-              dimension: 48,
-              child: CupertinoButton(
-                key: const ValueKey('new-message-button'),
-                minSize: 48,
-                padding: EdgeInsets.zero,
-                onPressed: onCompose,
-                child: Icon(
-                  CupertinoIcons.square_pencil,
-                  color: MessagesPalette.label(context),
-                  size: 25,
+                child: LiquidGlassSurface(
+                  borderRadius: BorderRadius.circular(24),
+                  blurSigma: blur,
+                  transparency: settings.headerTransparency,
+                  boxShadows: halo,
+                  child: CupertinoTextField(
+                    controller: searchController,
+                    onChanged: onSearchChanged,
+                    placeholder: 'Search',
+                    placeholderStyle: TextStyle(
+                      color: MessagesPalette.secondaryLabel(context),
+                      fontFamily: 'SF Pro Text',
+                      fontSize: 16,
+                      fontWeight: FontWeight.w400,
+                      height: 1,
+                    ),
+                    style: TextStyle(
+                      color: MessagesPalette.label(context),
+                      fontFamily: 'SF Pro Text',
+                      fontSize: 16,
+                      fontWeight: FontWeight.w400,
+                      height: 1,
+                    ),
+                    prefix: SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 20),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Icon(
+                            CupertinoIcons.search,
+                            size: 18,
+                            color: MessagesPalette.secondaryLabel(context),
+                          ),
+                        ),
+                      ),
+                    ),
+                    suffix: SizedBox(
+                      width: 58,
+                      height: 48,
+                      child: searchController.text.isEmpty
+                          ? Icon(
+                              CupertinoIcons.mic,
+                              size: 20,
+                              color:
+                                  MessagesPalette.secondaryLabel(context),
+                            )
+                          : CupertinoButton(
+                              minSize: 44,
+                              padding: EdgeInsets.zero,
+                              onPressed: () {
+                                searchController.clear();
+                                onSearchChanged('');
+                              },
+                              child: Icon(
+                                CupertinoIcons.clear_circled_solid,
+                                size: 18,
+                                color:
+                                    MessagesPalette.secondaryLabel(context),
+                              ),
+                            ),
+                    ),
+                    decoration: null,
+                    padding: EdgeInsets.zero,
+                    textInputAction: TextInputAction.search,
+                  ),
                 ),
               ),
-            ),
+              Positioned(
+                right: 28,
+                top: 26,
+                child: LiquidGlassSurface(
+                  borderRadius: BorderRadius.circular(24),
+                  blurSigma: blur,
+                  transparency: settings.headerTransparency,
+                  boxShadows: halo,
+                  child: SizedBox.square(
+                    dimension: 48,
+                    child: CupertinoButton(
+                      key: const ValueKey('new-message-button'),
+                      minSize: 48,
+                      padding: EdgeInsets.zero,
+                      onPressed: onCompose,
+                      child: const Icon(
+                        CupertinoIcons.square_pencil,
+                        color: Color(0xFF404040),
+                        size: 23,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
