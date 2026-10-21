@@ -1025,18 +1025,13 @@ class _Ios26BottomBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final settings = AppSettingsScope.of(context);
     final blur = settings.headerBlurSigma.clamp(0, 20).toDouble();
-    final halo = <BoxShadow>[
+    final controlShadow = <BoxShadow>[
       BoxShadow(
-        color: CupertinoColors.black.withValues(alpha: .12),
-        blurRadius: 30,
-        spreadRadius: 5,
-        offset: const Offset(0, 8),
-      ),
-      BoxShadow(
-        color: CupertinoColors.white.withValues(alpha: .72),
-        blurRadius: 14,
-        spreadRadius: 2,
-        offset: const Offset(0, -2),
+        color: CupertinoColors.black.withValues(
+          alpha: MessagesPalette.isDark(context) ? .16 : .08,
+        ),
+        blurRadius: 10,
+        offset: const Offset(0, 3),
       ),
     ];
     return SizedBox(
@@ -1056,7 +1051,7 @@ class _Ios26BottomBar extends StatelessWidget {
                   borderRadius: BorderRadius.circular(24),
                   blurSigma: blur,
                   transparency: settings.headerTransparency,
-                  boxShadows: halo,
+                  boxShadows: controlShadow,
                   child: CupertinoTextField(
                     controller: searchController,
                     onChanged: onSearchChanged,
@@ -1128,7 +1123,7 @@ class _Ios26BottomBar extends StatelessWidget {
                   borderRadius: BorderRadius.circular(24),
                   blurSigma: blur,
                   transparency: settings.headerTransparency,
-                  boxShadows: halo,
+                  boxShadows: controlShadow,
                   child: SizedBox.square(
                     dimension: 48,
                     child: CupertinoButton(
