@@ -1045,7 +1045,7 @@ class _Ios26BottomBar extends StatelessWidget {
               Positioned(
                 left: 28,
                 right: 88,
-                top: 26,
+                top: 34,
                 height: 48,
                 child: LiquidGlassSurface(
                   borderRadius: BorderRadius.circular(24),
@@ -1118,7 +1118,7 @@ class _Ios26BottomBar extends StatelessWidget {
               ),
               Positioned(
                 right: 28,
-                top: 26,
+                top: 34,
                 child: LiquidGlassSurface(
                   borderRadius: BorderRadius.circular(24),
                   blurSigma: blur,
@@ -1155,14 +1155,14 @@ class _Ios26MenuGlyph extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-        width: 24,
-        height: 20,
+        width: 21.6,
+        height: 18,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _line(24),
-            _line(18),
-            _line(12),
+            _line(21.6),
+            _line(16.2),
+            _line(10.8),
           ],
         ),
       );
@@ -1171,7 +1171,7 @@ class _Ios26MenuGlyph extends StatelessWidget {
         alignment: Alignment.center,
         child: Container(
           width: width,
-          height: 2.5,
+          height: 2.25,
           decoration: BoxDecoration(
             color: color,
             borderRadius: BorderRadius.circular(2),

@@ -1498,6 +1498,7 @@ class _ConversationHeader extends StatelessWidget {
       child: Align(
         alignment: Alignment.bottomCenter,
         child: SizedBox(
+          width: double.infinity,
           height: 96,
           child: Stack(
             clipBehavior: Clip.none,
@@ -1523,14 +1524,14 @@ class _ConversationHeader extends StatelessWidget {
                         children: [
                           Icon(
                             CupertinoIcons.chevron_left,
-                            size: 27,
+                            size: 23,
                             color: labelColor,
                           ),
                           if (backUnreadCount > 0) ...[
-                            const SizedBox(width: 4),
+                            const SizedBox(width: 5),
                             Container(
-                              width: 28,
-                              height: 28,
+                              width: 26,
+                              height: 26,
                               alignment: Alignment.center,
                               decoration: BoxDecoration(
                                 color: labelColor.withValues(alpha: .82),
@@ -1543,7 +1544,7 @@ class _ConversationHeader extends StatelessWidget {
                                 style: TextStyle(
                                   color: MessagesPalette.background(context),
                                   fontFamily: 'SF Pro Text',
-                                  fontSize: backUnreadCount > 99 ? 10 : 15,
+                                  fontSize: backUnreadCount > 99 ? 9 : 14,
                                   height: 1,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -1575,7 +1576,7 @@ class _ConversationHeader extends StatelessWidget {
                       },
                       child: Icon(
                         CupertinoIcons.phone,
-                        size: 23,
+                        size: 20,
                         color: labelColor,
                       ),
                     ),
@@ -1592,23 +1593,23 @@ class _ConversationHeader extends StatelessWidget {
                     onOpenContact();
                   },
                   child: LiquidGlassSurface(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(15),
                     blurSigma: blur,
                     transparency: settings.headerTransparency,
                     child: IntrinsicWidth(
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(
-                          minWidth: 108,
-                          maxWidth: 190,
+                          minWidth: 80,
+                          maxWidth: 180,
                         ),
                         child: SizedBox(
-                          height: 32,
+                          height: 30,
                           child: Stack(
                             alignment: Alignment.center,
                             children: [
                               Padding(
                                 padding:
-                                    const EdgeInsets.symmetric(horizontal: 24),
+                                    const EdgeInsets.symmetric(horizontal: 20),
                                 child: Text(
                                   conversation.title,
                                   key: const ValueKey(
@@ -1620,7 +1621,7 @@ class _ConversationHeader extends StatelessWidget {
                                   style: TextStyle(
                                     color: labelColor,
                                     fontFamily: 'SF Pro Text',
-                                    fontSize: 17,
+                                    fontSize: 16,
                                     height: 1,
                                     fontWeight: FontWeight.w600,
                                     letterSpacing: -.25,
@@ -1628,10 +1629,10 @@ class _ConversationHeader extends StatelessWidget {
                                 ),
                               ),
                               Positioned(
-                                right: 10,
+                                right: 8,
                                 child: Icon(
                                   CupertinoIcons.chevron_right,
-                                  size: 14,
+                                  size: 12,
                                   color: secondaryColor,
                                 ),
                               ),
@@ -2297,8 +2298,8 @@ class _DateSeparator extends StatelessWidget {
         AppSettingsScope.of(context).interfaceStyle == InterfaceStyle.ios26;
     return Padding(
       padding: EdgeInsets.only(
-        top: useIos26 ? 22 : 0,
-        bottom: useIos26 ? 14 : 10,
+        top: useIos26 ? 12 : 0,
+        bottom: useIos26 ? 2 : 10,
       ),
       child: Text.rich(
         TextSpan(

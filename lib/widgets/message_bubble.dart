@@ -196,7 +196,10 @@ class _MessageBubbleState extends State<MessageBubble> {
               Padding(
                 // Keep the delivery label visually clear of the outgoing
                 // bubble tail instead of aligning it with the tail's tip.
-                padding: const EdgeInsets.only(top: 4, right: 8),
+                padding: EdgeInsets.only(
+                  top: useIos26 ? 8 : 4,
+                  right: useIos26 ? 14 : 8,
+                ),
                 child: message.deliveryState == DeliveryState.failed &&
                         widget.onRetry != null
                     ? CupertinoButton(
