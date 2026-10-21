@@ -1492,6 +1492,28 @@ class _ConversationHeader extends StatelessWidget {
     final blur = settings.headerBlurSigma.clamp(0, 20).toDouble();
     final labelColor = MessagesPalette.label(context);
     final secondaryColor = MessagesPalette.secondaryLabel(context);
+    final contactNameStyle = TextStyle(
+      color: labelColor,
+      fontFamily: 'SF Pro Text',
+      fontSize: 17,
+      height: 1,
+      fontWeight: FontWeight.w600,
+      letterSpacing: -.25,
+    );
+    final contactNamePainter = TextPainter(
+      text: TextSpan(
+        text: conversation.title,
+        style: contactNameStyle,
+      ),
+      maxLines: 1,
+      ellipsis: '…',
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout(maxWidth: 154);
+    // The reference capsule is 115 px wide for “Alejandra”. Its width is
+    // otherwise driven by the rendered contact name, not by a flex constraint.
+    final contactNamePillWidth =
+        (contactNamePainter.width + 50).clamp(64.0, 190.0).toDouble();
     return SizedBox(
       key: const ValueKey('conversation-header-ios26'),
       height: 96 + topCompensation,
@@ -1584,7 +1606,7 @@ class _ConversationHeader extends StatelessWidget {
                 ),
               ),
               Positioned(
-                top: 63,
+                top: 57,
                 child: CupertinoButton(
                   minSize: 0,
                   padding: EdgeInsets.zero,
@@ -1593,52 +1615,37 @@ class _ConversationHeader extends StatelessWidget {
                     onOpenContact();
                   },
                   child: LiquidGlassSurface(
-                    borderRadius: BorderRadius.circular(15),
+                    borderRadius: BorderRadius.circular(16),
                     blurSigma: blur,
                     transparency: settings.headerTransparency,
-                    child: IntrinsicWidth(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(
-                          minWidth: 80,
-                          maxWidth: 180,
-                        ),
-                        child: SizedBox(
-                          height: 30,
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 20),
-                                child: Text(
-                                  conversation.title,
-                                  key: const ValueKey(
-                                    'conversation-contact-name',
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: labelColor,
-                                    fontFamily: 'SF Pro Text',
-                                    fontSize: 16,
-                                    height: 1,
-                                    fontWeight: FontWeight.w600,
-                                    letterSpacing: -.25,
-                                  ),
-                                ),
+                    child: SizedBox(
+                      width: contactNamePillWidth,
+                      height: 32,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 18),
+                            child: Text(
+                              conversation.title,
+                              key: const ValueKey(
+                                'conversation-contact-name',
                               ),
-                              Positioned(
-                                right: 8,
-                                child: Icon(
-                                  CupertinoIcons.chevron_right,
-                                  size: 12,
-                                  color: secondaryColor,
-                                ),
-                              ),
-                            ],
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: contactNameStyle,
+                            ),
                           ),
-                        ),
+                          Positioned(
+                            right: 7,
+                            child: Icon(
+                              CupertinoIcons.chevron_right,
+                              size: 12,
+                              color: secondaryColor,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
