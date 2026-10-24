@@ -1553,7 +1553,7 @@ class _ConversationHeader extends StatelessWidget {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 112),
+                padding: const EdgeInsets.symmetric(horizontal: 124),
                 child: Text(
                   conversation.title,
                   key: const ValueKey('conversation-contact-name'),
@@ -1811,7 +1811,7 @@ class _Ios3NavigationButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = backShape ? 104.0 : 64.0;
+    final width = backShape ? 116.0 : 64.0;
     return CupertinoButton(
       minSize: 34,
       padding: EdgeInsets.zero,

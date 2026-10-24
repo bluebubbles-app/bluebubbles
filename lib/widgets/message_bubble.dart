@@ -832,12 +832,12 @@ class MessageBubblePainter extends CustomPainter {
       canvas.clipPath(bubble);
       final highlightRect = RRect.fromRectAndRadius(
         Rect.fromLTWH(
-          size.width * .114,
-          size.height * .051,
-          size.width * .779,
-          size.height * .462,
+          size.width * .055,
+          size.height * .015,
+          size.width * .89,
+          size.height * .28,
         ),
-        Radius.circular(size.height * .231),
+        Radius.circular(size.height * .14),
       );
       final glossPaint = Paint()
         ..shader = LinearGradient(
