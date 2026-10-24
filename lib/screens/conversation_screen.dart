@@ -864,7 +864,10 @@ class _ConversationScreenState extends State<ConversationScreen>
                               final groupedMessage = showDateSeparator
                                   ? Column(
                                       children: [
-                                        _DateSeparator(value: message.sentAt),
+                                        _DateSeparator(
+                                          value: message.sentAt,
+                                          precedingMessage: previous,
+                                        ),
                                         insertedMessage,
                                       ],
                                     )
@@ -2294,18 +2297,24 @@ class _SelectableMessageSheetState extends State<_SelectableMessageSheet> {
 }
 
 class _DateSeparator extends StatelessWidget {
-  const _DateSeparator({required this.value});
+  const _DateSeparator({
+    required this.value,
+    this.precedingMessage,
+  });
 
   final DateTime value;
+  final ChatMessage? precedingMessage;
 
   @override
   Widget build(BuildContext context) {
     final label = _dateSeparatorParts(context, value);
     final useIos26 =
         AppSettingsScope.of(context).interfaceStyle == InterfaceStyle.ios26;
+    final needsIos17Clearance = !useIos26 &&
+        _ios17DateNeedsClearance(context, precedingMessage);
     return Padding(
       padding: EdgeInsets.only(
-        top: useIos26 ? 12 : 0,
+        top: useIos26 ? 12 : (needsIos17Clearance ? 10 : 0),
         bottom: useIos26 ? 2 : 10,
       ),
       child: Text.rich(
@@ -2331,6 +2340,40 @@ class _DateSeparator extends StatelessWidget {
       ),
     );
   }
+}
+
+bool _ios17DateNeedsClearance(
+  BuildContext context,
+  ChatMessage? message,
+) {
+  if (message == null) return false;
+  if (message.attachment != null) return true;
+
+  final text = message.text.trim();
+  if (text.isEmpty) return false;
+
+  final textScale = emojiOnlyTextScale(text);
+  final renderedTextScale = textScale == 2 ? 4.0 : textScale;
+  final screenWidth = MediaQuery.sizeOf(context).width;
+  final maxTextWidth = screenWidth * (274 / 375) - 24;
+  final painter = TextPainter(
+    text: TextSpan(
+      text: text,
+      style: MessagesText.body(context).copyWith(
+        fontSize: 16 * renderedTextScale,
+        height: renderedTextScale > 1 ? 1 : 1.18,
+        letterSpacing: renderedTextScale > 1 ? 0 : -.15,
+      ),
+    ),
+    textDirection: Directionality.of(context),
+    textScaler: MediaQuery.textScalerOf(context),
+    textWidthBasis: TextWidthBasis.longestLine,
+  )..layout(maxWidth: maxTextWidth);
+
+  final lineCount = painter.computeLineMetrics().length;
+  final bubbleWidth = painter.width + 24;
+  final crossesScreenCenter = bubbleWidth >= (screenWidth / 2) - 10;
+  return lineCount >= 3 || crossesScreenCenter;
 }
 
 String _formatTime(BuildContext context, DateTime value) {
