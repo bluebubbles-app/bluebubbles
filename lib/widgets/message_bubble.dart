@@ -102,6 +102,7 @@ class _MessageBubbleState extends State<MessageBubble> {
     final message = widget.message;
     final isFromMe = message.isFromMe;
     final settings = AppSettingsScope.maybeOf(context);
+    final useIos3 = settings?.interfaceStyle == InterfaceStyle.ios3;
     final useIos26 = settings?.interfaceStyle == InterfaceStyle.ios26;
     final isImageAttachment =
         message.attachment?.kind == MessageAttachmentKind.image;
@@ -110,8 +111,10 @@ class _MessageBubbleState extends State<MessageBubble> {
     final emojiScale = emojiOnlyTextScale(message.text);
     final renderedTextScale = emojiScale == 2 ? 4.0 : emojiScale;
     final Color color;
-    if (isImageAttachment) {
+    if (isImageAttachment && !useIos3) {
       color = CupertinoColors.transparent;
+    } else if (useIos3 && isImageAttachment && isFromMe) {
+      color = const Color(0xFFB7DF4B);
     } else if (isFromMe) {
       color = useGreenBubble
           ? MessagesPalette.customBubbleGreen
@@ -119,18 +122,31 @@ class _MessageBubbleState extends State<MessageBubble> {
     } else {
       color = MessagesPalette.receivedBubble(context);
     }
-    final foregroundColor = isImageAttachment
+    final foregroundColor = isImageAttachment && !useIos3
         ? MessagesPalette.label(context)
-        : isFromMe
-            ? CupertinoColors.white
-            : MessagesPalette.label(context);
+        : useIos3
+            ? CupertinoColors.black
+            : isFromMe
+                ? CupertinoColors.white
+                : MessagesPalette.label(context);
+    final classicGradient = useIos3
+        ? LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: isFromMe
+                ? (isImageAttachment || useGreenBubble
+                    ? const [Color(0xFFD5F36B), Color(0xFFA8D536)]
+                    : const [Color(0xFF6EBEFF), Color(0xFF98D3FF)])
+                : const [Color(0xFFFFFFFF), Color(0xFFE0E0E0)],
+          )
+        : null;
 
     return Semantics(
       label: isFromMe ? 'Sent message' : 'Received message',
       child: Padding(
         padding: EdgeInsets.only(
           top: widget.compactTop
-              ? (useIos26 ? 4 : 2)
+              ? (useIos26 ? 4 : (useIos3 ? 3 : 2))
               : (useIos26 ? 10 : 8),
         ),
         child: Column(
@@ -144,39 +160,52 @@ class _MessageBubbleState extends State<MessageBubble> {
                 key: _paintKey,
                 painter: MessageBubblePainter(
                   color: color,
-                  gradient: isFromMe && !useGreenBubble && !isImageAttachment
-                      ? LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: useIos26
-                              ? const [Color(0xFF4EBAFF), Color(0xFF0088FF)]
-                              : const [
-                                  Color(0xFF00B7FF),
-                                  MessagesPalette.blue,
-                                ],
-                        )
-                      : null,
-                  fixedGradient: useIos26,
+                  gradient: classicGradient ??
+                      (isFromMe && !useGreenBubble && !isImageAttachment
+                          ? LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: useIos26
+                                  ? const [
+                                      Color(0xFF4EBAFF),
+                                      Color(0xFF0088FF),
+                                    ]
+                                  : const [
+                                      Color(0xFF00B7FF),
+                                      MessagesPalette.blue,
+                                    ],
+                            )
+                          : null),
+                  fixedGradient: useIos3 || useIos26,
+                  useIos3Shape: useIos3,
                   useIos26Shape: useIos26,
                   scrollPosition: _scrollPosition,
                   paintKey: _paintKey,
                   screenHeight: MediaQuery.sizeOf(context).height,
                   isFromMe: isFromMe,
                   showTail: widget.showTail,
-                  shadowElevation: widget.shadowElevation,
+                  shadowElevation:
+                      useIos3 && widget.shadowElevation < 2
+                          ? 2
+                          : widget.shadowElevation,
                 ),
                 child: Container(
                   constraints: BoxConstraints(
-                    minHeight: useIos26 ? 40 : 36,
+                    minHeight: useIos26 ? 40 : (useIos3 ? 32 : 36),
                     maxWidth: MediaQuery.sizeOf(context).width *
-                        (useIos26 ? (280 / 402) : (274 / 375)),
+                        (useIos26
+                            ? (280 / 402)
+                            : (useIos3 ? .84 : (274 / 375))),
                   ),
-                  padding: isImageAttachment
+                  padding: isImageAttachment && !useIos3
                       ? EdgeInsets.zero
-                      : EdgeInsets.symmetric(
-                          horizontal: useIos26 ? 13 : 12,
-                          vertical: useIos26 ? 9 : 7,
-                        ),
+                      : isImageAttachment && useIos3
+                          ? const EdgeInsets.fromLTRB(4, 4, 4, 7)
+                          : EdgeInsets.symmetric(
+                              horizontal:
+                                  useIos26 ? 13 : (useIos3 ? 11 : 12),
+                              vertical: useIos26 ? 9 : (useIos3 ? 6 : 7),
+                            ),
                   child: Align(
                     alignment: Alignment.center,
                     widthFactor: 1,
@@ -185,6 +214,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                       message: message,
                       renderedTextScale: renderedTextScale,
                       foregroundColor: foregroundColor,
+                      useIos3: useIos3,
                     ),
                   ),
                 ),
@@ -235,7 +265,9 @@ class _MessageBubbleState extends State<MessageBubble> {
                           message.deliveryState,
                         ),
                         style: TextStyle(
-                          color: MessagesPalette.secondaryLabel(context),
+                          color: useIos3
+                              ? const Color(0xFF7E8798)
+                              : MessagesPalette.secondaryLabel(context),
                           fontSize: 11,
                           fontWeight: FontWeight.w500,
                         ),
@@ -246,7 +278,6 @@ class _MessageBubbleState extends State<MessageBubble> {
       ),
     );
   }
-
 }
 
 class _MessageBubbleContent extends StatelessWidget {
@@ -254,11 +285,13 @@ class _MessageBubbleContent extends StatelessWidget {
     required this.message,
     required this.renderedTextScale,
     required this.foregroundColor,
+    required this.useIos3,
   });
 
   final ChatMessage message;
   final double renderedTextScale;
   final Color foregroundColor;
+  final bool useIos3;
 
   @override
   Widget build(BuildContext context) {
@@ -285,8 +318,8 @@ class _MessageBubbleContent extends StatelessWidget {
               applyHeightToLastDescent: false,
             ),
             style: MessagesText.body(context).copyWith(
-              fontSize: 16 * renderedTextScale,
-              height: renderedTextScale > 1 ? 1 : 1.18,
+              fontSize: (useIos3 ? 17 : 16) * renderedTextScale,
+              height: renderedTextScale > 1 ? 1 : (useIos3 ? 1.12 : 1.18),
               letterSpacing: renderedTextScale > 1 ? 0 : -.15,
               color: foregroundColor,
             ),
@@ -615,6 +648,7 @@ class MessageBubblePainter extends CustomPainter {
     required this.color,
     required this.gradient,
     required this.fixedGradient,
+    required this.useIos3Shape,
     required this.useIos26Shape,
     required this.scrollPosition,
     required this.paintKey,
@@ -629,6 +663,7 @@ class MessageBubblePainter extends CustomPainter {
   final Color color;
   final LinearGradient? gradient;
   final bool fixedGradient;
+  final bool useIos3Shape;
   final bool useIos26Shape;
   final ScrollPosition? scrollPosition;
   final GlobalKey paintKey;
@@ -674,16 +709,18 @@ class MessageBubblePainter extends CustomPainter {
         ..addRRect(
           RRect.fromRectAndRadius(
             Offset.zero & size,
-            const Radius.circular(20),
+            Radius.circular(useIos3Shape ? 17 : 20),
           ),
         );
       bubble = body;
 
       if (showTail) {
-        final tail = useIos26Shape
-            ? _ios26Tail(size, isFromMe: isFromMe)
-            : Path();
-        if (!useIos26Shape && isFromMe) {
+        final tail = useIos3Shape
+            ? _ios3Tail(size, isFromMe: isFromMe)
+            : useIos26Shape
+                ? _ios26Tail(size, isFromMe: isFromMe)
+                : Path();
+        if (!useIos3Shape && !useIos26Shape && isFromMe) {
           tail
           ..moveTo(size.width - 1, size.height - 6.5)
           ..cubicTo(
@@ -714,7 +751,7 @@ class MessageBubblePainter extends CustomPainter {
             size.width - 1,
             size.height - 6.5,
           );
-        } else if (!useIos26Shape) {
+        } else if (!useIos3Shape && !useIos26Shape) {
           tail
           ..moveTo(1, size.height - 6.5)
           ..cubicTo(
@@ -765,6 +802,32 @@ class MessageBubblePainter extends CustomPainter {
       );
     }
     canvas.drawPath(bubble, paint);
+    if (useIos3Shape) {
+      canvas.save();
+      canvas.clipPath(bubble);
+      final glossPaint = Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xB8FFFFFF), Color(0x12FFFFFF)],
+        ).createShader(
+          Rect.fromLTWH(0, 0, size.width, size.height * .58),
+        );
+      canvas.drawRect(
+        Rect.fromLTWH(0, 0, size.width, size.height * .58),
+        glossPaint,
+      );
+      canvas.restore();
+      canvas.drawPath(
+        bubble,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.2
+          ..color = isFromMe
+              ? const Color(0xFF1B2D5E)
+              : const Color(0xFF8D8D8D),
+      );
+    }
   }
 
   @override
@@ -772,6 +835,7 @@ class MessageBubblePainter extends CustomPainter {
       oldDelegate.color != color ||
       oldDelegate.gradient != gradient ||
       oldDelegate.fixedGradient != fixedGradient ||
+      oldDelegate.useIos3Shape != useIos3Shape ||
       oldDelegate.useIos26Shape != useIos26Shape ||
       oldDelegate.scrollPosition != scrollPosition ||
       oldDelegate.paintKey != paintKey ||
@@ -779,6 +843,33 @@ class MessageBubblePainter extends CustomPainter {
       oldDelegate.isFromMe != isFromMe ||
       oldDelegate.showTail != showTail ||
       oldDelegate.shadowElevation != shadowElevation;
+
+  static Path _ios3Tail(Size size, {required bool isFromMe}) {
+    final path = Path();
+    if (isFromMe) {
+      path
+        ..moveTo(size.width - 13, size.height - 15)
+        ..quadraticBezierTo(
+          size.width - 7,
+          size.height - 3,
+          size.width + 8,
+          size.height,
+        )
+        ..quadraticBezierTo(
+          size.width,
+          size.height + 1,
+          size.width - 9,
+          size.height - 5,
+        );
+    } else {
+      path
+        ..moveTo(13, size.height - 15)
+        ..quadraticBezierTo(7, size.height - 3, -8, size.height)
+        ..quadraticBezierTo(0, size.height + 1, 9, size.height - 5);
+    }
+    path.close();
+    return path;
+  }
 
   static Path _ios26Tail(Size size, {required bool isFromMe}) {
     const designWidth = 70.0;

@@ -531,6 +531,14 @@ class _ConversationScreenState extends State<ConversationScreen>
     });
   }
 
+  void _enterSelectionMode() {
+    _timestampRevealController.value = 0;
+    setState(() {
+      _selectionMode = true;
+      _selectedMessageIds.clear();
+    });
+  }
+
   void _toggleSelection(ChatMessage message) {
     HapticFeedback.selectionClick();
     setState(() {
@@ -679,18 +687,21 @@ class _ConversationScreenState extends State<ConversationScreen>
 
   @override
   Widget build(BuildContext context) {
-    final useIos26 =
-        AppSettingsScope.of(context).interfaceStyle == InterfaceStyle.ios26;
+    final interfaceStyle = AppSettingsScope.of(context).interfaceStyle;
+    final useIos3 = interfaceStyle == InterfaceStyle.ios3;
+    final useIos26 = interfaceStyle == InterfaceStyle.ios26;
     final topCompensation =
         (44.0 - MediaQuery.paddingOf(context).top)
             .clamp(0.0, 44.0)
             .toDouble();
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: MessagesPalette.isDark(context)
+      value: !useIos3 && MessagesPalette.isDark(context)
           ? SystemUiOverlayStyle.light
           : SystemUiOverlayStyle.dark,
       child: CupertinoPageScaffold(
-        backgroundColor: MessagesPalette.background(context),
+        backgroundColor: useIos3
+            ? const Color(0xFFDCE1EC)
+            : MessagesPalette.background(context),
         child: SafeArea(
           child: Column(
             children: [
@@ -715,12 +726,17 @@ class _ConversationScreenState extends State<ConversationScreen>
                               parent: AlwaysScrollableScrollPhysics(),
                             ),
                             padding: EdgeInsets.fromLTRB(
-                              10,
+                              useIos3 ? 6 : 10,
                               _selectionMode
                                   ? 64
-                                  : (useIos26 ? 106 : 92) + topCompensation,
-                              14,
-                              10,
+                                  : (useIos26
+                                              ? 106
+                                              : useIos3
+                                                  ? 56
+                                                  : 92) +
+                                          topCompensation,
+                              useIos3 ? 8 : 14,
+                              useIos3 ? 4 : 10,
                             ),
                             initialItemCount:
                                 widget.conversation.messages.length + 1,
@@ -944,6 +960,7 @@ class _ConversationScreenState extends State<ConversationScreen>
                                   ),
                               onCall: widget.onCall,
                               onOpenContact: widget.onOpenContact,
+                              onEdit: _enterSelectionMode,
                             ),
                     ),
                   ],
@@ -1332,6 +1349,7 @@ class _ConversationHeader extends StatelessWidget {
     required this.backUnreadCount,
     required this.onCall,
     required this.onOpenContact,
+    required this.onEdit,
   });
 
   final Conversation conversation;
@@ -1339,10 +1357,14 @@ class _ConversationHeader extends StatelessWidget {
   final int backUnreadCount;
   final VoidCallback onCall;
   final VoidCallback onOpenContact;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
     final settings = AppSettingsScope.of(context);
+    if (settings.interfaceStyle == InterfaceStyle.ios3) {
+      return _buildIos3(context);
+    }
     if (settings.interfaceStyle == InterfaceStyle.ios26) {
       return _buildIos26(context, settings);
     }
@@ -1486,6 +1508,78 @@ class _ConversationHeader extends StatelessWidget {
           ),
         );
     return RepaintBoundary(child: addGlass(header));
+  }
+
+  Widget _buildIos3(BuildContext context) {
+    final backLabel = backUnreadCount > 0
+        ? 'Messages ($backUnreadCount)'
+        : 'Messages';
+    return Container(
+      key: const ValueKey('conversation-header-ios3'),
+      height: 44 + topCompensation,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFFB4C7DD), Color(0xFF526F94)],
+          stops: [0, 1],
+        ),
+        border: Border(
+          top: BorderSide(color: Color(0xFFDCE6F0), width: 1),
+          bottom: BorderSide(color: Color(0xFF344B67), width: 1),
+        ),
+      ),
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: SizedBox(
+          height: 44,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Positioned(
+                left: 6,
+                child: _Ios3NavigationButton(
+                  key: const ValueKey('conversation-back-button'),
+                  label: backLabel,
+                  backShape: true,
+                  onPressed: () => Navigator.of(context).maybePop(),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 112),
+                child: Text(
+                  conversation.title,
+                  key: const ValueKey('conversation-contact-name'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: CupertinoColors.white,
+                    fontFamily: 'SF Pro Text',
+                    fontSize: 20,
+                    height: 1,
+                    fontWeight: FontWeight.w700,
+                    shadows: [
+                      Shadow(
+                        color: Color(0xAA26384E),
+                        offset: Offset(0, -1),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 6,
+                child: _Ios3NavigationButton(
+                  label: 'Edit',
+                  onPressed: onEdit,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildIos26(
@@ -1696,6 +1790,120 @@ class _ConversationHeader extends StatelessWidget {
   }
 }
 
+class _Ios3NavigationButton extends StatelessWidget {
+  const _Ios3NavigationButton({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    this.backShape = false,
+  });
+
+  final String label;
+  final VoidCallback onPressed;
+  final bool backShape;
+
+  @override
+  Widget build(BuildContext context) {
+    final width = backShape ? 104.0 : 64.0;
+    return CupertinoButton(
+      minSize: 34,
+      padding: EdgeInsets.zero,
+      onPressed: onPressed,
+      child: CustomPaint(
+        painter: _Ios3NavigationButtonPainter(backShape: backShape),
+        child: SizedBox(
+          width: width,
+          height: 34,
+          child: Padding(
+            padding: EdgeInsets.only(left: backShape ? 8 : 0),
+            child: Center(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: CupertinoColors.white,
+                  fontFamily: 'SF Pro Text',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  shadows: [
+                    Shadow(
+                      color: Color(0xC0203045),
+                      offset: Offset(0, -1),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Ios3NavigationButtonPainter extends CustomPainter {
+  const _Ios3NavigationButtonPainter({required this.backShape});
+
+  final bool backShape;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path();
+    if (backShape) {
+      path
+        ..moveTo(13, 1)
+        ..lineTo(size.width - 7, 1)
+        ..quadraticBezierTo(size.width - 1, 1, size.width - 1, 7)
+        ..lineTo(size.width - 1, size.height - 7)
+        ..quadraticBezierTo(
+          size.width - 1,
+          size.height - 1,
+          size.width - 7,
+          size.height - 1,
+        )
+        ..lineTo(13, size.height - 1)
+        ..lineTo(1, size.height / 2)
+        ..close();
+    } else {
+      path.addRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(1, 1, size.width - 2, size.height - 2),
+          const Radius.circular(6),
+        ),
+      );
+    }
+    final rect = Offset.zero & size;
+    canvas.drawPath(
+      path,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF7894B5), Color(0xFF3D5D84)],
+        ).createShader(rect),
+    );
+    canvas.drawPath(
+      path,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = const Color(0xFF294767),
+    );
+    canvas.drawPath(
+      path,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = .7
+        ..color = const Color(0x66FFFFFF),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_Ios3NavigationButtonPainter oldDelegate) =>
+      oldDelegate.backShape != backShape;
+}
+
 class _HeaderButton extends StatelessWidget {
   const _HeaderButton({
     super.key,
@@ -1738,6 +1946,48 @@ class _SelectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (AppSettingsScope.of(context).interfaceStyle == InterfaceStyle.ios3) {
+      return Container(
+        height: 44,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFB4C7DD), Color(0xFF526F94)],
+          ),
+          border: Border(
+            bottom: BorderSide(color: Color(0xFF344B67), width: 1),
+          ),
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Text(
+              '$selectionCount Selected',
+              style: const TextStyle(
+                color: CupertinoColors.white,
+                fontFamily: 'SF Pro Text',
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                shadows: [
+                  Shadow(
+                    color: Color(0xAA26384E),
+                    offset: Offset(0, -1),
+                  ),
+                ],
+              ),
+            ),
+            Positioned(
+              right: 6,
+              child: _Ios3NavigationButton(
+                label: 'Done',
+                onPressed: onCancel,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return Container(
       height: 58,
       decoration: BoxDecoration(
@@ -2308,14 +2558,15 @@ class _DateSeparator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final label = _dateSeparatorParts(context, value);
-    final useIos26 =
-        AppSettingsScope.of(context).interfaceStyle == InterfaceStyle.ios26;
-    final needsIos17Clearance = !useIos26 &&
+    final interfaceStyle = AppSettingsScope.of(context).interfaceStyle;
+    final useIos3 = interfaceStyle == InterfaceStyle.ios3;
+    final useIos26 = interfaceStyle == InterfaceStyle.ios26;
+    final needsIos17Clearance = interfaceStyle == InterfaceStyle.ios17 &&
         _ios17DateNeedsClearance(context, precedingMessage);
     return Padding(
       padding: EdgeInsets.only(
-        top: useIos26 ? 12 : (needsIos17Clearance ? 10 : 0),
-        bottom: useIos26 ? 2 : 10,
+        top: useIos26 ? 12 : (useIos3 ? 8 : (needsIos17Clearance ? 10 : 0)),
+        bottom: useIos26 ? 2 : (useIos3 ? 6 : 10),
       ),
       child: Text.rich(
         TextSpan(
@@ -2332,10 +2583,20 @@ class _DateSeparator extends StatelessWidget {
         ),
         textAlign: TextAlign.center,
         style: TextStyle(
-          color: MessagesPalette.secondaryLabel(context),
+          color: useIos3
+              ? const Color(0xFF868FA0)
+              : MessagesPalette.secondaryLabel(context),
           fontFamily: 'SF Pro Text',
-          fontSize: 11,
+          fontSize: useIos3 ? 12 : 11,
           height: 1,
+          shadows: useIos3
+              ? const [
+                  Shadow(
+                    color: Color(0xCCFFFFFF),
+                    offset: Offset(0, 1),
+                  ),
+                ]
+              : null,
         ),
       ),
     );

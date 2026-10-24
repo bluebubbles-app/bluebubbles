@@ -14,7 +14,7 @@ enum EmojiStyle { apple, android }
 
 enum SentBubbleColor { blue, green }
 
-enum InterfaceStyle { ios17, ios26 }
+enum InterfaceStyle { ios3, ios17, ios26 }
 
 class AppSettingsController extends ChangeNotifier {
   static const _headerTransparencyKey = 'header_transparency';

@@ -306,15 +306,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _ChoiceRow(
                   key: const ValueKey('interface-style-setting'),
                   title: 'Interface',
-                  value: settings.interfaceStyle == InterfaceStyle.ios26
-                      ? 'iOS 26'
-                      : 'iOS 17',
+                  value: switch (settings.interfaceStyle) {
+                    InterfaceStyle.ios3 => 'iOS 3.0',
+                    InterfaceStyle.ios17 => 'iOS 17',
+                    InterfaceStyle.ios26 => 'iOS 26',
+                  },
                   icon: CupertinoIcons.paintbrush,
                   onPressed: () async {
                     final value = await _pick<InterfaceStyle>(
                       title: 'Interface',
                       current: settings.interfaceStyle,
                       options: const [
+                        (InterfaceStyle.ios3, 'iOS 3.0'),
                         (InterfaceStyle.ios17, 'iOS 17'),
                         (InterfaceStyle.ios26, 'iOS 26'),
                       ],

@@ -373,6 +373,15 @@ class _MessageComposerState extends State<MessageComposer> {
     final isDark = MessagesPalette.isDark(context);
     final settings = AppSettingsScope.maybeOf(context);
 
+    if (settings?.interfaceStyle == InterfaceStyle.ios3) {
+      return _buildIos3Composer(
+        context,
+        attachment: attachment,
+        isAudioDraft: isAudioDraft,
+        canSend: canSend,
+      );
+    }
+
     if (settings?.interfaceStyle == InterfaceStyle.ios26) {
       return _buildIos26Composer(
         context,
@@ -576,6 +585,202 @@ class _MessageComposerState extends State<MessageComposer> {
                     const SizedBox(width: 16)
                   else
                     const SizedBox(width: 12),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildIos3Composer(
+    BuildContext context, {
+    required MessageAttachment? attachment,
+    required bool isAudioDraft,
+    required bool canSend,
+  }) {
+    return SafeArea(
+      top: false,
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFEDEEF0), Color(0xFFC7C8CC)],
+          ),
+          border: Border(
+            top: BorderSide(color: Color(0xFF8B8D92), width: 1),
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (attachment?.kind == MessageAttachmentKind.image)
+              _AttachmentPreview(
+                attachment: attachment!,
+                onRemove: _cancelRecording,
+              ),
+            SizedBox(
+              height: 60,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const SizedBox(width: 8),
+                  CupertinoButton(
+                    key: const ValueKey('new-message-attachment-button'),
+                    minSize: 40,
+                    padding: EdgeInsets.zero,
+                    onPressed: _busy ? null : _showCompactAttachmentMenu,
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: const LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Color(0xFF878E9A), Color(0xFF5F6976)],
+                        ),
+                        border: Border.all(
+                          color: const Color(0xFF383E47),
+                          width: 1.2,
+                        ),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x8CFFFFFF),
+                            blurRadius: 1,
+                            offset: Offset(0, 1),
+                          ),
+                        ],
+                      ),
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        CupertinoIcons.camera_fill,
+                        color: CupertinoColors.white,
+                        size: 24,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Container(
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF6F6F6),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: const Color(0xFF303030),
+                          width: 1.1,
+                        ),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x70000000),
+                            blurRadius: 4,
+                            offset: Offset(0, 2),
+                          ),
+                          BoxShadow(
+                            color: Color(0x70FFFFFF),
+                            blurRadius: 2,
+                            offset: Offset(0, -1),
+                          ),
+                        ],
+                      ),
+                      child: _recording
+                          ? _RecordingControls(
+                              duration: _recordingDuration,
+                              onCancel: _cancelRecording,
+                              onStop: _stopRecording,
+                              busy: _busy,
+                            )
+                          : isAudioDraft
+                              ? _AudioDraftControls(
+                                  duration: Duration(
+                                    milliseconds:
+                                        attachment!.durationMilliseconds ?? 0,
+                                  ),
+                                  playing: _previewPlaying,
+                                  onPlayPause: _togglePreviewPlayback,
+                                  onCancel: _cancelRecording,
+                                  onSend: _send,
+                                )
+                              : CupertinoTextField(
+                                  controller: _controller,
+                                  focusNode: _focusNode,
+                                  placeholder: 'iMessage',
+                                  placeholderStyle: const TextStyle(
+                                    fontFamily: 'SF Pro Text',
+                                    color: Color(0xFF999999),
+                                    fontSize: 17,
+                                  ),
+                                  style: const TextStyle(
+                                    fontFamily: 'SF Pro Text',
+                                    color: CupertinoColors.black,
+                                    fontSize: 17,
+                                  ),
+                                  minLines: 1,
+                                  maxLines: 1,
+                                  textCapitalization:
+                                      TextCapitalization.sentences,
+                                  keyboardType: TextInputType.multiline,
+                                  decoration: null,
+                                  padding: const EdgeInsets.fromLTRB(
+                                    16,
+                                    9,
+                                    12,
+                                    9,
+                                  ),
+                                ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  CupertinoButton(
+                    minSize: 40,
+                    padding: EdgeInsets.zero,
+                    onPressed: canSend && !_busy ? _send : null,
+                    child: Container(
+                      width: 87,
+                      height: 40,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: canSend
+                              ? const [Color(0xFF96B5F9), Color(0xFF1B46CC)]
+                              : const [Color(0xFFB9C3D8), Color(0xFF7083AD)],
+                        ),
+                        border: Border.all(
+                          color: const Color(0xFF344B88),
+                          width: 1.2,
+                        ),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x40FFFFFF),
+                            blurRadius: 1,
+                            offset: Offset(0, 1),
+                          ),
+                        ],
+                      ),
+                      child: const Text(
+                        'Send',
+                        style: TextStyle(
+                          color: Color(0xFFFFFFFB),
+                          fontFamily: 'SF Pro Text',
+                          fontSize: 17,
+                          fontWeight: FontWeight.w600,
+                          shadows: [
+                            Shadow(
+                              color: Color(0x52000000),
+                              offset: Offset(0, -1),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                 ],
               ),
             ),

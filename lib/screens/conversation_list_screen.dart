@@ -615,6 +615,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final useIos3 = widget.interfaceStyle == InterfaceStyle.ios3;
     final useIos26 = widget.interfaceStyle == InterfaceStyle.ios26;
     final searchActive = _query.trim().isNotEmpty;
     final filtered = _filtered;
@@ -624,11 +625,13 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
         filtered.where((conversation) => !conversation.isPinned).toList();
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: MessagesPalette.isDark(context)
+      value: !useIos3 && MessagesPalette.isDark(context)
           ? SystemUiOverlayStyle.light
           : SystemUiOverlayStyle.dark,
       child: CupertinoPageScaffold(
-        backgroundColor: MessagesPalette.background(context),
+        backgroundColor: useIos3
+            ? const Color(0xFFF4F4F4)
+            : MessagesPalette.background(context),
         child: Stack(
           children: [
             SafeArea(
@@ -850,6 +853,82 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
         (44.0 - MediaQuery.paddingOf(context).top)
             .clamp(0.0, 44.0)
             .toDouble();
+    if (settings.interfaceStyle == InterfaceStyle.ios3) {
+      return Container(
+        height: 44 + topCompensation,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFB4C7DD), Color(0xFF526F94)],
+          ),
+          border: Border(
+            top: BorderSide(color: Color(0xFFDCE6F0), width: 1),
+            bottom: BorderSide(color: Color(0xFF344B67), width: 1),
+          ),
+        ),
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: SizedBox(
+            height: 44,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Text(
+                  _selectingConversations
+                      ? '${_selectedConversationIds.length} Selected'
+                      : 'Messages',
+                  key: const ValueKey('messages-title'),
+                  style: const TextStyle(
+                    color: CupertinoColors.white,
+                    fontFamily: 'SF Pro Text',
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    shadows: [
+                      Shadow(
+                        color: Color(0xAA26384E),
+                        offset: Offset(0, -1),
+                      ),
+                    ],
+                  ),
+                ),
+                Positioned(
+                  left: 6,
+                  child: _Ios3ListNavigationButton(
+                    key: const ValueKey('edit-conversations-button'),
+                    width: 58,
+                    onPressed: _toggleConversationSelectionMode,
+                    child: Text(
+                      _selectingConversations ? 'Done' : 'Edit',
+                    ),
+                  ),
+                ),
+                Positioned(
+                  right: 50,
+                  child: _Ios3ListNavigationButton(
+                    key: const ValueKey('open-settings-button'),
+                    width: 38,
+                    onPressed:
+                        _selectingConversations ? null : _openSettings,
+                    child: const Icon(CupertinoIcons.ellipsis, size: 18),
+                  ),
+                ),
+                Positioned(
+                  right: 6,
+                  child: _Ios3ListNavigationButton(
+                    key: const ValueKey('new-message-button'),
+                    width: 38,
+                    onPressed:
+                        _selectingConversations ? null : _composeNewMessage,
+                    child: const Icon(CupertinoIcons.square_pencil, size: 18),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     if (settings.interfaceStyle == InterfaceStyle.ios26) {
       final blur = settings.headerBlurSigma.clamp(0, 20).toDouble();
       return SizedBox(
@@ -1146,6 +1225,65 @@ class _Ios26BottomBar extends StatelessWidget {
       ),
     );
   }
+}
+
+class _Ios3ListNavigationButton extends StatelessWidget {
+  const _Ios3ListNavigationButton({
+    super.key,
+    required this.width,
+    required this.onPressed,
+    required this.child,
+  });
+
+  final double width;
+  final VoidCallback? onPressed;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => CupertinoButton(
+        minSize: 34,
+        padding: EdgeInsets.zero,
+        onPressed: onPressed,
+        child: Container(
+          width: width,
+          height: 34,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(6),
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF7894B5), Color(0xFF3D5D84)],
+            ),
+            border: Border.all(color: const Color(0xFF294767), width: 1),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x66FFFFFF),
+                blurRadius: 1,
+                offset: Offset(0, 1),
+              ),
+            ],
+          ),
+          child: IconTheme(
+            data: const IconThemeData(color: CupertinoColors.white),
+            child: DefaultTextStyle(
+              style: const TextStyle(
+                color: CupertinoColors.white,
+                fontFamily: 'SF Pro Text',
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                shadows: [
+                  Shadow(
+                    color: Color(0xC0203045),
+                    offset: Offset(0, -1),
+                  ),
+                ],
+              ),
+              child: child,
+            ),
+          ),
+        ),
+      );
 }
 
 class _Ios26MenuGlyph extends StatelessWidget {
@@ -1486,10 +1624,16 @@ class _NewMessageRecipientScreenState
     final typedRecipient = _query.trim();
     final selectedConversation = _selectedConversation;
     final isDark = MessagesPalette.isDark(context);
+    final useIos3 =
+        AppSettingsScope.of(context).interfaceStyle == InterfaceStyle.ios3;
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+      value: isDark && !useIos3
+          ? SystemUiOverlayStyle.light
+          : SystemUiOverlayStyle.dark,
       child: CupertinoPageScaffold(
-        backgroundColor: MessagesPalette.background(context),
+        backgroundColor: useIos3
+            ? const Color(0xFFDCE1EC)
+            : MessagesPalette.background(context),
         child: SafeArea(
           bottom: false,
           child: Column(
@@ -1498,11 +1642,20 @@ class _NewMessageRecipientScreenState
                 key: const ValueKey('new-message-header'),
                 height: 44,
                 decoration: BoxDecoration(
-                  color: MessagesPalette.background(context),
+                  color: useIos3 ? null : MessagesPalette.background(context),
+                  gradient: useIos3
+                      ? const LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Color(0xFFB4C7DD), Color(0xFF526F94)],
+                        )
+                      : null,
                   border: Border(
                     bottom: BorderSide(
-                      color: MessagesPalette.hairline(context),
-                      width: .5,
+                      color: useIos3
+                          ? const Color(0xFF344B67)
+                          : MessagesPalette.hairline(context),
+                      width: useIos3 ? 1 : .5,
                     ),
                   ),
                 ),
@@ -1520,33 +1673,58 @@ class _NewMessageRecipientScreenState
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontFamily: 'SF Pro Text',
-                            color: MessagesPalette.label(context),
-                            fontSize: 17,
+                            color: useIos3
+                                ? CupertinoColors.white
+                                : MessagesPalette.label(context),
+                            fontSize: useIos3 ? 20 : 17,
                             height: 1,
-                            fontWeight: FontWeight.w600,
+                            fontWeight:
+                                useIos3 ? FontWeight.w700 : FontWeight.w600,
                             letterSpacing: -.25,
+                            shadows: useIos3
+                                ? const [
+                                    Shadow(
+                                      color: Color(0xAA26384E),
+                                      offset: Offset(0, -1),
+                                    ),
+                                  ]
+                                : null,
                           ),
                         ),
                       ),
                     ),
                     Positioned(
-                      right: 8,
-                      child: CupertinoButton(
-                        key: const ValueKey('new-message-cancel-button'),
-                        minSize: 44,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: Text(
-                          MessageStatusStrings.cancel(context),
-                          style: const TextStyle(
-                            fontFamily: 'SF Pro Text',
-                            color: MessagesPalette.headerActionBlue,
-                            fontSize: 17,
-                            fontWeight: FontWeight.w400,
-                            letterSpacing: -.2,
-                          ),
-                        ),
-                      ),
+                      right: useIos3 ? 6 : 8,
+                      child: useIos3
+                          ? _Ios3ListNavigationButton(
+                              key: const ValueKey(
+                                'new-message-cancel-button',
+                              ),
+                              width: 68,
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: Text(
+                                MessageStatusStrings.cancel(context),
+                              ),
+                            )
+                          : CupertinoButton(
+                              key: const ValueKey(
+                                'new-message-cancel-button',
+                              ),
+                              minSize: 44,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 8),
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: Text(
+                                MessageStatusStrings.cancel(context),
+                                style: const TextStyle(
+                                  fontFamily: 'SF Pro Text',
+                                  color: MessagesPalette.headerActionBlue,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w400,
+                                  letterSpacing: -.2,
+                                ),
+                              ),
+                            ),
                     ),
                   ],
                 ),
@@ -1556,7 +1734,9 @@ class _NewMessageRecipientScreenState
                 height: 47,
                 padding: const EdgeInsets.only(left: 17, right: 8),
                 decoration: BoxDecoration(
-                  color: MessagesPalette.background(context),
+                  color: useIos3
+                      ? CupertinoColors.white
+                      : MessagesPalette.background(context),
                   border: Border(
                     bottom: BorderSide(
                       color: MessagesPalette.hairline(context),
@@ -1570,7 +1750,9 @@ class _NewMessageRecipientScreenState
                       MessageStatusStrings.recipientLabel(context),
                       style: TextStyle(
                         fontFamily: 'SF Pro Text',
-                        color: MessagesPalette.secondaryLabel(context),
+                        color: useIos3
+                            ? const Color(0xFF6C6C6C)
+                            : MessagesPalette.secondaryLabel(context),
                         fontSize: 16,
                         height: 1,
                         fontWeight: FontWeight.w400,
@@ -1592,7 +1774,9 @@ class _NewMessageRecipientScreenState
                         style: TextStyle(
                           fontFamily: 'SF Pro Text',
                           color: selectedConversation == null
-                              ? MessagesPalette.label(context)
+                              ? (useIos3
+                                  ? CupertinoColors.black
+                                  : MessagesPalette.label(context))
                               : MessagesPalette.headerActionBlue,
                           fontSize: 16,
                           height: 1.2,
@@ -2810,11 +2994,14 @@ class ConversationRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final highlighted = conversation.unreadCount > 0;
-    final useIos26 =
-        AppSettingsScope.of(context).interfaceStyle == InterfaceStyle.ios26;
+    final interfaceStyle = AppSettingsScope.of(context).interfaceStyle;
+    final useIos3 = interfaceStyle == InterfaceStyle.ios3;
+    final useIos26 = interfaceStyle == InterfaceStyle.ios26;
     final rowHeight = useIos26 ? 88.0 : 76.0;
     return ColoredBox(
-      color: MessagesPalette.background(context),
+      color: useIos3
+          ? CupertinoColors.white
+          : MessagesPalette.background(context),
       child: Stack(
         children: [
           CupertinoButton(
@@ -2890,6 +3077,9 @@ class ConversationRow extends StatelessWidget {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: MessagesText.headline(context).copyWith(
+                                  color: useIos3
+                                      ? CupertinoColors.black
+                                      : null,
                                   fontSize: 17,
                                   height: 1,
                                   fontWeight: FontWeight.w600,
@@ -2917,6 +3107,9 @@ class ConversationRow extends StatelessWidget {
                                       overflow: TextOverflow.ellipsis,
                                       style: MessagesText.secondary(context)
                                           .copyWith(
+                                        color: useIos3
+                                            ? const Color(0xFF6C6C6C)
+                                            : null,
                                         fontSize: 15,
                                         height: 4 / 3,
                                         fontWeight: FontWeight.w400,
@@ -2940,6 +3133,9 @@ class ConversationRow extends StatelessWidget {
                                 ),
                                 style:
                                     MessagesText.secondary(context).copyWith(
+                                  color: useIos3
+                                      ? const Color(0xFF6C6C6C)
+                                      : null,
                                   fontSize: 15,
                                   fontWeight: highlighted
                                       ? FontWeight.w600
@@ -2950,7 +3146,9 @@ class ConversationRow extends StatelessWidget {
                               Icon(
                                 CupertinoIcons.chevron_right,
                                 size: 13,
-                                color: MessagesPalette.isDark(context)
+                                color: useIos3
+                                    ? const Color(0xFF8A8A8A)
+                                    : MessagesPalette.isDark(context)
                                     ? MessagesPalette.secondaryLabel(context)
                                     : const Color(0x4D3C3C43),
                               ),
@@ -2970,7 +3168,9 @@ class ConversationRow extends StatelessWidget {
             bottom: 0,
             child: IgnorePointer(
               child: ColoredBox(
-                color: MessagesPalette.isDark(context)
+                color: useIos3
+                    ? const Color(0xFFB7B7B7)
+                    : MessagesPalette.isDark(context)
                     ? MessagesPalette.hairline(context).withValues(alpha: .55)
                     : const Color(0x5C3C3C43),
                 child: const SizedBox(height: .5),
