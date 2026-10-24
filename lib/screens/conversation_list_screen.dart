@@ -870,6 +870,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
         child: Align(
           alignment: Alignment.bottomCenter,
           child: SizedBox(
+            width: double.infinity,
             height: 44,
             child: Stack(
               alignment: Alignment.center,

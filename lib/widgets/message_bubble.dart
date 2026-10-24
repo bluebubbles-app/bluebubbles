@@ -143,7 +143,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                         Color(0xFF98D3FF),
                       ]
                     : const [Color(0xFF6EBEFF), Color(0xFF98D3FF)])
-                : const [Color(0xFFFFFFFF), Color(0xFFE0E0E0)],
+                : const [Color(0xFFECECEC), Color(0xFFC8C8C8)],
             stops: isFromMe && useGreenBubble
                 ? const [0, .2, .5, .875, 1]
                 : null,
@@ -833,11 +833,11 @@ class MessageBubblePainter extends CustomPainter {
       final highlightRect = RRect.fromRectAndRadius(
         Rect.fromLTWH(
           size.width * .114,
-          2,
+          size.height * .051,
           size.width * .779,
-          18,
+          size.height * .462,
         ),
-        const Radius.circular(9),
+        Radius.circular(size.height * .231),
       );
       final glossPaint = Paint()
         ..shader = LinearGradient(
@@ -852,7 +852,9 @@ class MessageBubblePainter extends CustomPainter {
           end: Alignment.bottomCenter,
           colors: useIos3Green
               ? const [Color(0x00BDFF43), Color(0x80BDFF43)]
-              : const [Color(0x00FFFFFF), Color(0x7AFFFFFF)],
+              : isFromMe
+                  ? const [Color(0x00FFFFFF), Color(0x7AFFFFFF)]
+                  : const [Color(0x00FFFFFF), Color(0x24FFFFFF)],
           stops: const [.35, 1],
         ).createShader(Offset.zero & size);
       canvas.drawPath(
