@@ -832,9 +832,9 @@ class MessageBubblePainter extends CustomPainter {
       canvas.clipPath(bubble);
       final highlightRect = RRect.fromRectAndRadius(
         Rect.fromLTWH(
-          size.width * .015,
-          size.height * .005,
-          size.width * .97,
+          size.width * .075,
+          size.height * .02,
+          size.width * .85,
           size.height * .17,
         ),
         Radius.circular(size.height * .085),
@@ -864,16 +864,23 @@ class MessageBubblePainter extends CustomPainter {
       canvas.restore();
       canvas.save();
       canvas.clipPath(bubble);
-      canvas.clipRect(
-        Rect.fromLTWH(0, size.height * .72, size.width + 10, size.height * .3),
-      );
+      final lowerReflection = Path();
+      final lowerStart = isFromMe ? 3.5 : 8.0;
+      final lowerEnd = size.width - (isFromMe ? 8.0 : 3.5);
+      final lowerY = size.height - 1.4;
+      lowerReflection
+        ..moveTo(lowerStart, lowerY - 2.2)
+        ..quadraticBezierTo(lowerStart + 1.2, lowerY, lowerStart + 4, lowerY)
+        ..lineTo(lowerEnd - 4, lowerY)
+        ..quadraticBezierTo(lowerEnd - 1.2, lowerY, lowerEnd, lowerY - 2.2);
       canvas.drawPath(
-        bubble.shift(const Offset(0, -.6)),
+        lowerReflection,
         Paint()
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.2
-          ..color = const Color(0xA8FFFFFF)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, .65),
+          ..strokeWidth = 1.1
+          ..strokeCap = StrokeCap.round
+          ..color = const Color(0xB8FFFFFF)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, .35),
       );
       canvas.restore();
       canvas.drawPath(
