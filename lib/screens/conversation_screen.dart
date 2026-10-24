@@ -2636,7 +2636,7 @@ class _Ios3TextMessageDivider extends StatelessWidget {
         const Expanded(
           child: CustomPaint(
             painter: _Ios3DottedLinePainter(color: color),
-            size: Size.fromHeight(1),
+            size: Size.fromHeight(2),
           ),
         ),
         const SizedBox(width: 6),
@@ -2660,7 +2660,7 @@ class _Ios3TextMessageDivider extends StatelessWidget {
         const Expanded(
           child: CustomPaint(
             painter: _Ios3DottedLinePainter(color: color),
-            size: Size.fromHeight(1),
+            size: Size.fromHeight(2),
           ),
         ),
       ],
@@ -2679,13 +2679,23 @@ class _Ios3DottedLinePainter extends CustomPainter {
       ..color = color
       ..strokeWidth = 1
       ..strokeCap = StrokeCap.round;
+    final highlightPaint = Paint()
+      ..color = const Color(0xCCFFFFFF)
+      ..strokeWidth = 1
+      ..strokeCap = StrokeCap.round;
     const dashWidth = 1.4;
     const dashGap = 1.8;
-    final y = size.height / 2;
+    const y = .5;
     for (double x = 0; x < size.width; x += dashWidth + dashGap) {
+      final end = (x + dashWidth).clamp(0, size.width).toDouble();
+      canvas.drawLine(
+        Offset(x, y + 1),
+        Offset(end, y + 1),
+        highlightPaint,
+      );
       canvas.drawLine(
         Offset(x, y),
-        Offset((x + dashWidth).clamp(0, size.width).toDouble(), y),
+        Offset(end, y),
         paint,
       );
     }
