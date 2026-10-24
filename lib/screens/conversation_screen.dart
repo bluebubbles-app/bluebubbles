@@ -757,6 +757,11 @@ class _ConversationScreenState extends State<ConversationScreen>
                                           ? DateTime.now()
                                           : widget.conversation.messages.first
                                               .sentAt,
+                                      message:
+                                          widget.conversation.messages.isEmpty
+                                              ? null
+                                              : widget.conversation.messages
+                                                  .first,
                                     ),
                                     if (widget.conversation.id == 'tobias')
                                       const _PhotoStackMessage(),
@@ -883,6 +888,7 @@ class _ConversationScreenState extends State<ConversationScreen>
                                         _DateSeparator(
                                           value: message.sentAt,
                                           precedingMessage: previous,
+                                          message: message,
                                         ),
                                         insertedMessage,
                                       ],
@@ -2551,10 +2557,12 @@ class _DateSeparator extends StatelessWidget {
   const _DateSeparator({
     required this.value,
     this.precedingMessage,
+    this.message,
   });
 
   final DateTime value;
   final ChatMessage? precedingMessage;
+  final ChatMessage? message;
 
   @override
   Widget build(BuildContext context) {
@@ -2569,39 +2577,123 @@ class _DateSeparator extends StatelessWidget {
         top: useIos26 ? 12 : (useIos3 ? 8 : (needsIos17Clearance ? 10 : 0)),
         bottom: useIos26 ? 2 : (useIos3 ? 6 : 10),
       ),
-      child: Text.rich(
-        TextSpan(
-          children: [
-            TextSpan(
-              text: label.$1,
-              style: const TextStyle(fontWeight: FontWeight.w700),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (useIos3 && message?.isFromMe == false) ...[
+            _Ios3TextMessageDivider(
+              label: MessageStatusStrings.textMessage(context),
             ),
-            TextSpan(
-              text: '  ${label.$2}',
-              style: const TextStyle(fontWeight: FontWeight.w400),
-            ),
+            const SizedBox(height: 6),
           ],
-        ),
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          color: useIos3
-              ? const Color(0xFF868FA0)
-              : MessagesPalette.secondaryLabel(context),
-          fontFamily: 'SF Pro Text',
-          fontSize: useIos3 ? 12 : 11,
-          height: 1,
-          shadows: useIos3
-              ? const [
-                  Shadow(
-                    color: Color(0xCCFFFFFF),
-                    offset: Offset(0, 1),
-                  ),
-                ]
-              : null,
-        ),
+          Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(
+                  text: label.$1,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                TextSpan(
+                  text: '  ${label.$2}',
+                  style: const TextStyle(fontWeight: FontWeight.w400),
+                ),
+              ],
+            ),
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: useIos3
+                  ? const Color(0xFF868FA0)
+                  : MessagesPalette.secondaryLabel(context),
+              fontFamily: 'SF Pro Text',
+              fontSize: useIos3 ? 12 : 11,
+              height: 1,
+              shadows: useIos3
+                  ? const [
+                      Shadow(
+                        color: Color(0xCCFFFFFF),
+                        offset: Offset(0, 1),
+                      ),
+                    ]
+                  : null,
+            ),
+          ),
+        ],
       ),
     );
   }
+}
+
+class _Ios3TextMessageDivider extends StatelessWidget {
+  const _Ios3TextMessageDivider({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    const color = Color(0xFF9EA7B7);
+    return Row(
+      children: [
+        const Expanded(
+          child: CustomPaint(
+            painter: _Ios3DottedLinePainter(color: color),
+            size: Size.fromHeight(1),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(
+            color: color,
+            fontFamily: 'SF Pro Text',
+            fontSize: 12,
+            height: 1,
+            fontWeight: FontWeight.w500,
+            shadows: [
+              Shadow(
+                color: Color(0xCCFFFFFF),
+                offset: Offset(0, 1),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 6),
+        const Expanded(
+          child: CustomPaint(
+            painter: _Ios3DottedLinePainter(color: color),
+            size: Size.fromHeight(1),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Ios3DottedLinePainter extends CustomPainter {
+  const _Ios3DottedLinePainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1
+      ..strokeCap = StrokeCap.round;
+    const dashWidth = 1.4;
+    const dashGap = 1.8;
+    final y = size.height / 2;
+    for (double x = 0; x < size.width; x += dashWidth + dashGap) {
+      canvas.drawLine(
+        Offset(x, y),
+        Offset((x + dashWidth).clamp(0, size.width).toDouble(), y),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_Ios3DottedLinePainter oldDelegate) =>
+      oldDelegate.color != color;
 }
 
 bool _ios17DateNeedsClearance(

@@ -42,6 +42,23 @@ abstract final class MessageStatusStrings {
     'vi': 'Đến:',
   };
 
+  static const _textMessageLabels = <String, String>{
+    'en': 'Text Message', 'fr': 'Message texte',
+    'de': 'Textnachricht', 'es': 'Mensaje de texto',
+    'it': 'Messaggio di testo', 'pt': 'Mensagem de texto',
+    'nl': 'Tekstbericht', 'pl': 'Wiadomość tekstowa',
+    'ru': 'Текстовое сообщение', 'uk': 'Текстове повідомлення',
+    'tr': 'Metin Mesajı', 'ar': 'رسالة نصية',
+    'zh_Hans': '短信', 'zh_Hant': '文字訊息',
+    'ja': 'テキストメッセージ', 'ko': '문자 메시지',
+    'hi': 'टेक्स्ट संदेश', 'id': 'Pesan Teks',
+    'sv': 'Textmeddelande', 'da': 'Tekstbesked',
+    'nb': 'Tekstmelding', 'fi': 'Tekstiviesti',
+    'cs': 'Textová zpráva', 'ro': 'Mesaj text',
+    'el': 'Μήνυμα κειμένου', 'he': 'הודעת טקסט',
+    'th': 'ข้อความตัวอักษร', 'vi': 'Tin nhắn văn bản',
+  };
+
   static const _sendToTemplates = <String, String>{
     'en': 'Send to “{recipient}”', 'fr': 'Envoyer à « {recipient} »',
     'de': 'Senden an „{recipient}“', 'es': 'Enviar a “{recipient}”',
@@ -278,6 +295,8 @@ abstract final class MessageStatusStrings {
       _newMessageTitles[_localeKey(context)] ?? _newMessageTitles['en']!;
   static String recipientLabel(BuildContext context) =>
       _recipientLabels[_localeKey(context)] ?? _recipientLabels['en']!;
+  static String textMessage(BuildContext context) =>
+      _textMessageLabels[_localeKey(context)] ?? _textMessageLabels['en']!;
   static String sendTo(BuildContext context, String recipient) =>
       (_sendToTemplates[_localeKey(context)] ?? _sendToTemplates['en']!)
           .replaceFirst('{recipient}', recipient);

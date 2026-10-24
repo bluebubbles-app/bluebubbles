@@ -201,7 +201,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                 ),
                 child: Container(
                   constraints: BoxConstraints(
-                    minHeight: useIos26 ? 40 : (useIos3 ? 39 : 36),
+                    minHeight: useIos26 ? 40 : 36,
                     maxWidth: MediaQuery.sizeOf(context).width *
                         (useIos26
                             ? (280 / 402)
@@ -213,8 +213,8 @@ class _MessageBubbleState extends State<MessageBubble> {
                           ? const EdgeInsets.fromLTRB(4, 4, 4, 7)
                           : EdgeInsets.symmetric(
                               horizontal:
-                                  useIos26 ? 13 : (useIos3 ? 17 : 12),
-                              vertical: useIos26 ? 9 : (useIos3 ? 6 : 7),
+                                  useIos26 ? 13 : (useIos3 ? 13 : 12),
+                              vertical: useIos26 ? 9 : (useIos3 ? 5 : 7),
                             ),
                   child: Align(
                     alignment: Alignment.center,
