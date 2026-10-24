@@ -134,10 +134,19 @@ class _MessageBubbleState extends State<MessageBubble> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: isFromMe
-                ? (isImageAttachment || useGreenBubble
-                    ? const [Color(0xFFD5F36B), Color(0xFFA8D536)]
+                ? (useGreenBubble
+                    ? const [
+                        Color(0xFF20B45C),
+                        Color(0xFF52B847),
+                        Color(0xFF75BF42),
+                        Color(0xFF78C043),
+                        Color(0xFF98D3FF),
+                      ]
                     : const [Color(0xFF6EBEFF), Color(0xFF98D3FF)])
                 : const [Color(0xFFFFFFFF), Color(0xFFE0E0E0)],
+            stops: isFromMe && useGreenBubble
+                ? const [0, .2, .5, .875, 1]
+                : null,
           )
         : null;
 
@@ -178,6 +187,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                           : null),
                   fixedGradient: useIos3 || useIos26,
                   useIos3Shape: useIos3,
+                  useIos3Green: useIos3 && isFromMe && useGreenBubble,
                   useIos26Shape: useIos26,
                   scrollPosition: _scrollPosition,
                   paintKey: _paintKey,
@@ -191,7 +201,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                 ),
                 child: Container(
                   constraints: BoxConstraints(
-                    minHeight: useIos26 ? 40 : (useIos3 ? 32 : 36),
+                    minHeight: useIos26 ? 40 : (useIos3 ? 39 : 36),
                     maxWidth: MediaQuery.sizeOf(context).width *
                         (useIos26
                             ? (280 / 402)
@@ -203,7 +213,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                           ? const EdgeInsets.fromLTRB(4, 4, 4, 7)
                           : EdgeInsets.symmetric(
                               horizontal:
-                                  useIos26 ? 13 : (useIos3 ? 11 : 12),
+                                  useIos26 ? 13 : (useIos3 ? 17 : 12),
                               vertical: useIos26 ? 9 : (useIos3 ? 6 : 7),
                             ),
                   child: Align(
@@ -649,6 +659,7 @@ class MessageBubblePainter extends CustomPainter {
     required this.gradient,
     required this.fixedGradient,
     required this.useIos3Shape,
+    required this.useIos3Green,
     required this.useIos26Shape,
     required this.scrollPosition,
     required this.paintKey,
@@ -664,6 +675,7 @@ class MessageBubblePainter extends CustomPainter {
   final LinearGradient? gradient;
   final bool fixedGradient;
   final bool useIos3Shape;
+  final bool useIos3Green;
   final bool useIos26Shape;
   final ScrollPosition? scrollPosition;
   final GlobalKey paintKey;
@@ -709,7 +721,7 @@ class MessageBubblePainter extends CustomPainter {
         ..addRRect(
           RRect.fromRectAndRadius(
             Offset.zero & size,
-            Radius.circular(useIos3Shape ? 17 : 20),
+            Radius.circular(useIos3Shape ? 19.5 : 20),
           ),
         );
       bubble = body;
@@ -793,7 +805,20 @@ class MessageBubblePainter extends CustomPainter {
       _cachedBubblePath = bubble;
     }
 
-    if (shadowElevation > 0) {
+    if (useIos3Shape) {
+      canvas.drawShadow(
+        bubble.shift(const Offset(0, 1)),
+        CupertinoColors.black.withValues(alpha: .24),
+        2,
+        true,
+      );
+      canvas.drawShadow(
+        bubble.shift(const Offset(0, .5)),
+        CupertinoColors.black.withValues(alpha: .24),
+        .5,
+        true,
+      );
+    } else if (shadowElevation > 0) {
       canvas.drawShadow(
         bubble,
         CupertinoColors.black.withValues(alpha: .38),
@@ -805,24 +830,41 @@ class MessageBubblePainter extends CustomPainter {
     if (useIos3Shape) {
       canvas.save();
       canvas.clipPath(bubble);
+      final highlightRect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          size.width * .114,
+          2,
+          size.width * .779,
+          18,
+        ),
+        const Radius.circular(9),
+      );
       final glossPaint = Paint()
-        ..shader = const LinearGradient(
+        ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xB8FFFFFF), Color(0x12FFFFFF)],
-        ).createShader(
-          Rect.fromLTWH(0, 0, size.width, size.height * .58),
-        );
-      canvas.drawRect(
-        Rect.fromLTWH(0, 0, size.width, size.height * .58),
-        glossPaint,
+          colors: const [Color(0xCCFFFFFF), Color(0x00F3FFF2)],
+        ).createShader(highlightRect.outerRect);
+      canvas.drawRRect(highlightRect, glossPaint);
+      final innerTint = Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: useIos3Green
+              ? const [Color(0x00BDFF43), Color(0x80BDFF43)]
+              : const [Color(0x00FFFFFF), Color(0x7AFFFFFF)],
+          stops: const [.35, 1],
+        ).createShader(Offset.zero & size);
+      canvas.drawPath(
+        bubble,
+        innerTint,
       );
       canvas.restore();
       canvas.drawPath(
         bubble,
         Paint()
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.2
+          ..strokeWidth = 1.5
           ..color = isFromMe
               ? const Color(0xFF1B2D5E)
               : const Color(0xFF8D8D8D),
@@ -836,6 +878,7 @@ class MessageBubblePainter extends CustomPainter {
       oldDelegate.gradient != gradient ||
       oldDelegate.fixedGradient != fixedGradient ||
       oldDelegate.useIos3Shape != useIos3Shape ||
+      oldDelegate.useIos3Green != useIos3Green ||
       oldDelegate.useIos26Shape != useIos26Shape ||
       oldDelegate.scrollPosition != scrollPosition ||
       oldDelegate.paintKey != paintKey ||
@@ -846,27 +889,44 @@ class MessageBubblePainter extends CustomPainter {
 
   static Path _ios3Tail(Size size, {required bool isFromMe}) {
     final path = Path();
-    if (isFromMe) {
-      path
-        ..moveTo(size.width - 13, size.height - 15)
-        ..quadraticBezierTo(
-          size.width - 7,
-          size.height - 3,
-          size.width + 8,
-          size.height,
-        )
-        ..quadraticBezierTo(
-          size.width,
-          size.height + 1,
-          size.width - 9,
-          size.height - 5,
-        );
-    } else {
-      path
-        ..moveTo(13, size.height - 15)
-        ..quadraticBezierTo(7, size.height - 3, -8, size.height)
-        ..quadraticBezierTo(0, size.height + 1, 9, size.height - 5);
-    }
+    final direction = isFromMe ? 1.0 : -1.0;
+    final edge = isFromMe ? size.width : 0.0;
+    double x(double distance) => edge + distance * direction;
+    path
+      ..moveTo(x(-6.15), size.height - 5.3)
+      ..cubicTo(
+        x(-3.35),
+        size.height - 2.95,
+        x(.3),
+        size.height - 1.5,
+        x(4.3),
+        size.height - 1.5,
+      )
+      ..cubicTo(
+        x(6.3),
+        size.height - 1.5,
+        x(8.25),
+        size.height - 1.85,
+        x(10),
+        size.height - 2.55,
+      )
+      ..cubicTo(
+        x(4.4),
+        size.height - 2.55,
+        x(-.1),
+        size.height - 6.8,
+        x(-.1),
+        size.height - 12.25,
+      )
+      ..lineTo(x(-.1), size.height - 17.35)
+      ..cubicTo(
+        x(0),
+        size.height - 18.05,
+        x(0),
+        size.height - 18.8,
+        x(0),
+        size.height - 19.5,
+      );
     path.close();
     return path;
   }

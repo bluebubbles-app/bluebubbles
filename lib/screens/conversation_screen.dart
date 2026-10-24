@@ -726,7 +726,7 @@ class _ConversationScreenState extends State<ConversationScreen>
                               parent: AlwaysScrollableScrollPhysics(),
                             ),
                             padding: EdgeInsets.fromLTRB(
-                              useIos3 ? 6 : 10,
+                              useIos3 ? 14 : 10,
                               _selectionMode
                                   ? 64
                                   : (useIos26
@@ -735,7 +735,7 @@ class _ConversationScreenState extends State<ConversationScreen>
                                                   ? 56
                                                   : 92) +
                                           topCompensation,
-                              useIos3 ? 8 : 14,
+                              14,
                               useIos3 ? 4 : 10,
                             ),
                             initialItemCount:
