@@ -736,7 +736,7 @@ class _ConversationScreenState extends State<ConversationScreen>
                                                   : 92) +
                                           topCompensation,
                               14,
-                              useIos3 ? 4 : 10,
+                              useIos3 ? 12 : 10,
                             ),
                             initialItemCount:
                                 widget.conversation.messages.length + 1,
