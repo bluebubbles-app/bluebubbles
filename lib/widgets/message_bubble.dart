@@ -108,6 +108,10 @@ class _MessageBubbleState extends State<MessageBubble> {
         message.attachment?.kind == MessageAttachmentKind.image;
     final useGreenBubble = isFromMe &&
         settings?.sentBubbleColor == SentBubbleColor.green;
+    final showIos3FailureIcon = useIos3 &&
+        isFromMe &&
+        message.deliveryState == DeliveryState.failed &&
+        widget.onRetry != null;
     final emojiScale = emojiOnlyTextScale(message.text);
     final renderedTextScale = emojiScale == 2 ? 4.0 : emojiScale;
     final Color color;
@@ -165,68 +169,96 @@ class _MessageBubbleState extends State<MessageBubble> {
             Align(
               alignment:
                   isFromMe ? Alignment.centerRight : Alignment.centerLeft,
-              child: CustomPaint(
-                key: _paintKey,
-                painter: MessageBubblePainter(
-                  color: color,
-                  gradient: classicGradient ??
-                      (isFromMe && !useGreenBubble && !isImageAttachment
-                          ? LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: useIos26
-                                  ? const [
-                                      Color(0xFF4EBAFF),
-                                      Color(0xFF0088FF),
-                                    ]
-                                  : const [
-                                      Color(0xFF00B7FF),
-                                      MessagesPalette.blue,
-                                    ],
-                            )
-                          : null),
-                  fixedGradient: useIos3 || useIos26,
-                  useIos3Shape: useIos3,
-                  useIos3Green: useIos3 && isFromMe && useGreenBubble,
-                  useIos26Shape: useIos26,
-                  scrollPosition: _scrollPosition,
-                  paintKey: _paintKey,
-                  screenHeight: MediaQuery.sizeOf(context).height,
-                  isFromMe: isFromMe,
-                  showTail: widget.showTail,
-                  shadowElevation:
-                      useIos3 && widget.shadowElevation < 2
-                          ? 2
-                          : widget.shadowElevation,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  right: showIos3FailureIcon ? 35 : 0,
                 ),
-                child: Container(
-                  constraints: BoxConstraints(
-                    minHeight: useIos26 ? 40 : 36,
-                    maxWidth: MediaQuery.sizeOf(context).width *
-                        (useIos26
-                            ? (280 / 402)
-                            : (useIos3 ? .84 : (274 / 375))),
-                  ),
-                  padding: isImageAttachment && !useIos3
-                      ? EdgeInsets.zero
-                      : isImageAttachment && useIos3
-                          ? const EdgeInsets.fromLTRB(4, 4, 4, 7)
-                          : EdgeInsets.symmetric(
-                              horizontal:
-                                  useIos26 ? 13 : (useIos3 ? 13 : 12),
-                              vertical: useIos26 ? 9 : (useIos3 ? 5 : 7),
-                            ),
-                  child: Align(
-                    alignment: Alignment.center,
-                    widthFactor: 1,
-                    heightFactor: 1,
-                    child: _MessageBubbleContent(
-                      message: message,
-                      renderedTextScale: renderedTextScale,
-                      foregroundColor: foregroundColor,
-                      useIos3: useIos3,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    CustomPaint(
+                      key: _paintKey,
+                      painter: MessageBubblePainter(
+                        color: color,
+                        gradient: classicGradient ??
+                            (isFromMe &&
+                                    !useGreenBubble &&
+                                    !isImageAttachment
+                                ? LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: useIos26
+                                        ? const [
+                                            Color(0xFF4EBAFF),
+                                            Color(0xFF0088FF),
+                                          ]
+                                        : const [
+                                            Color(0xFF00B7FF),
+                                            MessagesPalette.blue,
+                                          ],
+                                  )
+                                : null),
+                        fixedGradient: useIos3 || useIos26,
+                        useIos3Shape: useIos3,
+                        useIos3Green: useIos3 && isFromMe && useGreenBubble,
+                        useIos26Shape: useIos26,
+                        scrollPosition: _scrollPosition,
+                        paintKey: _paintKey,
+                        screenHeight: MediaQuery.sizeOf(context).height,
+                        isFromMe: isFromMe,
+                        showTail: widget.showTail,
+                        shadowElevation:
+                            useIos3 && widget.shadowElevation < 2
+                                ? 2
+                                : widget.shadowElevation,
+                      ),
+                      child: Container(
+                        constraints: BoxConstraints(
+                          minHeight: useIos26 ? 40 : 36,
+                          maxWidth: MediaQuery.sizeOf(context).width *
+                              (useIos26
+                                  ? (280 / 402)
+                                  : (useIos3 ? .84 : (274 / 375))),
+                        ),
+                        padding: isImageAttachment && !useIos3
+                            ? EdgeInsets.zero
+                            : isImageAttachment && useIos3
+                                ? const EdgeInsets.fromLTRB(7, 7, 7, 10)
+                                : EdgeInsets.symmetric(
+                                    horizontal: useIos26
+                                        ? 13
+                                        : (useIos3 ? 13 : 12),
+                                    vertical:
+                                        useIos26 ? 9 : (useIos3 ? 5 : 7),
+                                  ),
+                        child: Align(
+                          alignment: Alignment.center,
+                          widthFactor: 1,
+                          heightFactor: 1,
+                          child: _MessageBubbleContent(
+                            message: message,
+                            renderedTextScale: renderedTextScale,
+                            foregroundColor: foregroundColor,
+                            useIos3: useIos3,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                    if (showIos3FailureIcon)
+                      Positioned(
+                        right: -35,
+                        top: 0,
+                        bottom: 0,
+                        child: Center(
+                          child: CupertinoButton(
+                            minSize: 21,
+                            padding: EdgeInsets.zero,
+                            onPressed: widget.onRetry,
+                            child: const _Ios3FailureIcon(),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),
@@ -249,21 +281,35 @@ class _MessageBubbleState extends State<MessageBubble> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(
-                              CupertinoIcons.exclamationmark_circle_fill,
-                              size: 13,
-                              color: CupertinoColors.systemRed,
-                            ),
-                            const SizedBox(width: 4),
+                            if (!useIos3) ...[
+                              const Icon(
+                                CupertinoIcons.exclamationmark_circle_fill,
+                                size: 13,
+                                color: CupertinoColors.systemRed,
+                              ),
+                              const SizedBox(width: 4),
+                            ],
                             Text(
                               MessageStatusStrings.label(
                                 context,
                                 message.deliveryState,
                               ),
-                              style: const TextStyle(
-                                color: CupertinoColors.systemRed,
+                              style: TextStyle(
+                                color: useIos3
+                                    ? const Color(0xFFA70F24)
+                                    : CupertinoColors.systemRed,
                                 fontSize: 11,
-                                fontWeight: FontWeight.w400,
+                                fontWeight: useIos3
+                                    ? FontWeight.w700
+                                    : FontWeight.w400,
+                                shadows: useIos3
+                                    ? const [
+                                        Shadow(
+                                          color: Color(0xCCFFFFFF),
+                                          offset: Offset(0, 1),
+                                        ),
+                                      ]
+                                    : null,
                               ),
                             ),
                           ],
@@ -290,6 +336,82 @@ class _MessageBubbleState extends State<MessageBubble> {
   }
 }
 
+class _Ios3FailureIcon extends StatelessWidget {
+  const _Ios3FailureIcon();
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.square(
+        dimension: 21,
+        child: CustomPaint(painter: _Ios3FailureIconPainter()),
+      );
+}
+
+class _Ios3FailureIconPainter extends CustomPainter {
+  const _Ios3FailureIconPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final scale = size.width / 21;
+    canvas.save();
+    canvas.scale(scale, scale);
+    const center = Offset(10.3, 9.3);
+
+    canvas.drawCircle(
+      center,
+      8.5,
+      Paint()
+        ..color = const Color(0xFF707070)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, .65),
+    );
+    canvas.drawCircle(
+      center.translate(0, 1),
+      8.5,
+      Paint()..color = const Color(0x40000000),
+    );
+    canvas.drawCircle(center, 8.5, Paint()..color = CupertinoColors.white);
+    canvas.drawCircle(center, 7.5, Paint()..color = const Color(0xFFDE5463));
+
+    canvas.save();
+    canvas.clipPath(Path()..addOval(Rect.fromCircle(center: center, radius: 7.5)));
+    final lowerShade = Path()
+      ..moveTo(3.3, 10.93)
+      ..quadraticBezierTo(10.3, 5.8, 17.3, 10.93)
+      ..lineTo(17.8, 17.2)
+      ..lineTo(2.8, 17.2)
+      ..close();
+    canvas.drawPath(
+      lowerShade,
+      Paint()..color = const Color(0x80C02125),
+    );
+    canvas.restore();
+
+    final symbolShadow = Paint()
+      ..color = const Color(0x40000000)
+      ..strokeWidth = 1.4
+      ..strokeCap = StrokeCap.round;
+    final symbol = Paint()
+      ..color = CupertinoColors.white
+      ..strokeWidth = 1.4
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(
+      const Offset(10.3, 4.6),
+      const Offset(10.3, 10.8),
+      symbolShadow,
+    );
+    canvas.drawLine(
+      const Offset(10.3, 4.1),
+      const Offset(10.3, 10.3),
+      symbol,
+    );
+    canvas.drawCircle(const Offset(10.3, 13.55), 1, symbolShadow);
+    canvas.drawCircle(const Offset(10.3, 13.05), 1, symbol);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_Ios3FailureIconPainter oldDelegate) => false;
+}
+
 class _MessageBubbleContent extends StatelessWidget {
   const _MessageBubbleContent({
     required this.message,
@@ -311,7 +433,10 @@ class _MessageBubbleContent extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (attachment?.kind == MessageAttachmentKind.image)
-          _ImageAttachment(attachment: attachment!),
+          _ImageAttachment(
+            attachment: attachment!,
+            useIos3: useIos3,
+          ),
         if (attachment?.kind == MessageAttachmentKind.audio)
           _AudioAttachment(
             attachment: attachment!,
@@ -341,9 +466,13 @@ class _MessageBubbleContent extends StatelessWidget {
 }
 
 class _ImageAttachment extends StatelessWidget {
-  const _ImageAttachment({required this.attachment});
+  const _ImageAttachment({
+    required this.attachment,
+    required this.useIos3,
+  });
 
   final MessageAttachment attachment;
+  final bool useIos3;
 
   @override
   Widget build(BuildContext context) {
@@ -403,7 +532,9 @@ class _ImageAttachment extends StatelessWidget {
         ),
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
+        // The image curve stays concentric with the classic 19.5 pt bubble
+        // corner after accounting for its 7 pt media inset.
+        borderRadius: BorderRadius.circular(useIos3 ? 12.5 : 12),
         child: SizedBox(width: 220, height: 170, child: image),
       ),
     );
