@@ -1811,7 +1811,27 @@ class _Ios3NavigationButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = backShape ? 116.0 : 64.0;
+    const labelStyle = TextStyle(
+      color: CupertinoColors.white,
+      fontFamily: 'SF Pro Text',
+      fontSize: 13,
+      fontWeight: FontWeight.w600,
+      shadows: [
+        Shadow(
+          color: Color(0xC0203045),
+          offset: Offset(0, -1),
+        ),
+      ],
+    );
+    final labelPainter = TextPainter(
+      text: TextSpan(text: label, style: labelStyle),
+      maxLines: 1,
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout();
+    final width = backShape
+        ? (labelPainter.width + 28).clamp(92.0, 116.0).toDouble()
+        : (labelPainter.width + 22).clamp(48.0, 80.0).toDouble();
     return CupertinoButton(
       minSize: 34,
       padding: EdgeInsets.zero,
@@ -1828,18 +1848,7 @@ class _Ios3NavigationButton extends StatelessWidget {
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: CupertinoColors.white,
-                  fontFamily: 'SF Pro Text',
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  shadows: [
-                    Shadow(
-                      color: Color(0xC0203045),
-                      offset: Offset(0, -1),
-                    ),
-                  ],
-                ),
+                style: labelStyle,
               ),
             ),
           ),

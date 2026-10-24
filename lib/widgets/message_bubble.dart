@@ -832,12 +832,12 @@ class MessageBubblePainter extends CustomPainter {
       canvas.clipPath(bubble);
       final highlightRect = RRect.fromRectAndRadius(
         Rect.fromLTWH(
-          size.width * .055,
-          size.height * .015,
-          size.width * .89,
-          size.height * .28,
+          size.width * .015,
+          size.height * .005,
+          size.width * .97,
+          size.height * .17,
         ),
-        Radius.circular(size.height * .14),
+        Radius.circular(size.height * .085),
       );
       final glossPaint = Paint()
         ..shader = LinearGradient(
@@ -860,6 +860,20 @@ class MessageBubblePainter extends CustomPainter {
       canvas.drawPath(
         bubble,
         innerTint,
+      );
+      canvas.restore();
+      canvas.save();
+      canvas.clipPath(bubble);
+      canvas.clipRect(
+        Rect.fromLTWH(0, size.height * .72, size.width + 10, size.height * .3),
+      );
+      canvas.drawPath(
+        bubble.shift(const Offset(0, -.6)),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.2
+          ..color = const Color(0xA8FFFFFF)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, .65),
       );
       canvas.restore();
       canvas.drawPath(
