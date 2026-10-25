@@ -117,8 +117,12 @@ class _MessageBubbleState extends State<MessageBubble> {
     final Color color;
     if (isImageAttachment && !useIos3) {
       color = CupertinoColors.transparent;
-    } else if (useIos3 && isImageAttachment && isFromMe) {
-      color = const Color(0xFFB7DF4B);
+    } else if (useIos3 && isImageAttachment) {
+      color = isFromMe
+          ? (useGreenBubble
+              ? const Color(0xFF75BF42)
+              : const Color(0xFF83CAFF))
+          : const Color(0xFFD7D7D7);
     } else if (isFromMe) {
       color = useGreenBubble
           ? MessagesPalette.customBubbleGreen
@@ -201,6 +205,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                         fixedGradient: useIos3 || useIos26,
                         useIos3Shape: useIos3,
                         useIos3Green: useIos3 && isFromMe && useGreenBubble,
+                        ios3Media: useIos3 && isImageAttachment,
                         useIos26Shape: useIos26,
                         scrollPosition: _scrollPosition,
                         paintKey: _paintKey,
@@ -223,7 +228,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                         padding: isImageAttachment && !useIos3
                             ? EdgeInsets.zero
                             : isImageAttachment && useIos3
-                                ? const EdgeInsets.fromLTRB(7, 7, 7, 10)
+                                ? EdgeInsets.zero
                                 : EdgeInsets.symmetric(
                                     horizontal: useIos26
                                         ? 13
@@ -444,19 +449,26 @@ class _MessageBubbleContent extends StatelessWidget {
           ),
         if (message.text.isNotEmpty) ...[
           if (attachment != null) const SizedBox(height: 6),
-          Text(
-            message.text,
-            textAlign: TextAlign.left,
-            textWidthBasis: TextWidthBasis.longestLine,
-            textHeightBehavior: const TextHeightBehavior(
-              applyHeightToFirstAscent: false,
-              applyHeightToLastDescent: false,
-            ),
-            style: MessagesText.body(context).copyWith(
-              fontSize: (useIos3 ? 17 : 16) * renderedTextScale,
-              height: renderedTextScale > 1 ? 1 : (useIos3 ? 1.12 : 1.18),
-              letterSpacing: renderedTextScale > 1 ? 0 : -.15,
-              color: foregroundColor,
+          Padding(
+            padding: useIos3 &&
+                    attachment?.kind == MessageAttachmentKind.image
+                ? const EdgeInsets.fromLTRB(10, 0, 10, 8)
+                : EdgeInsets.zero,
+            child: Text(
+              message.text,
+              textAlign: TextAlign.left,
+              textWidthBasis: TextWidthBasis.longestLine,
+              textHeightBehavior: const TextHeightBehavior(
+                applyHeightToFirstAscent: false,
+                applyHeightToLastDescent: false,
+              ),
+              style: MessagesText.body(context).copyWith(
+                fontSize: (useIos3 ? 17 : 16) * renderedTextScale,
+                height:
+                    renderedTextScale > 1 ? 1 : (useIos3 ? 1.12 : 1.18),
+                letterSpacing: renderedTextScale > 1 ? 0 : -.15,
+                color: foregroundColor,
+              ),
             ),
           ),
         ],
@@ -532,10 +544,36 @@ class _ImageAttachment extends StatelessWidget {
         ),
       ),
       child: ClipRRect(
-        // The image curve stays concentric with the classic 19.5 pt bubble
-        // corner after accounting for its 7 pt media inset.
-        borderRadius: BorderRadius.circular(useIos3 ? 12.5 : 12),
-        child: SizedBox(width: 220, height: 170, child: image),
+        borderRadius: BorderRadius.circular(useIos3 ? 19.5 : 12),
+        child: SizedBox(
+          width: 220,
+          height: 170,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              image,
+              if (useIos3)
+                Positioned(
+                  left: 4,
+                  right: 4,
+                  top: 3,
+                  height: 20,
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(15),
+                        gradient: const LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Color(0xCFFFFFFF), Color(0x00FFFFFF)],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -791,6 +829,7 @@ class MessageBubblePainter extends CustomPainter {
     required this.fixedGradient,
     required this.useIos3Shape,
     required this.useIos3Green,
+    required this.ios3Media,
     required this.useIos26Shape,
     required this.scrollPosition,
     required this.paintKey,
@@ -807,6 +846,7 @@ class MessageBubblePainter extends CustomPainter {
   final bool fixedGradient;
   final bool useIos3Shape;
   final bool useIos3Green;
+  final bool ios3Media;
   final bool useIos26Shape;
   final ScrollPosition? scrollPosition;
   final GlobalKey paintKey;
@@ -952,7 +992,7 @@ class MessageBubblePainter extends CustomPainter {
       );
     }
     canvas.drawPath(bubble, paint);
-    if (useIos3Shape) {
+    if (useIos3Shape && !ios3Media) {
       canvas.save();
       canvas.clipPath(bubble);
       final highlightRect = RRect.fromRectAndRadius(
@@ -1025,6 +1065,7 @@ class MessageBubblePainter extends CustomPainter {
       oldDelegate.fixedGradient != fixedGradient ||
       oldDelegate.useIos3Shape != useIos3Shape ||
       oldDelegate.useIos3Green != useIos3Green ||
+      oldDelegate.ios3Media != ios3Media ||
       oldDelegate.useIos26Shape != useIos26Shape ||
       oldDelegate.scrollPosition != scrollPosition ||
       oldDelegate.paintKey != paintKey ||

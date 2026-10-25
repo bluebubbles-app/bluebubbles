@@ -365,6 +365,17 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
     if (mounted) setState(() {});
   }
 
+  Future<void> _openIos3About() async {
+    HapticFeedback.selectionClick();
+    await Navigator.of(context).push(
+      CupertinoPageRoute<void>(
+        builder: (_) => _Ios3StatsScreen(
+          conversations: widget.conversations,
+        ),
+      ),
+    );
+  }
+
   Future<void> _retryPhoneMessages() async {
     try {
       await widget.onReloadPhoneMessages();
@@ -802,7 +813,11 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                 padding: EdgeInsets.only(
                   bottom: _selectingConversations
                       ? 96
-                      : (useIos26 ? 104 : 28),
+                      : (useIos26
+                          ? 104
+                          : useIos3
+                              ? 58 + MediaQuery.paddingOf(context).bottom
+                              : 28),
                 ),
               ),
                         ],
@@ -815,7 +830,8 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
             Positioned(
               left: 16,
               right: 16,
-              bottom: MediaQuery.paddingOf(context).bottom + 12,
+              bottom: MediaQuery.paddingOf(context).bottom +
+                  (useIos3 ? 48 : 12),
               child: ValueListenableBuilder<SmsSyncProgress>(
                 valueListenable: widget.syncProgress,
                 builder: (context, progress, _) => IgnorePointer(
@@ -842,6 +858,17 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                   searchController: _searchController,
                   onSearchChanged: _onSearchChanged,
                   onCompose: _composeNewMessage,
+                ),
+              ),
+            if (useIos3 && !_selectingConversations)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: _Ios3ListBottomBar(
+                  bottomPadding: MediaQuery.paddingOf(context).bottom,
+                  onAbout: _openIos3About,
+                  onSettings: _openSettings,
                 ),
               ),
             if (_selectingConversations)
@@ -916,16 +943,6 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                     child: Text(
                       _selectingConversations ? 'Done' : 'Edit',
                     ),
-                  ),
-                ),
-                Positioned(
-                  right: 50,
-                  child: _Ios3ListNavigationButton(
-                    key: const ValueKey('open-settings-button'),
-                    width: 38,
-                    onPressed:
-                        _selectingConversations ? null : _openSettings,
-                    child: const Icon(CupertinoIcons.ellipsis, size: 18),
                   ),
                 ),
                 Positioned(
@@ -1102,6 +1119,324 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
       ),
     );
   }
+}
+
+class _Ios3ListBottomBar extends StatelessWidget {
+  const _Ios3ListBottomBar({
+    required this.bottomPadding,
+    required this.onAbout,
+    required this.onSettings,
+  });
+
+  final double bottomPadding;
+  final VoidCallback onAbout;
+  final VoidCallback onSettings;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        height: 40 + bottomPadding,
+        padding: EdgeInsets.fromLTRB(6, 5, 6, 5 + bottomPadding),
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF9FB3CA), Color(0xFF6D87A6)],
+          ),
+          border: Border(
+            top: BorderSide(color: Color(0xFF405A78), width: 1),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _Ios3FooterButton(
+              key: const ValueKey('ios3-about-button'),
+              label: 'About',
+              onPressed: onAbout,
+            ),
+            _Ios3FooterButton(
+              key: const ValueKey('open-settings-button'),
+              label: 'Settings',
+              onPressed: onSettings,
+            ),
+          ],
+        ),
+      );
+}
+
+class _Ios3FooterButton extends StatelessWidget {
+  const _Ios3FooterButton({
+    super.key,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => CupertinoButton(
+        minSize: 28,
+        padding: EdgeInsets.zero,
+        onPressed: onPressed,
+        child: Container(
+          height: 26,
+          constraints: const BoxConstraints(minWidth: 56),
+          padding: const EdgeInsets.symmetric(horizontal: 9),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(4),
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF7897BA), Color(0xFF45678E)],
+            ),
+            border: Border.all(color: const Color(0xFF294767), width: 1),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x99FFFFFF),
+                blurRadius: .5,
+                offset: Offset(0, 1),
+              ),
+            ],
+          ),
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: CupertinoColors.white,
+              fontFamily: 'SF Pro Text',
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              shadows: [
+                Shadow(color: Color(0xAA20344C), offset: Offset(0, -1)),
+              ],
+            ),
+          ),
+        ),
+      );
+}
+
+class _Ios3StatsScreen extends StatelessWidget {
+  const _Ios3StatsScreen({required this.conversations});
+
+  final List<Conversation> conversations;
+
+  @override
+  Widget build(BuildContext context) {
+    var sent = 0;
+    var received = 0;
+    Conversation? topContact;
+    for (final conversation in conversations) {
+      for (final message in conversation.messages) {
+        if (message.isFromMe) {
+          sent++;
+        } else {
+          received++;
+        }
+      }
+      final currentTopContact = topContact;
+      if (currentTopContact == null ||
+          conversation.messages.length > currentTopContact.messages.length) {
+        topContact = conversation;
+      }
+    }
+    final total = sent + received;
+    final topContactName = topContact?.title ?? '—';
+    final topContactCount = topContact?.messages.length ?? 0;
+
+    return CupertinoTheme(
+      data: const CupertinoThemeData(brightness: Brightness.light),
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle.dark,
+        child: CupertinoPageScaffold(
+          backgroundColor: const Color(0xFFDDE3ED),
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                Container(
+                  height: 44,
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0xFFB4C7DD), Color(0xFF526F94)],
+                    ),
+                    border: Border(
+                      bottom: BorderSide(color: Color(0xFF344B67)),
+                    ),
+                  ),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      const Text(
+                        'SMS Stats',
+                        style: TextStyle(
+                          color: CupertinoColors.white,
+                          fontFamily: 'SF Pro Text',
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          shadows: [
+                            Shadow(
+                              color: Color(0xAA26384E),
+                              offset: Offset(0, -1),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Positioned(
+                        left: 6,
+                        child: _Ios3ListNavigationButton(
+                          width: 58,
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('About'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Stack(
+                    children: [
+                      const Positioned.fill(
+                        child: CustomPaint(
+                          painter: _Ios3StatsBackgroundPainter(),
+                        ),
+                      ),
+                      ListView(
+                        padding: const EdgeInsets.fromLTRB(7, 12, 7, 24),
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.fromLTRB(6, 0, 6, 5),
+                            child: Text(
+                              'General stats',
+                              style: TextStyle(
+                                color: Color(0xFF4A4A4A),
+                                fontFamily: 'SF Pro Text',
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                          _Ios3StatsGroup(
+                            rows: [
+                              _Ios3StatsRowData('Total', '$total'),
+                              _Ios3StatsRowData('- Sent', '$sent'),
+                              _Ios3StatsRowData('- Received', '$received'),
+                              _Ios3StatsRowData('- SMS', '$total'),
+                              const _Ios3StatsRowData('- iMessage', '0'),
+                              _Ios3StatsRowData(
+                                'Top Contact',
+                                '$topContactCount messages',
+                              ),
+                              _Ios3StatsRowData('- Name', topContactName),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Ios3StatsRowData {
+  const _Ios3StatsRowData(this.label, this.value);
+
+  final String label;
+  final String value;
+}
+
+class _Ios3StatsGroup extends StatelessWidget {
+  const _Ios3StatsGroup({required this.rows});
+
+  final List<_Ios3StatsRowData> rows;
+
+  @override
+  Widget build(BuildContext context) => ClipRRect(
+        borderRadius: BorderRadius.circular(9),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8F8F8),
+            border: Border.all(color: const Color(0xFF9A9A9A)),
+          ),
+          child: Column(
+            children: [
+              for (var index = 0; index < rows.length; index++) ...[
+                SizedBox(
+                  height: 40,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            rows[index].label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: CupertinoColors.black,
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Flexible(
+                          child: Text(
+                            rows[index].value,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(
+                              color: Color(0xFF466783),
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (index != rows.length - 1)
+                  const SizedBox(
+                    height: .5,
+                    child: ColoredBox(color: Color(0xFFB8B8B8)),
+                  ),
+              ],
+            ],
+          ),
+        ),
+      );
+}
+
+class _Ios3StatsBackgroundPainter extends CustomPainter {
+  const _Ios3StatsBackgroundPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()..color = const Color(0xFFDDE3ED),
+    );
+    final stripe = Paint()
+      ..color = const Color(0x18FFFFFF)
+      ..strokeWidth = 1;
+    for (var x = 0.0; x < size.width; x += 4) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), stripe);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_Ios3StatsBackgroundPainter oldDelegate) => false;
 }
 
 class _Ios26BottomBar extends StatelessWidget {
@@ -3216,7 +3551,20 @@ class ConversationRow extends StatelessWidget {
                     child: _SelectionCircle(selected: selected),
                   )
                 else
-                  const SizedBox(width: 27),
+                  SizedBox(
+                    width: 27,
+                    child: Center(
+                      child: conversation.unreadCount > 0
+                          ? const DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: MessagesPalette.blue,
+                                shape: BoxShape.circle,
+                              ),
+                              child: SizedBox(width: 11, height: 11),
+                            )
+                          : null,
+                    ),
+                  ),
                 Expanded(
                   child: SizedBox(
                     height: rowHeight,
@@ -3255,7 +3603,7 @@ class ConversationRow extends StatelessWidget {
                                       ),
                                       maxLines: 1,
                                       style: const TextStyle(
-                                        color: Color(0xFF3478B9),
+                                        color: Color(0xFF508CE0),
                                         fontFamily: 'SF Pro Text',
                                         fontSize: 15,
                                         height: 1,
