@@ -912,7 +912,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
               alignment: Alignment.center,
               children: [
                 Transform.translate(
-                  offset: const Offset(0, 1),
+                  offset: const Offset(0, ios3TopBarVerticalOffset),
                   child: Text(
                     _selectingConversations
                         ? '${_selectedConversationIds.length} Selected'
@@ -1301,7 +1301,7 @@ class _Ios3StatsScreenState extends State<_Ios3StatsScreen> {
                     alignment: Alignment.center,
                     children: [
                       Transform.translate(
-                        offset: const Offset(0, 1),
+                        offset: const Offset(0, ios3TopBarVerticalOffset),
                         child: const Text(
                           'SMS Stats',
                           style: ios3TopBarTitleStyle,
@@ -2028,7 +2028,10 @@ class _NewMessageRecipientScreenState
                       left: 108,
                       right: 108,
                       child: Transform.translate(
-                        offset: Offset(0, useIos3 ? 1 : 0),
+                        offset: Offset(
+                          0,
+                          useIos3 ? ios3TopBarVerticalOffset : 0,
+                        ),
                         child: Center(
                           child: Text(
                             MessageStatusStrings.newMessage(context),

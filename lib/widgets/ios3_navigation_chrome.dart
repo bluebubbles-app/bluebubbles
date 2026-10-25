@@ -1,8 +1,10 @@
 import 'package:flutter/cupertino.dart';
 
-const double ios3TopBarHeight = 38;
-const double ios3TopBarControlCenterY = 20;
+const double ios3TopBarHeight = 45;
+const double ios3TopBarControlCenterY = 22.5;
 const double ios3TopBarButtonHeight = 24;
+const double ios3TopBarVerticalOffset =
+    ios3TopBarControlCenterY - (ios3TopBarHeight / 2);
 
 const BoxDecoration ios3TopBarDecoration = BoxDecoration(
   gradient: LinearGradient(
@@ -63,7 +65,7 @@ class Ios3TopBarGloss extends StatelessWidget {
                 left: 0,
                 right: 0,
                 top: 1,
-                height: 20,
+                height: ios3TopBarControlCenterY - 1,
                 child: ColoredBox(color: Color(0x14FFFFFF)),
               ),
               Positioned(

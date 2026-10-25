@@ -784,7 +784,7 @@ class _ConversationScreenState extends State<ConversationScreen>
                                   : (useIos26
                                               ? 106
                                               : useIos3
-                                                  ? 50
+                                                  ? ios3TopBarHeight + 12
                                                   : 92) +
                                           topCompensation,
                               14,
@@ -1613,7 +1613,10 @@ class _ConversationHeader extends StatelessWidget {
               Positioned.fill(
                 child: IgnorePointer(
                   child: Transform.translate(
-                    offset: Offset(screenCenterCorrection, 1),
+                    offset: Offset(
+                      screenCenterCorrection,
+                      ios3TopBarVerticalOffset,
+                    ),
                     child: Center(
                       child: SizedBox(
                         width: 130,
@@ -2216,7 +2219,7 @@ class _SelectionHeader extends StatelessWidget {
           alignment: Alignment.center,
           children: [
             Transform.translate(
-              offset: const Offset(0, 1),
+              offset: const Offset(0, ios3TopBarVerticalOffset),
               child: Text(
                 '$selectionCount Selected',
                 style: ios3TopBarTitleStyle,

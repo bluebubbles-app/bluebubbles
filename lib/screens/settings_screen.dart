@@ -723,7 +723,7 @@ class _Ios3SettingsHeader extends StatelessWidget {
           alignment: Alignment.center,
           children: [
             Transform.translate(
-              offset: const Offset(0, 1),
+              offset: const Offset(0, ios3TopBarVerticalOffset),
               child: const Text(
                 'Settings',
                 style: ios3TopBarTitleStyle,
