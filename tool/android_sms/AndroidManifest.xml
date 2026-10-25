@@ -40,9 +40,10 @@
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme" />
             <!-- Flutter tooling only discovers launch activities declared on
-                 an <activity>. Variant overlays remove this filter from the
-                 merged APK, where the selectable aliases remain the only
-                 launcher entries. -->
+                 an <activity>. Variant overlays data-qualify this filter so
+                 Flutter can still start MainActivity explicitly without
+                 exposing an extra Home Screen icon beside the selectable
+                 aliases. -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

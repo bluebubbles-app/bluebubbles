@@ -4,9 +4,17 @@
         <activity android:name="io.github.bluebubblesapp.bluebubbles.MainActivity">
             <!-- The canonical manifest keeps this filter solely so
                  `flutter run` can resolve MainActivity before Gradle merges
-                 manifests. The installed app launches through one of the
-                 selectable activity aliases instead. -->
+                 manifests. Replace it with a data-qualified launcher filter:
+                 Flutter still discovers MainActivity and starts it explicitly,
+                 while Android's data-less launcher intent does not expose an
+                 extra Home Screen icon. The selectable aliases remain the only
+                 visible launcher entries. -->
             <intent-filter tools:node="removeAll" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <data android:scheme="bluebubbles-flutter-debug" />
+            </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.SENDTO" />
                 <category android:name="android.intent.category.DEFAULT" />
