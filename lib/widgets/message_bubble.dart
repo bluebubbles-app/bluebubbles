@@ -1038,21 +1038,70 @@ class MessageBubblePainter extends CustomPainter {
       const lowerInset = 1.4;
       const cornerExtent = 9.0;
       final lowerY = size.height - 1.4;
-      lowerReflection
-        ..moveTo(lowerInset, lowerY - cornerExtent)
-        ..quadraticBezierTo(
-          lowerInset,
-          lowerY,
-          lowerInset + cornerExtent,
-          lowerY,
-        )
-        ..lineTo(size.width - lowerInset - cornerExtent, lowerY)
-        ..quadraticBezierTo(
-          size.width - lowerInset,
-          lowerY,
-          size.width - lowerInset,
-          lowerY - cornerExtent,
-        );
+      if (!showTail) {
+        lowerReflection
+          ..moveTo(lowerInset, lowerY - cornerExtent)
+          ..quadraticBezierTo(
+            lowerInset,
+            lowerY,
+            lowerInset + cornerExtent,
+            lowerY,
+          )
+          ..lineTo(size.width - lowerInset - cornerExtent, lowerY)
+          ..quadraticBezierTo(
+            size.width - lowerInset,
+            lowerY,
+            size.width - lowerInset,
+            lowerY - cornerExtent,
+          );
+      } else {
+        final direction = isFromMe ? 1.0 : -1.0;
+        final tailEdge = isFromMe ? size.width : 0.0;
+        double tailX(double distance) => tailEdge + distance * direction;
+        if (isFromMe) {
+          lowerReflection
+            ..moveTo(lowerInset, lowerY - cornerExtent)
+            ..quadraticBezierTo(
+              lowerInset,
+              lowerY,
+              lowerInset + cornerExtent,
+              lowerY,
+            );
+        } else {
+          lowerReflection
+            ..moveTo(size.width - lowerInset, lowerY - cornerExtent)
+            ..quadraticBezierTo(
+              size.width - lowerInset,
+              lowerY,
+              size.width - lowerInset - cornerExtent,
+              lowerY,
+            );
+        }
+        lowerReflection
+          ..lineTo(tailX(-12), lowerY)
+          ..quadraticBezierTo(
+            tailX(-8),
+            lowerY,
+            tailX(-6.15),
+            size.height - 6.1,
+          )
+          ..cubicTo(
+            tailX(-3.35),
+            size.height - 3.75,
+            tailX(.3),
+            size.height - 2.3,
+            tailX(4.3),
+            size.height - 2.3,
+          )
+          ..cubicTo(
+            tailX(6.3),
+            size.height - 2.3,
+            tailX(8.25),
+            size.height - 2.65,
+            tailX(10),
+            size.height - 3.35,
+          );
+      }
       canvas.drawPath(
         lowerReflection,
         Paint()
