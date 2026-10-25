@@ -32,6 +32,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _transferring = false;
   bool _smsChanging = false;
   bool _diagnosing = false;
+  bool _changingAppIcon = false;
 
   Future<void> _changeSmsMode() async {
     if (_smsChanging) return;
@@ -134,6 +135,66 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     } finally {
       if (mounted) setState(() => _diagnosing = false);
+    }
+  }
+
+  Future<void> _changeAppIcon() async {
+    if (_changingAppIcon) return;
+    final settings = AppSettingsScope.of(context);
+    final selected = await showCupertinoModalPopup<AppIconStyle>(
+      context: context,
+      builder: (context) => CupertinoActionSheet(
+        title: const Text('App Icon'),
+        message: const Text(
+          'Choose the icon shown on your Home Screen. The launcher may take '
+          'a few seconds to refresh.',
+        ),
+        actions: AppIconStyle.values
+            .map(
+              (style) => CupertinoActionSheetAction(
+                isDefaultAction: style == settings.appIconStyle,
+                onPressed: () => Navigator.of(context).pop(style),
+                child: Row(
+                  children: [
+                    _AppIconPreview(style: style, size: 48),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        style.label,
+                        textAlign: TextAlign.left,
+                      ),
+                    ),
+                    if (style == settings.appIconStyle)
+                      const Icon(
+                        CupertinoIcons.check_mark_circled_solid,
+                        size: 22,
+                      ),
+                  ],
+                ),
+              ),
+            )
+            .toList(),
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+      ),
+    );
+    if (selected == null || selected == settings.appIconStyle || !mounted) {
+      return;
+    }
+
+    final previous = settings.appIconStyle;
+    setState(() => _changingAppIcon = true);
+    try {
+      await settings.setAppIconStyle(selected);
+      await widget.smsController.setLauncherIcon(selected.name);
+      await HapticFeedback.mediumImpact();
+    } catch (error) {
+      await settings.setAppIconStyle(previous);
+      if (mounted) await _showError('Icon Change Failed', error);
+    } finally {
+      if (mounted) setState(() => _changingAppIcon = false);
     }
   }
 
@@ -327,6 +388,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     }
                   },
                 ),
+                _AppIconChoiceRow(
+                  style: settings.appIconStyle,
+                  changing: _changingAppIcon,
+                  onPressed: _changeAppIcon,
+                ),
                 _SliderSetting(
                   key: const ValueKey('header-transparency-setting'),
                   title: 'Header Transparency',
@@ -500,6 +566,91 @@ class _SettingsScreenState extends State<SettingsScreen> {
         SentBubbleColor.blue => 'Blue',
         SentBubbleColor.green => 'Green',
       };
+}
+
+extension on AppIconStyle {
+  String get label => switch (this) {
+        AppIconStyle.modernBlue => 'Modern Blue',
+        AppIconStyle.modernGreen => 'Modern Green',
+        AppIconStyle.classicBlue => 'Classic Blue',
+        AppIconStyle.classicGreen => 'Classic Green',
+      };
+
+  String get assetPath => switch (this) {
+        AppIconStyle.modernBlue => 'assets/icon/app-icons/modern_blue.png',
+        AppIconStyle.modernGreen => 'assets/icon/app-icons/modern_green.png',
+        AppIconStyle.classicBlue => 'assets/icon/app-icons/classic_blue.png',
+        AppIconStyle.classicGreen => 'assets/icon/app-icons/classic_green.png',
+      };
+}
+
+class _AppIconPreview extends StatelessWidget {
+  const _AppIconPreview({required this.style, required this.size});
+
+  final AppIconStyle style;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(size * .2237),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x26000000),
+              blurRadius: 5,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(size * .2237),
+          child: Image.asset(
+            style.assetPath,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            filterQuality: FilterQuality.medium,
+            cacheWidth:
+                (size * MediaQuery.devicePixelRatioOf(context)).round(),
+            cacheHeight:
+                (size * MediaQuery.devicePixelRatioOf(context)).round(),
+          ),
+        ),
+      );
+}
+
+class _AppIconChoiceRow extends StatelessWidget {
+  const _AppIconChoiceRow({
+    required this.style,
+    required this.changing,
+    required this.onPressed,
+  });
+
+  final AppIconStyle style;
+  final bool changing;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => CupertinoListTile(
+        key: const ValueKey('app-icon-setting'),
+        leading: _AppIconPreview(style: style, size: 32),
+        title: Text(
+          'App Icon',
+          style: TextStyle(color: MessagesPalette.label(context)),
+        ),
+        additionalInfo: changing
+            ? const CupertinoActivityIndicator(radius: 8)
+            : Text(
+                style.label,
+                style: TextStyle(
+                  color: MessagesPalette.secondaryLabel(context),
+                ),
+              ),
+        trailing: const CupertinoListTileChevron(),
+        onTap: changing ? null : onPressed,
+      );
 }
 
 class _SliderSetting extends StatelessWidget {

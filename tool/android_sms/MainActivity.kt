@@ -6,6 +6,7 @@ import android.app.AppOpsManager
 import android.app.role.RoleManager
 import android.content.ActivityNotFoundException
 import android.content.ClipData
+import android.content.ComponentName
 import android.content.ContentResolver
 import android.content.ContentValues
 import android.content.Intent
@@ -48,7 +49,7 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val CHANNEL = "bluebubbles/sms"
         private const val TAG = "BlueBubblesSms"
-        private const val NATIVE_BUILD = "2026-10-19-full-gallery-picker-v1"
+        private const val NATIVE_BUILD = "2026-10-25-alternate-launcher-icons-v1"
         private const val ROLE_REQUEST = 4701
         private const val PERMISSION_REQUEST = 4702
         private const val MEDIA_PERMISSION_REQUEST = 4703
@@ -134,6 +135,7 @@ class MainActivity : FlutterActivity() {
     private fun handleMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "getState" -> result.success(currentState())
+            "setLauncherIcon" -> setLauncherIcon(call, result)
             "consumeNotificationThread" -> {
                 result.success(pendingNotificationThreadId)
                 pendingNotificationThreadId = null
@@ -176,6 +178,46 @@ class MainActivity : FlutterActivity() {
     private fun notificationThreadId(intent: Intent?): String? =
         intent?.getStringExtra(MessageNotifier.EXTRA_THREAD_ID)
             ?.takeIf { it.isNotBlank() }
+
+    private fun setLauncherIcon(call: MethodCall, result: MethodChannel.Result) {
+        val requested = call.argument<String>("icon")
+        val aliases = mapOf(
+            "modernBlue" to ComponentName(this, "$packageName.LauncherModernBlue"),
+            "modernGreen" to ComponentName(this, "$packageName.LauncherModernGreen"),
+            "classicBlue" to ComponentName(this, "$packageName.LauncherClassicBlue"),
+            "classicGreen" to ComponentName(this, "$packageName.LauncherClassicGreen"),
+        )
+        val selected = aliases[requested]
+        if (selected == null) {
+            result.error("invalid_launcher_icon", "Unknown launcher icon: $requested", null)
+            return
+        }
+
+        try {
+            packageManager.setComponentEnabledSetting(
+                selected,
+                PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                PackageManager.DONT_KILL_APP,
+            )
+            aliases.values
+                .filterNot { it == selected }
+                .forEach { component ->
+                    packageManager.setComponentEnabledSetting(
+                        component,
+                        PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                        PackageManager.DONT_KILL_APP,
+                    )
+                }
+            result.success(true)
+        } catch (error: Exception) {
+            Log.e(TAG, "Unable to change launcher icon", error)
+            result.error(
+                "launcher_icon_failed",
+                error.message ?: "Android could not change the launcher icon.",
+                null,
+            )
+        }
+    }
 
     private fun currentState(): Map<String, Boolean> = mapOf(
         "supported" to isSmsRoleAvailable(),

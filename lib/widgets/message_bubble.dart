@@ -939,14 +939,8 @@ class MessageBubblePainter extends CustomPainter {
     if (useIos3Shape) {
       canvas.drawShadow(
         bubble.shift(const Offset(0, 1)),
-        CupertinoColors.black.withValues(alpha: .24),
-        2,
-        true,
-      );
-      canvas.drawShadow(
-        bubble.shift(const Offset(0, .5)),
-        CupertinoColors.black.withValues(alpha: .24),
-        .5,
+        CupertinoColors.black.withValues(alpha: .18),
+        1.5,
         true,
       );
     } else if (shadowElevation > 0) {
@@ -1019,9 +1013,7 @@ class MessageBubblePainter extends CustomPainter {
         Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.5
-          ..color = isFromMe
-              ? const Color(0xFF1B2D5E)
-              : const Color(0xFF8D8D8D),
+          ..color = const Color(0xFF8D8D8D).withValues(alpha: .9),
       );
     }
   }

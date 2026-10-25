@@ -7,6 +7,8 @@ project_root="$(cd "$script_dir/.." && pwd)"
 manifest="$project_root/android/app/src/main/AndroidManifest.xml"
 native_source="$script_dir/android_sms"
 kotlin_target="$project_root/android/app/src/main/kotlin/io/github/bluebubblesapp/bluebubbles"
+icon_source="$project_root/assets/icon/app-icons"
+icon_target="$project_root/android/app/src/main/res/drawable-nodpi"
 vendor_source="$script_dir/vendor/android-smsmms"
 vendor_target="$project_root/android/android-smsmms"
 
@@ -51,6 +53,15 @@ cp "$native_source/BlueBubblesMmsSentReceiver.kt" \
 cp "$native_source/RespondViaMessageService.kt" \
   "$kotlin_target/RespondViaMessageService.kt"
 cp "$native_source/SmsSendCompat.kt" "$kotlin_target/SmsSendCompat.kt"
+
+# Keep each user-selectable launcher icon as the exact supplied square
+# artwork. Android applies the device launcher mask; Flutter uses the same
+# files for the iOS-shaped previews in Settings.
+mkdir -p "$icon_target"
+cp "$icon_source/modern_blue.png" "$icon_target/app_icon_modern_blue.png"
+cp "$icon_source/modern_green.png" "$icon_target/app_icon_modern_green.png"
+cp "$icon_source/classic_blue.png" "$icon_target/app_icon_classic_blue.png"
+cp "$icon_source/classic_green.png" "$icon_target/app_icon_classic_green.png"
 
 # Android does not expose a high-level MMS composer. Bundle the modernized
 # transport used by QUIK for carrier-aware image and audio sending.

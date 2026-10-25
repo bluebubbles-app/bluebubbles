@@ -99,6 +99,14 @@ class AndroidSmsController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setLauncherIcon(String icon) async {
+    if (kIsWeb || !Platform.isAndroid) return;
+    await _channel.invokeMethod<bool>(
+      'setLauncherIcon',
+      <String, Object?>{'icon': icon},
+    );
+  }
+
   Future<bool> requestDefaultAndPermissions() async {
     if (kIsWeb || !Platform.isAndroid) return false;
     busy = true;
