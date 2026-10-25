@@ -82,6 +82,7 @@ class _ConversationScreenState extends State<ConversationScreen>
   Timer? _providerRefreshDebounce;
   Timer? _sendingStatePoller;
   bool _sendingOutgoingMessage = false;
+  bool _showSendingProgress = false;
   late int _lastMessagesChangedRevision;
 
   @override
@@ -101,6 +102,7 @@ class _ConversationScreenState extends State<ConversationScreen>
     _lastMessagesChangedRevision = widget.messagesChangedRevision.value;
     widget.messagesChangedRevision.addListener(_handleProviderMessagesChanged);
     _sendingOutgoingMessage = _hasPendingOutgoingMessage;
+    _showSendingProgress = _sendingOutgoingMessage;
     if (_sendingOutgoingMessage) _startSendingStatePoller();
     unawaited(_loadMessages(showLoading: !widget.messagesPreloaded));
   }
@@ -407,8 +409,12 @@ class _ConversationScreenState extends State<ConversationScreen>
   void _refreshSendingState() {
     if (!mounted) return;
     final isSending = _hasPendingOutgoingMessage;
-    if (isSending != _sendingOutgoingMessage) {
-      setState(() => _sendingOutgoingMessage = isSending);
+    if (isSending != _sendingOutgoingMessage ||
+        (isSending && !_showSendingProgress)) {
+      setState(() {
+        _sendingOutgoingMessage = isSending;
+        if (isSending) _showSendingProgress = true;
+      });
     }
     if (isSending) {
       _startSendingStatePoller();
@@ -416,6 +422,11 @@ class _ConversationScreenState extends State<ConversationScreen>
       _sendingStatePoller?.cancel();
       _sendingStatePoller = null;
     }
+  }
+
+  void _handleSendingProgressCompleted() {
+    if (!mounted || _sendingOutgoingMessage || !_showSendingProgress) return;
+    setState(() => _showSendingProgress = false);
   }
 
   Future<void> _retryFailedMessage(ChatMessage message) async {
@@ -995,7 +1006,10 @@ class _ConversationScreenState extends State<ConversationScreen>
                             )
                           : _ConversationHeader(
                               conversation: widget.conversation,
-                               isSending: _sendingOutgoingMessage,
+                              isSending: _sendingOutgoingMessage,
+                              showSendingProgress: _showSendingProgress,
+                              onSendingProgressCompleted:
+                                  _handleSendingProgressCompleted,
                               topCompensation: topCompensation,
                               backUnreadCount: widget.allConversations
                                   .where(
@@ -1394,6 +1408,8 @@ class _ConversationHeader extends StatelessWidget {
   const _ConversationHeader({
     required this.conversation,
     required this.isSending,
+    required this.showSendingProgress,
+    required this.onSendingProgressCompleted,
     required this.topCompensation,
     required this.backUnreadCount,
     required this.onCall,
@@ -1403,6 +1419,8 @@ class _ConversationHeader extends StatelessWidget {
 
   final Conversation conversation;
   final bool isSending;
+  final bool showSendingProgress;
+  final VoidCallback onSendingProgressCompleted;
   final double topCompensation;
   final int backUnreadCount;
   final VoidCallback onCall;
@@ -1596,32 +1614,36 @@ class _ConversationHeader extends StatelessWidget {
                   onPressed: () => Navigator.of(context).maybePop(),
                 ),
               ),
-              Positioned(
-                left: 128,
-                right: 68,
+              Positioned.fill(
                 child: Center(
-                  child: isSending
-                      ? const _Ios3SendingProgress()
-                      : Text(
-                          conversation.title,
-                          key: const ValueKey('conversation-contact-name'),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: CupertinoColors.white,
-                            fontFamily: 'SF Pro Text',
-                            fontSize: 20,
-                            height: 1,
-                            fontWeight: FontWeight.w700,
-                            shadows: [
-                              Shadow(
-                                color: Color(0xAA26384E),
-                                offset: Offset(0, -1),
-                              ),
-                            ],
+                  child: SizedBox(
+                    width: 130,
+                    child: showSendingProgress
+                        ? _Ios3SendingProgress(
+                            isSending: isSending,
+                            onCompleted: onSendingProgressCompleted,
+                          )
+                        : Text(
+                            conversation.title,
+                            key: const ValueKey('conversation-contact-name'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: CupertinoColors.white,
+                              fontFamily: 'SF Pro Text',
+                              fontSize: 20,
+                              height: 1,
+                              fontWeight: FontWeight.w700,
+                              shadows: [
+                                Shadow(
+                                  color: Color(0xAA26384E),
+                                  offset: Offset(0, -1),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
+                  ),
                 ),
               ),
               Positioned(
@@ -1847,7 +1869,13 @@ class _ConversationHeader extends StatelessWidget {
 }
 
 class _Ios3SendingProgress extends StatefulWidget {
-  const _Ios3SendingProgress();
+  const _Ios3SendingProgress({
+    required this.isSending,
+    required this.onCompleted,
+  });
+
+  final bool isSending;
+  final VoidCallback onCompleted;
 
   @override
   State<_Ios3SendingProgress> createState() => _Ios3SendingProgressState();
@@ -1855,10 +1883,69 @@ class _Ios3SendingProgress extends StatefulWidget {
 
 class _Ios3SendingProgressState extends State<_Ios3SendingProgress>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 8),
-  )..forward();
+  late final AnimationController _controller = AnimationController(vsync: this);
+  int _animationGeneration = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.isSending) {
+      _animateWaiting();
+    } else {
+      _animateCompletion();
+    }
+  }
+
+  @override
+  void didUpdateWidget(_Ios3SendingProgress oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isSending == widget.isSending) return;
+    if (widget.isSending) {
+      _animateWaiting();
+    } else {
+      _animateCompletion();
+    }
+  }
+
+  void _animateWaiting() {
+    _animationGeneration++;
+    if (_controller.value > .82) _controller.value = 0;
+    final milliseconds = ((.82 - _controller.value).abs() * 1400)
+        .round()
+        .clamp(180, 1200)
+        .toInt();
+    unawaited(
+      _controller.animateTo(
+        .82,
+        duration: Duration(milliseconds: milliseconds),
+        curve: Curves.easeOutCubic,
+      ),
+    );
+  }
+
+  void _animateCompletion() {
+    final generation = ++_animationGeneration;
+    final milliseconds = ((1 - _controller.value) * 900)
+        .round()
+        .clamp(650, 900)
+        .toInt();
+    unawaited(
+      _controller
+          .animateTo(
+            1,
+            duration: Duration(milliseconds: milliseconds),
+            curve: Curves.easeOutCubic,
+          )
+          .whenComplete(() {
+            if (!mounted ||
+                generation != _animationGeneration ||
+                widget.isSending) {
+              return;
+            }
+            widget.onCompleted();
+          }),
+    );
+  }
 
   @override
   void dispose() {
@@ -1900,8 +1987,7 @@ class _Ios3SendingProgressState extends State<_Ios3SendingProgress>
             child: AnimatedBuilder(
               animation: _controller,
               builder: (context, _) {
-                final progress = .08 +
-                    Curves.easeOutCubic.transform(_controller.value) * .84;
+                final progress = .04 + (_controller.value * .96);
                 return CustomPaint(
                   painter: _Ios3SendingProgressPainter(progress: progress),
                 );

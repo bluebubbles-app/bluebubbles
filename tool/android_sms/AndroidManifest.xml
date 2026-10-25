@@ -62,7 +62,8 @@
             android:targetActivity="io.github.bluebubblesapp.bluebubbles.MainActivity"
             android:enabled="true"
             android:exported="true"
-            android:icon="@drawable/app_icon_modern_blue"
+            android:icon="@mipmap/app_icon_modern_blue"
+            android:roundIcon="@mipmap/app_icon_modern_blue"
             android:label="BlueBubbles">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -75,7 +76,8 @@
             android:targetActivity="io.github.bluebubblesapp.bluebubbles.MainActivity"
             android:enabled="false"
             android:exported="true"
-            android:icon="@drawable/app_icon_modern_green"
+            android:icon="@mipmap/app_icon_modern_green"
+            android:roundIcon="@mipmap/app_icon_modern_green"
             android:label="BlueBubbles">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -88,7 +90,8 @@
             android:targetActivity="io.github.bluebubblesapp.bluebubbles.MainActivity"
             android:enabled="false"
             android:exported="true"
-            android:icon="@drawable/app_icon_classic_blue"
+            android:icon="@mipmap/app_icon_classic_blue"
+            android:roundIcon="@mipmap/app_icon_classic_blue"
             android:label="BlueBubbles">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -101,7 +104,8 @@
             android:targetActivity="io.github.bluebubblesapp.bluebubbles.MainActivity"
             android:enabled="false"
             android:exported="true"
-            android:icon="@drawable/app_icon_classic_green"
+            android:icon="@mipmap/app_icon_classic_green"
+            android:roundIcon="@mipmap/app_icon_classic_green"
             android:label="BlueBubbles">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

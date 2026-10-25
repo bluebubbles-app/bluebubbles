@@ -9,7 +9,10 @@ launcher_overlay_source="$script_dir/android_sms/AndroidManifest.launcher-overla
 native_source="$script_dir/android_sms"
 kotlin_target="$project_root/android/app/src/main/kotlin/io/github/bluebubblesapp/bluebubbles"
 icon_source="$project_root/assets/icon/app-icons"
-icon_target="$project_root/android/app/src/main/res/drawable-nodpi"
+icon_adaptive_source="$script_dir/android_sms/app_icons"
+icon_drawable_target="$project_root/android/app/src/main/res/drawable-nodpi"
+icon_legacy_target="$project_root/android/app/src/main/res/mipmap-nodpi"
+icon_adaptive_target="$project_root/android/app/src/main/res/mipmap-anydpi-v26"
 vendor_source="$script_dir/vendor/android-smsmms"
 vendor_target="$project_root/android/android-smsmms"
 
@@ -60,14 +63,18 @@ cp "$native_source/RespondViaMessageService.kt" \
   "$kotlin_target/RespondViaMessageService.kt"
 cp "$native_source/SmsSendCompat.kt" "$kotlin_target/SmsSendCompat.kt"
 
-# Keep each user-selectable launcher icon as the exact supplied square
-# artwork. Android applies the device launcher mask; Flutter uses the same
-# files for the iOS-shaped previews in Settings.
-mkdir -p "$icon_target"
-cp "$icon_source/modern_blue.png" "$icon_target/app_icon_modern_blue.png"
-cp "$icon_source/modern_green.png" "$icon_target/app_icon_modern_green.png"
-cp "$icon_source/classic_blue.png" "$icon_target/app_icon_classic_blue.png"
-cp "$icon_source/classic_green.png" "$icon_target/app_icon_classic_green.png"
+# Install each supplied square as the full-bleed background of a real
+# adaptive icon. Using the complete artwork as a legacy drawable makes modern
+# launchers shrink it into an extra white circle.
+find "$project_root/android/app/src/main/res" -type f \
+  \( -name 'app_icon_*.png' -o -name 'app_icon_*.xml' \) \
+  -delete
+mkdir -p "$icon_drawable_target" "$icon_legacy_target" "$icon_adaptive_target"
+for icon in modern_blue modern_green classic_blue classic_green; do
+  cp "$icon_source/$icon.png" "$icon_drawable_target/app_icon_${icon}_art.png"
+  cp "$icon_source/$icon.png" "$icon_legacy_target/app_icon_$icon.png"
+  cp "$icon_adaptive_source/$icon.xml" "$icon_adaptive_target/app_icon_$icon.xml"
+done
 
 # Android does not expose a high-level MMS composer. Bundle the modernized
 # transport used by QUIK for carrier-aware image and audio sending.

@@ -49,7 +49,7 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val CHANNEL = "bluebubbles/sms"
         private const val TAG = "BlueBubblesSms"
-        private const val NATIVE_BUILD = "2026-10-25-alternate-launcher-icons-v1"
+        private const val NATIVE_BUILD = "2026-10-25-adaptive-launcher-icons-v2"
         private const val ROLE_REQUEST = 4701
         private const val PERMISSION_REQUEST = 4702
         private const val MEDIA_PERMISSION_REQUEST = 4703

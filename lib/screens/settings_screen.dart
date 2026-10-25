@@ -392,17 +392,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   changing: _changingAppIcon,
                   onPressed: _changeAppIcon,
                 ),
-                _SliderSetting(
-                  key: const ValueKey('header-transparency-setting'),
-                  title: 'Header Transparency',
-                  value: settings.headerTransparency,
-                  min: 0,
-                  max: 1,
-                  leading: CupertinoIcons.drop,
-                  note: 'Higher levels require more graphics processing and '
-                      'may affect responsiveness on older devices.',
-                  onChanged: settings.setHeaderTransparency,
-                ),
+                if (!useIos3)
+                  _SliderSetting(
+                    key: const ValueKey('header-transparency-setting'),
+                    title: 'Header Transparency',
+                    value: settings.headerTransparency,
+                    min: 0,
+                    max: 1,
+                    leading: CupertinoIcons.drop,
+                    note:
+                        'Higher levels require more graphics processing and '
+                        'may affect responsiveness on older devices.',
+                    onChanged: settings.setHeaderTransparency,
+                  ),
                 _SliderSetting(
                   key: const ValueKey('font-size-setting'),
                   title: 'Text Size',
@@ -701,6 +703,7 @@ class _Ios3SettingsHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
+        width: double.infinity,
         height: 45,
         decoration: const BoxDecoration(
           gradient: LinearGradient(

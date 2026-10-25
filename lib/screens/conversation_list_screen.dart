@@ -3199,7 +3199,7 @@ class ConversationRow extends StatelessWidget {
   }
 
   Widget _buildIos3(BuildContext context, bool highlighted) {
-    const rowHeight = 56.0;
+    const rowHeight = 64.0;
     return ColoredBox(
       color: CupertinoColors.white,
       child: Stack(
@@ -3221,7 +3221,7 @@ class ConversationRow extends StatelessWidget {
                   child: SizedBox(
                     height: rowHeight,
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(0, 7, 8, 5),
+                      padding: const EdgeInsets.fromLTRB(0, 8, 8, 6),
                       child: Stack(
                         children: [
                           Positioned.fill(
@@ -3239,7 +3239,7 @@ class ConversationRow extends StatelessWidget {
                                         style: TextStyle(
                                           color: CupertinoColors.black,
                                           fontFamily: 'SF Pro Text',
-                                          fontSize: 15,
+                                          fontSize: 17,
                                           height: 1,
                                           fontWeight: highlighted
                                               ? FontWeight.w700
@@ -3257,7 +3257,7 @@ class ConversationRow extends StatelessWidget {
                                       style: const TextStyle(
                                         color: Color(0xFF3478B9),
                                         fontFamily: 'SF Pro Text',
-                                        fontSize: 13,
+                                        fontSize: 15,
                                         height: 1,
                                         fontWeight: FontWeight.w400,
                                       ),
@@ -3284,7 +3284,7 @@ class ConversationRow extends StatelessWidget {
                                         style: const TextStyle(
                                           color: Color(0xFF777777),
                                           fontFamily: 'SF Pro Text',
-                                          fontSize: 13,
+                                          fontSize: 17,
                                           height: 1.1,
                                           fontWeight: FontWeight.w400,
                                         ),
