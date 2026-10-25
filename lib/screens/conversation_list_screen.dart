@@ -619,10 +619,12 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
     final useIos26 = widget.interfaceStyle == InterfaceStyle.ios26;
     final searchActive = _query.trim().isNotEmpty;
     final filtered = _filtered;
-    final pinned =
-        filtered.where((conversation) => conversation.isPinned).toList();
-    final regular =
-        filtered.where((conversation) => !conversation.isPinned).toList();
+    final pinned = useIos3
+        ? const <Conversation>[]
+        : filtered.where((conversation) => conversation.isPinned).toList();
+    final regular = useIos3
+        ? filtered
+        : filtered.where((conversation) => !conversation.isPinned).toList();
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: !useIos3 && MessagesPalette.isDark(context)
@@ -651,10 +653,22 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                 child: useIos26
                     ? const SizedBox.shrink()
                     : Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                        padding: useIos3
+                            ? const EdgeInsets.fromLTRB(6, 5, 6, 6)
+                            : const EdgeInsets.fromLTRB(16, 0, 16, 24),
                         child: IosSearchField(
                           controller: _searchController,
                           onChanged: _onSearchChanged,
+                          height: useIos3 ? 29 : 36,
+                          backgroundColor:
+                              useIos3 ? CupertinoColors.white : null,
+                          borderRadius: useIos3 ? 14.5 : 10,
+                          fontSize: useIos3 ? 13 : 17,
+                          iconSize: useIos3 ? 14 : 18,
+                          verticalPadding: useIos3 ? 4 : 7,
+                          borderColor:
+                              useIos3 ? const Color(0xFF9A9A9A) : null,
+                          showMicrophone: !useIos3,
                         ),
                       ),
               ),
@@ -2998,6 +3012,7 @@ class ConversationRow extends StatelessWidget {
     final interfaceStyle = AppSettingsScope.of(context).interfaceStyle;
     final useIos3 = interfaceStyle == InterfaceStyle.ios3;
     final useIos26 = interfaceStyle == InterfaceStyle.ios26;
+    if (useIos3) return _buildIos3(context, highlighted);
     final rowHeight = useIos26 ? 88.0 : 76.0;
     return ColoredBox(
       color: useIos3
@@ -3175,6 +3190,135 @@ class ConversationRow extends StatelessWidget {
                     ? MessagesPalette.hairline(context).withValues(alpha: .55)
                     : const Color(0x5C3C3C43),
                 child: const SizedBox(height: .5),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIos3(BuildContext context, bool highlighted) {
+    const rowHeight = 56.0;
+    return ColoredBox(
+      color: CupertinoColors.white,
+      child: Stack(
+        children: [
+          CupertinoButton(
+            pressedOpacity: .55,
+            padding: EdgeInsets.zero,
+            onPressed: onTap,
+            child: Row(
+              children: [
+                if (selectionMode)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 10, right: 8),
+                    child: _SelectionCircle(selected: selected),
+                  )
+                else
+                  const SizedBox(width: 27),
+                Expanded(
+                  child: SizedBox(
+                    height: rowHeight,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(0, 7, 8, 5),
+                      child: Stack(
+                        children: [
+                          Positioned.fill(
+                            right: 20,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        conversation.title,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: CupertinoColors.black,
+                                          fontFamily: 'SF Pro Text',
+                                          fontSize: 15,
+                                          height: 1,
+                                          fontWeight: highlighted
+                                              ? FontWeight.w700
+                                              : FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      _relativeTime(
+                                        context,
+                                        conversation.updatedAt,
+                                      ),
+                                      maxLines: 1,
+                                      style: const TextStyle(
+                                        color: Color(0xFF3478B9),
+                                        fontFamily: 'SF Pro Text',
+                                        fontSize: 13,
+                                        height: 1,
+                                        fontWeight: FontWeight.w400,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    if (conversation.isMuted)
+                                      const Padding(
+                                        padding: EdgeInsets.only(right: 4),
+                                        child: Icon(
+                                          CupertinoIcons.bell_slash_fill,
+                                          size: 11,
+                                          color: Color(0xFF777777),
+                                        ),
+                                      ),
+                                    Expanded(
+                                      child: Text(
+                                        conversation.preview,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: Color(0xFF777777),
+                                          fontFamily: 'SF Pro Text',
+                                          fontSize: 13,
+                                          height: 1.1,
+                                          fontWeight: FontWeight.w400,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Align(
+                            alignment: Alignment.centerRight,
+                            child: Icon(
+                              CupertinoIcons.chevron_right,
+                              size: 15,
+                              color: Color(0xFF8A8F96),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: IgnorePointer(
+              child: ColoredBox(
+                color: Color(0xFFCACACA),
+                child: SizedBox(height: .5),
               ),
             ),
           ),

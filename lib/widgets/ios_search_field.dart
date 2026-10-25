@@ -10,6 +10,11 @@ class IosSearchField extends StatelessWidget {
     this.height = 36,
     this.backgroundColor,
     this.borderRadius = 10,
+    this.fontSize = 17,
+    this.iconSize = 18,
+    this.verticalPadding = 7,
+    this.borderColor,
+    this.showMicrophone = true,
   });
 
   final TextEditingController controller;
@@ -17,6 +22,11 @@ class IosSearchField extends StatelessWidget {
   final double height;
   final Color? backgroundColor;
   final double borderRadius;
+  final double fontSize;
+  final double iconSize;
+  final double verticalPadding;
+  final Color? borderColor;
+  final bool showMicrophone;
 
   @override
   Widget build(BuildContext context) {
@@ -25,6 +35,16 @@ class IosSearchField extends StatelessWidget {
       decoration: BoxDecoration(
         color: backgroundColor ?? MessagesPalette.fill(context),
         borderRadius: BorderRadius.circular(borderRadius),
+        border: borderColor == null ? null : Border.all(color: borderColor!),
+        boxShadow: borderColor == null
+            ? null
+            : const [
+                BoxShadow(
+                  color: Color(0x26000000),
+                  blurRadius: 2,
+                  offset: Offset(0, 1),
+                ),
+              ],
       ),
       child: CupertinoTextField(
         controller: controller,
@@ -32,26 +52,28 @@ class IosSearchField extends StatelessWidget {
         placeholder: 'Search',
         placeholderStyle: TextStyle(
           color: MessagesPalette.secondaryLabel(context),
-          fontSize: 17,
+          fontSize: fontSize,
         ),
-        style: MessagesText.body(context),
+        style: MessagesText.body(context).copyWith(fontSize: fontSize),
         prefix: Padding(
           padding: const EdgeInsets.only(left: 8, right: 5),
           child: Icon(
             CupertinoIcons.search,
-            size: 18,
+            size: iconSize,
             color: MessagesPalette.secondaryLabel(context),
           ),
         ),
         suffix: controller.text.isEmpty
-            ? Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: Icon(
-                  CupertinoIcons.mic,
-                  size: 18,
-                  color: MessagesPalette.secondaryLabel(context),
-                ),
-              )
+            ? showMicrophone
+                ? Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Icon(
+                      CupertinoIcons.mic,
+                      size: iconSize,
+                      color: MessagesPalette.secondaryLabel(context),
+                    ),
+                  )
+                : null
             : CupertinoButton(
                 minSize: 28,
                 padding: const EdgeInsets.symmetric(horizontal: 7),
@@ -66,7 +88,7 @@ class IosSearchField extends StatelessWidget {
                 ),
               ),
         decoration: null,
-        padding: const EdgeInsets.symmetric(vertical: 7),
+        padding: EdgeInsets.symmetric(vertical: verticalPadding),
         textInputAction: TextInputAction.search,
       ),
     );

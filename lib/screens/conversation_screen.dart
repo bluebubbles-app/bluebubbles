@@ -80,6 +80,8 @@ class _ConversationScreenState extends State<ConversationScreen>
   bool _refreshingFromProvider = false;
   bool _providerRefreshQueued = false;
   Timer? _providerRefreshDebounce;
+  Timer? _sendingStatePoller;
+  bool _sendingOutgoingMessage = false;
   late int _lastMessagesChangedRevision;
 
   @override
@@ -98,6 +100,8 @@ class _ConversationScreenState extends State<ConversationScreen>
     );
     _lastMessagesChangedRevision = widget.messagesChangedRevision.value;
     widget.messagesChangedRevision.addListener(_handleProviderMessagesChanged);
+    _sendingOutgoingMessage = _hasPendingOutgoingMessage;
+    if (_sendingOutgoingMessage) _startSendingStatePoller();
     unawaited(_loadMessages(showLoading: !widget.messagesPreloaded));
   }
 
@@ -372,6 +376,7 @@ class _ConversationScreenState extends State<ConversationScreen>
   void _send(String text) {
     final previousLength = widget.conversation.messages.length;
     widget.onSend(text);
+    _refreshSendingState();
     if (widget.conversation.messages.length <= previousLength) return;
     _messageListKey.currentState?.insertItem(
       0,
@@ -379,6 +384,38 @@ class _ConversationScreenState extends State<ConversationScreen>
     );
     Timer(const Duration(milliseconds: 40), _scrollToBottom);
     Timer(_messageInsertionDuration, _scrollToBottom);
+  }
+
+  void _sendAttachment(MessageAttachment attachment, String caption) {
+    widget.onSendAttachment?.call(attachment, caption);
+    _refreshSendingState();
+  }
+
+  bool get _hasPendingOutgoingMessage => widget.conversation.messages.any(
+        (message) =>
+            message.isFromMe &&
+            message.deliveryState == DeliveryState.sending,
+      );
+
+  void _startSendingStatePoller() {
+    _sendingStatePoller ??= Timer.periodic(
+      const Duration(milliseconds: 120),
+      (_) => _refreshSendingState(),
+    );
+  }
+
+  void _refreshSendingState() {
+    if (!mounted) return;
+    final isSending = _hasPendingOutgoingMessage;
+    if (isSending != _sendingOutgoingMessage) {
+      setState(() => _sendingOutgoingMessage = isSending);
+    }
+    if (isSending) {
+      _startSendingStatePoller();
+    } else {
+      _sendingStatePoller?.cancel();
+      _sendingStatePoller = null;
+    }
   }
 
   Future<void> _retryFailedMessage(ChatMessage message) async {
@@ -404,6 +441,7 @@ class _ConversationScreenState extends State<ConversationScreen>
     if (shouldRetry != true || !mounted) return;
     HapticFeedback.lightImpact();
     widget.onRetrySend(message);
+    _refreshSendingState();
     if (!mounted) return;
     setState(() => _messageListKey = GlobalKey<AnimatedListState>());
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -673,6 +711,7 @@ class _ConversationScreenState extends State<ConversationScreen>
   @override
   void dispose() {
     _providerRefreshDebounce?.cancel();
+    _sendingStatePoller?.cancel();
     widget.messagesChangedRevision.removeListener(
       _handleProviderMessagesChanged,
     );
@@ -956,6 +995,7 @@ class _ConversationScreenState extends State<ConversationScreen>
                             )
                           : _ConversationHeader(
                               conversation: widget.conversation,
+                               isSending: _sendingOutgoingMessage,
                               topCompensation: topCompensation,
                               backUnreadCount: widget.allConversations
                                   .where(
@@ -993,7 +1033,7 @@ class _ConversationScreenState extends State<ConversationScreen>
                   ),
                 MessageComposer(
                   onSend: _send,
-                  onSendAttachment: widget.onSendAttachment ?? (_, __) {},
+                  onSendAttachment: _sendAttachment,
                 ),
               ],
             ],
@@ -1353,6 +1393,7 @@ class _MutedConversationNotice extends StatelessWidget {
 class _ConversationHeader extends StatelessWidget {
   const _ConversationHeader({
     required this.conversation,
+    required this.isSending,
     required this.topCompensation,
     required this.backUnreadCount,
     required this.onCall,
@@ -1361,6 +1402,7 @@ class _ConversationHeader extends StatelessWidget {
   });
 
   final Conversation conversation;
+  final bool isSending;
   final double topCompensation;
   final int backUnreadCount;
   final VoidCallback onCall;
@@ -1554,27 +1596,32 @@ class _ConversationHeader extends StatelessWidget {
                   onPressed: () => Navigator.of(context).maybePop(),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 124),
-                child: Text(
-                  conversation.title,
-                  key: const ValueKey('conversation-contact-name'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: CupertinoColors.white,
-                    fontFamily: 'SF Pro Text',
-                    fontSize: 20,
-                    height: 1,
-                    fontWeight: FontWeight.w700,
-                    shadows: [
-                      Shadow(
-                        color: Color(0xAA26384E),
-                        offset: Offset(0, -1),
-                      ),
-                    ],
-                  ),
+              Positioned(
+                left: 128,
+                right: 68,
+                child: Center(
+                  child: isSending
+                      ? const _Ios3SendingProgress()
+                      : Text(
+                          conversation.title,
+                          key: const ValueKey('conversation-contact-name'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: CupertinoColors.white,
+                            fontFamily: 'SF Pro Text',
+                            fontSize: 20,
+                            height: 1,
+                            fontWeight: FontWeight.w700,
+                            shadows: [
+                              Shadow(
+                                color: Color(0xAA26384E),
+                                offset: Offset(0, -1),
+                              ),
+                            ],
+                          ),
+                        ),
                 ),
               ),
               Positioned(
@@ -1797,6 +1844,138 @@ class _ConversationHeader extends StatelessWidget {
       ),
     );
   }
+}
+
+class _Ios3SendingProgress extends StatefulWidget {
+  const _Ios3SendingProgress();
+
+  @override
+  State<_Ios3SendingProgress> createState() => _Ios3SendingProgressState();
+}
+
+class _Ios3SendingProgressState extends State<_Ios3SendingProgress>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 8),
+  )..forward();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 112,
+      height: 36,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            MessageStatusStrings.label(context, DeliveryState.sending),
+            key: const ValueKey('conversation-ios3-sending-label'),
+            maxLines: 1,
+            style: const TextStyle(
+              color: CupertinoColors.white,
+              fontFamily: 'SF Pro Text',
+              fontSize: 12,
+              height: 1,
+              fontWeight: FontWeight.w600,
+              shadows: [
+                Shadow(
+                  color: Color(0xAA26384E),
+                  offset: Offset(0, -1),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          SizedBox(
+            key: const ValueKey('conversation-ios3-sending-progress'),
+            width: 106,
+            height: 9,
+            child: AnimatedBuilder(
+              animation: _controller,
+              builder: (context, _) {
+                final progress = .08 +
+                    Curves.easeOutCubic.transform(_controller.value) * .84;
+                return CustomPaint(
+                  painter: _Ios3SendingProgressPainter(progress: progress),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Ios3SendingProgressPainter extends CustomPainter {
+  const _Ios3SendingProgressPainter({required this.progress});
+
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final outer = RRect.fromRectAndRadius(
+      Offset.zero & size,
+      Radius.circular(size.height / 2),
+    );
+    canvas.drawRRect(
+      outer,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF29496E), Color(0xFF5D7DA2)],
+        ).createShader(Offset.zero & size),
+    );
+    canvas.drawRRect(
+      outer,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = const Color(0x99314764),
+    );
+
+    final innerRect = Rect.fromLTWH(1.5, 1.5, size.width - 3, size.height - 3);
+    final fillWidth = (innerRect.width * progress)
+        .clamp(innerRect.height, innerRect.width)
+        .toDouble();
+    final fill = RRect.fromRectAndRadius(
+      Rect.fromLTWH(
+        innerRect.left,
+        innerRect.top,
+        fillWidth,
+        innerRect.height,
+      ),
+      Radius.circular(innerRect.height / 2),
+    );
+    canvas.drawRRect(
+      fill,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFFFFFFFF), Color(0xFFB9C9D7)],
+        ).createShader(fill.outerRect),
+    );
+    canvas.drawLine(
+      Offset(innerRect.left + 2, innerRect.top + 1),
+      Offset(innerRect.left + fillWidth - 2, innerRect.top + 1),
+      Paint()
+        ..color = const Color(0xCCFFFFFF)
+        ..strokeWidth = .7,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_Ios3SendingProgressPainter oldDelegate) =>
+      oldDelegate.progress != progress;
 }
 
 class _Ios3NavigationButton extends StatelessWidget {
