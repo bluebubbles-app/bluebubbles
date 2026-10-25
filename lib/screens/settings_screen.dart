@@ -6,6 +6,7 @@ import '../services/android_sms_service.dart';
 import '../services/message_transfer_service.dart';
 import '../settings/app_settings.dart';
 import '../theme/messages_theme.dart';
+import '../widgets/ios3_navigation_chrome.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
@@ -716,46 +717,29 @@ class _Ios3SettingsHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         width: double.infinity,
-        height: 45,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFFC1D1E4),
-              Color(0xFF829DBB),
-              Color(0xFF4E6E93),
-            ],
-            stops: [0, .48, 1],
-          ),
-          border: Border(
-            bottom: BorderSide(color: Color(0xFF344B67)),
-          ),
-        ),
+        height: ios3TopBarHeight,
+        decoration: ios3TopBarDecoration,
         child: Stack(
           alignment: Alignment.center,
           children: [
-            const Text(
-              'Settings',
-              style: TextStyle(
-                color: CupertinoColors.white,
-                fontFamily: 'SF Pro Text',
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                shadows: [
-                  Shadow(color: Color(0xB3000000), offset: Offset(0, -1)),
-                ],
+            Transform.translate(
+              offset: const Offset(0, 1),
+              child: const Text(
+                'Settings',
+                style: ios3TopBarTitleStyle,
               ),
             ),
             Positioned(
               left: 6,
+              top: ios3TopBarControlCenterY -
+                  (ios3TopBarButtonHeight / 2),
               child: CupertinoButton(
-                minSize: 32,
+                minSize: ios3TopBarButtonHeight,
                 padding: EdgeInsets.zero,
                 onPressed: onBack,
                 child: SizedBox(
                   width: 92,
-                  height: 34,
+                  height: ios3TopBarButtonHeight,
                   child: CustomPaint(
                     painter: const _Ios3SettingsBackButtonPainter(),
                     child: const Padding(
@@ -764,18 +748,7 @@ class _Ios3SettingsHeader extends StatelessWidget {
                         child: Text(
                           'Messages',
                           maxLines: 1,
-                          style: TextStyle(
-                            color: CupertinoColors.white,
-                            fontFamily: 'SF Pro Text',
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            shadows: [
-                              Shadow(
-                                color: Color(0xA6000000),
-                                offset: Offset(0, -1),
-                              ),
-                            ],
-                          ),
+                          style: ios3TopBarButtonTextStyle,
                         ),
                       ),
                     ),
@@ -783,6 +756,7 @@ class _Ios3SettingsHeader extends StatelessWidget {
                 ),
               ),
             ),
+            const Ios3TopBarGloss(),
           ],
         ),
       );
@@ -812,25 +786,21 @@ class _Ios3SettingsBackButtonPainter extends CustomPainter {
     canvas.drawPath(
       path,
       Paint()
-        ..shader = const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFF7894B5), Color(0xFF3D5D84)],
-        ).createShader(Offset.zero & size),
+        ..shader = ios3TopBarButtonGradient.createShader(Offset.zero & size),
     );
     canvas.drawPath(
       path,
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1
-        ..color = const Color(0xFF294767),
+        ..color = const Color(0x80000000),
     );
     canvas.drawPath(
       path,
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = .7
-        ..color = const Color(0x66FFFFFF),
+        ..color = const Color(0x33FFFFFF),
     );
   }
 

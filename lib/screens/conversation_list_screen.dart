@@ -15,6 +15,7 @@ import '../settings/app_settings.dart';
 import '../services/android_sms_service.dart';
 import '../theme/messages_theme.dart';
 import '../widgets/contact_avatar.dart';
+import '../widgets/ios3_navigation_chrome.dart';
 import '../widgets/ios_search_field.dart';
 import '../widgets/liquid_glass_surface.dart';
 import '../widgets/message_composer.dart';
@@ -891,52 +892,39 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
 
   Widget _buildHeader(BuildContext context) {
     final settings = AppSettingsScope.of(context);
+    final baseTopBarHeight = settings.interfaceStyle == InterfaceStyle.ios3
+        ? ios3TopBarHeight
+        : 44.0;
     final topCompensation =
-        (44.0 - MediaQuery.paddingOf(context).top)
-            .clamp(0.0, 44.0)
+        (baseTopBarHeight - MediaQuery.paddingOf(context).top)
+            .clamp(0.0, baseTopBarHeight)
             .toDouble();
     if (settings.interfaceStyle == InterfaceStyle.ios3) {
       return Container(
-        height: 44 + topCompensation,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFB4C7DD), Color(0xFF526F94)],
-          ),
-          border: Border(
-            top: BorderSide(color: Color(0xFFDCE6F0), width: 1),
-            bottom: BorderSide(color: Color(0xFF344B67), width: 1),
-          ),
-        ),
+        height: ios3TopBarHeight + topCompensation,
+        decoration: ios3TopBarDecoration,
         child: Align(
           alignment: Alignment.bottomCenter,
           child: SizedBox(
             width: double.infinity,
-            height: 44,
+            height: ios3TopBarHeight,
             child: Stack(
               alignment: Alignment.center,
               children: [
-                Text(
-                  _selectingConversations
-                      ? '${_selectedConversationIds.length} Selected'
-                      : 'Messages',
-                  key: const ValueKey('messages-title'),
-                  style: const TextStyle(
-                    color: CupertinoColors.white,
-                    fontFamily: 'SF Pro Text',
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    shadows: [
-                      Shadow(
-                        color: Color(0xAA26384E),
-                        offset: Offset(0, -1),
-                      ),
-                    ],
+                Transform.translate(
+                  offset: const Offset(0, 1),
+                  child: Text(
+                    _selectingConversations
+                        ? '${_selectedConversationIds.length} Selected'
+                        : 'Messages',
+                    key: const ValueKey('messages-title'),
+                    style: ios3TopBarTitleStyle,
                   ),
                 ),
                 Positioned(
                   left: 6,
+                  top: ios3TopBarControlCenterY -
+                      (ios3TopBarButtonHeight / 2),
                   child: _Ios3ListNavigationButton(
                     key: const ValueKey('edit-conversations-button'),
                     width: 58,
@@ -948,6 +936,8 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                 ),
                 Positioned(
                   right: 6,
+                  top: ios3TopBarControlCenterY -
+                      (ios3TopBarButtonHeight / 2),
                   child: _Ios3ListNavigationButton(
                     key: const ValueKey('new-message-button'),
                     width: 38,
@@ -956,6 +946,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                     child: const Icon(CupertinoIcons.square_pencil, size: 18),
                   ),
                 ),
+                const Ios3TopBarGloss(),
               ],
             ),
           ),
@@ -1304,43 +1295,29 @@ class _Ios3StatsScreenState extends State<_Ios3StatsScreen> {
               children: [
                 Container(
                   width: double.infinity,
-                  height: 44,
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Color(0xFFB4C7DD), Color(0xFF526F94)],
-                    ),
-                    border: Border(
-                      bottom: BorderSide(color: Color(0xFF344B67)),
-                    ),
-                  ),
+                  height: ios3TopBarHeight,
+                  decoration: ios3TopBarDecoration,
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
-                      const Text(
-                        'SMS Stats',
-                        style: TextStyle(
-                          color: CupertinoColors.white,
-                          fontFamily: 'SF Pro Text',
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          shadows: [
-                            Shadow(
-                              color: Color(0xAA26384E),
-                              offset: Offset(0, -1),
-                            ),
-                          ],
+                      Transform.translate(
+                        offset: const Offset(0, 1),
+                        child: const Text(
+                          'SMS Stats',
+                          style: ios3TopBarTitleStyle,
                         ),
                       ),
                       Positioned(
                         left: 6,
+                        top: ios3TopBarControlCenterY -
+                            (ios3TopBarButtonHeight / 2),
                         child: _Ios3ListNavigationButton(
                           width: 74,
                           onPressed: () => Navigator.of(context).pop(),
                           child: const Text('Messages'),
                         ),
                       ),
+                      const Ios3TopBarGloss(),
                     ],
                   ),
                 ),
@@ -1647,25 +1624,21 @@ class _Ios3ListNavigationButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => CupertinoButton(
-        minSize: 34,
+        minSize: ios3TopBarButtonHeight,
         padding: EdgeInsets.zero,
         onPressed: onPressed,
         child: Container(
           width: width,
-          height: 34,
+          height: ios3TopBarButtonHeight,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(6),
-            gradient: const LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Color(0xFF7894B5), Color(0xFF3D5D84)],
-            ),
-            border: Border.all(color: const Color(0xFF294767), width: 1),
+            borderRadius: BorderRadius.circular(4),
+            gradient: ios3TopBarButtonGradient,
+            border: Border.all(color: const Color(0x80000000), width: 1),
             boxShadow: const [
               BoxShadow(
-                color: Color(0x66FFFFFF),
-                blurRadius: 1,
+                color: Color(0x33FFFFFF),
+                blurRadius: 0,
                 offset: Offset(0, 1),
               ),
             ],
@@ -1673,18 +1646,7 @@ class _Ios3ListNavigationButton extends StatelessWidget {
           child: IconTheme(
             data: const IconThemeData(color: CupertinoColors.white),
             child: DefaultTextStyle(
-              style: const TextStyle(
-                color: CupertinoColors.white,
-                fontFamily: 'SF Pro Text',
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                shadows: [
-                  Shadow(
-                    color: Color(0xC0203045),
-                    offset: Offset(0, -1),
-                  ),
-                ],
-              ),
+              style: ios3TopBarButtonTextStyle,
               child: child,
             ),
           ),
@@ -2046,24 +2008,18 @@ class _NewMessageRecipientScreenState
             children: [
               Container(
                 key: const ValueKey('new-message-header'),
-                height: 44,
+                height: useIos3 ? ios3TopBarHeight : 44,
                 decoration: BoxDecoration(
                   color: useIos3 ? null : MessagesPalette.background(context),
-                  gradient: useIos3
-                      ? const LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [Color(0xFFB4C7DD), Color(0xFF526F94)],
-                        )
-                      : null,
-                  border: Border(
-                    bottom: BorderSide(
-                      color: useIos3
-                          ? const Color(0xFF344B67)
-                          : MessagesPalette.hairline(context),
-                      width: useIos3 ? 1 : .5,
-                    ),
-                  ),
+                  gradient: useIos3 ? ios3TopBarDecoration.gradient : null,
+                  border: useIos3
+                      ? ios3TopBarDecoration.border
+                      : Border(
+                          bottom: BorderSide(
+                            color: MessagesPalette.hairline(context),
+                            width: .5,
+                          ),
+                        ),
                 ),
                 child: Stack(
                   alignment: Alignment.center,
@@ -2071,36 +2027,34 @@ class _NewMessageRecipientScreenState
                     Positioned.fill(
                       left: 108,
                       right: 108,
-                      child: Center(
-                        child: Text(
-                          MessageStatusStrings.newMessage(context),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontFamily: 'SF Pro Text',
-                            color: useIos3
-                                ? CupertinoColors.white
-                                : MessagesPalette.label(context),
-                            fontSize: useIos3 ? 20 : 17,
-                            height: 1,
-                            fontWeight:
-                                useIos3 ? FontWeight.w700 : FontWeight.w600,
-                            letterSpacing: -.25,
-                            shadows: useIos3
-                                ? const [
-                                    Shadow(
-                                      color: Color(0xAA26384E),
-                                      offset: Offset(0, -1),
-                                    ),
-                                  ]
-                                : null,
+                      child: Transform.translate(
+                        offset: Offset(0, useIos3 ? 1 : 0),
+                        child: Center(
+                          child: Text(
+                            MessageStatusStrings.newMessage(context),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: useIos3
+                                ? ios3TopBarTitleStyle
+                                : TextStyle(
+                                    fontFamily: 'SF Pro Text',
+                                    color: MessagesPalette.label(context),
+                                    fontSize: 17,
+                                    height: 1,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: -.25,
+                                  ),
                           ),
                         ),
                       ),
                     ),
                     Positioned(
                       right: useIos3 ? 6 : 8,
+                      top: useIos3
+                          ? ios3TopBarControlCenterY -
+                              (ios3TopBarButtonHeight / 2)
+                          : null,
                       child: useIos3
                           ? _Ios3ListNavigationButton(
                               key: const ValueKey(
@@ -2132,6 +2086,7 @@ class _NewMessageRecipientScreenState
                               ),
                             ),
                     ),
+                    if (useIos3) const Ios3TopBarGloss(),
                   ],
                 ),
               ),

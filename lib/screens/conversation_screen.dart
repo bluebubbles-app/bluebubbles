@@ -12,6 +12,7 @@ import '../models/notification_open_request.dart';
 import '../settings/app_settings.dart';
 import '../theme/messages_theme.dart';
 import '../widgets/contact_avatar.dart';
+import '../widgets/ios3_navigation_chrome.dart';
 import '../widgets/liquid_glass_surface.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/message_composer.dart';
@@ -740,9 +741,10 @@ class _ConversationScreenState extends State<ConversationScreen>
     final interfaceStyle = AppSettingsScope.of(context).interfaceStyle;
     final useIos3 = interfaceStyle == InterfaceStyle.ios3;
     final useIos26 = interfaceStyle == InterfaceStyle.ios26;
+    final baseTopBarHeight = useIos3 ? ios3TopBarHeight : 44.0;
     final topCompensation =
-        (44.0 - MediaQuery.paddingOf(context).top)
-            .clamp(0.0, 44.0)
+        (baseTopBarHeight - MediaQuery.paddingOf(context).top)
+            .clamp(0.0, baseTopBarHeight)
             .toDouble();
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: !useIos3 && MessagesPalette.isDark(context)
@@ -782,7 +784,7 @@ class _ConversationScreenState extends State<ConversationScreen>
                                   : (useIos26
                                               ? 106
                                               : useIos3
-                                                  ? 56
+                                                  ? 50
                                                   : 92) +
                                           topCompensation,
                               14,
@@ -1587,29 +1589,20 @@ class _ConversationHeader extends StatelessWidget {
         (viewPadding.right - viewPadding.left) / 2;
     return Container(
       key: const ValueKey('conversation-header-ios3'),
-      height: 44 + topCompensation,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFFB4C7DD), Color(0xFF526F94)],
-          stops: [0, 1],
-        ),
-        border: Border(
-          top: BorderSide(color: Color(0xFFDCE6F0), width: 1),
-          bottom: BorderSide(color: Color(0xFF344B67), width: 1),
-        ),
-      ),
+      height: ios3TopBarHeight + topCompensation,
+      decoration: ios3TopBarDecoration,
       child: Align(
         alignment: Alignment.bottomCenter,
         child: SizedBox(
           width: double.infinity,
-          height: 44,
+          height: ios3TopBarHeight,
           child: Stack(
             alignment: Alignment.center,
             children: [
               Positioned(
                 left: 6,
+                top: ios3TopBarControlCenterY -
+                    (ios3TopBarButtonHeight / 2),
                 child: _Ios3NavigationButton(
                   key: const ValueKey('conversation-back-button'),
                   label: backLabel,
@@ -1620,7 +1613,7 @@ class _ConversationHeader extends StatelessWidget {
               Positioned.fill(
                 child: IgnorePointer(
                   child: Transform.translate(
-                    offset: Offset(screenCenterCorrection, 0),
+                    offset: Offset(screenCenterCorrection, 1),
                     child: Center(
                       child: SizedBox(
                         width: 130,
@@ -1637,19 +1630,7 @@ class _ConversationHeader extends StatelessWidget {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  color: CupertinoColors.white,
-                                  fontFamily: 'SF Pro Text',
-                                  fontSize: 20,
-                                  height: 1,
-                                  fontWeight: FontWeight.w700,
-                                  shadows: [
-                                    Shadow(
-                                      color: Color(0xAA26384E),
-                                      offset: Offset(0, -1),
-                                    ),
-                                  ],
-                                ),
+                                style: ios3TopBarTitleStyle,
                               ),
                       ),
                     ),
@@ -1658,11 +1639,14 @@ class _ConversationHeader extends StatelessWidget {
               ),
               Positioned(
                 right: 6,
+                top: ios3TopBarControlCenterY -
+                    (ios3TopBarButtonHeight / 2),
                 child: _Ios3NavigationButton(
                   label: 'Edit',
                   onPressed: onEdit,
                 ),
               ),
+              const Ios3TopBarGloss(),
             ],
           ),
         ),
@@ -2088,18 +2072,7 @@ class _Ios3NavigationButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const labelStyle = TextStyle(
-      color: CupertinoColors.white,
-      fontFamily: 'SF Pro Text',
-      fontSize: 13,
-      fontWeight: FontWeight.w600,
-      shadows: [
-        Shadow(
-          color: Color(0xC0203045),
-          offset: Offset(0, -1),
-        ),
-      ],
-    );
+    const labelStyle = ios3TopBarButtonTextStyle;
     final labelPainter = TextPainter(
       text: TextSpan(text: label, style: labelStyle),
       maxLines: 1,
@@ -2110,14 +2083,14 @@ class _Ios3NavigationButton extends StatelessWidget {
         ? (labelPainter.width + 28).clamp(92.0, 116.0).toDouble()
         : (labelPainter.width + 22).clamp(48.0, 80.0).toDouble();
     return CupertinoButton(
-      minSize: 34,
+      minSize: ios3TopBarButtonHeight,
       padding: EdgeInsets.zero,
       onPressed: onPressed,
       child: CustomPaint(
         painter: _Ios3NavigationButtonPainter(backShape: backShape),
         child: SizedBox(
           width: width,
-          height: 34,
+          height: ios3TopBarButtonHeight,
           child: Padding(
             padding: EdgeInsets.only(left: backShape ? 8 : 0),
             child: Center(
@@ -2162,7 +2135,7 @@ class _Ios3NavigationButtonPainter extends CustomPainter {
       path.addRRect(
         RRect.fromRectAndRadius(
           Rect.fromLTWH(1, 1, size.width - 2, size.height - 2),
-          const Radius.circular(6),
+          const Radius.circular(4),
         ),
       );
     }
@@ -2170,25 +2143,21 @@ class _Ios3NavigationButtonPainter extends CustomPainter {
     canvas.drawPath(
       path,
       Paint()
-        ..shader = const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFF7894B5), Color(0xFF3D5D84)],
-        ).createShader(rect),
+        ..shader = ios3TopBarButtonGradient.createShader(rect),
     );
     canvas.drawPath(
       path,
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1
-        ..color = const Color(0xFF294767),
+        ..color = const Color(0x80000000),
     );
     canvas.drawPath(
       path,
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = .7
-        ..color = const Color(0x66FFFFFF),
+        ..color = const Color(0x33FFFFFF),
     );
   }
 
@@ -2241,42 +2210,28 @@ class _SelectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     if (AppSettingsScope.of(context).interfaceStyle == InterfaceStyle.ios3) {
       return Container(
-        height: 44,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFB4C7DD), Color(0xFF526F94)],
-          ),
-          border: Border(
-            bottom: BorderSide(color: Color(0xFF344B67), width: 1),
-          ),
-        ),
+        height: ios3TopBarHeight,
+        decoration: ios3TopBarDecoration,
         child: Stack(
           alignment: Alignment.center,
           children: [
-            Text(
-              '$selectionCount Selected',
-              style: const TextStyle(
-                color: CupertinoColors.white,
-                fontFamily: 'SF Pro Text',
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                shadows: [
-                  Shadow(
-                    color: Color(0xAA26384E),
-                    offset: Offset(0, -1),
-                  ),
-                ],
+            Transform.translate(
+              offset: const Offset(0, 1),
+              child: Text(
+                '$selectionCount Selected',
+                style: ios3TopBarTitleStyle,
               ),
             ),
             Positioned(
               right: 6,
+              top: ios3TopBarControlCenterY -
+                  (ios3TopBarButtonHeight / 2),
               child: _Ios3NavigationButton(
                 label: 'Done',
                 onPressed: onCancel,
               ),
             ),
+            const Ios3TopBarGloss(),
           ],
         ),
       );
