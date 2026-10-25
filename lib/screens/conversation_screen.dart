@@ -1582,6 +1582,9 @@ class _ConversationHeader extends StatelessWidget {
     final backLabel = backUnreadCount > 0
         ? 'Messages ($backUnreadCount)'
         : 'Messages';
+    final viewPadding = MediaQuery.viewPaddingOf(context);
+    final screenCenterCorrection =
+        (viewPadding.right - viewPadding.left) / 2;
     return Container(
       key: const ValueKey('conversation-header-ios3'),
       height: 44 + topCompensation,
@@ -1615,34 +1618,41 @@ class _ConversationHeader extends StatelessWidget {
                 ),
               ),
               Positioned.fill(
-                child: Center(
-                  child: SizedBox(
-                    width: 130,
-                    child: showSendingProgress
-                        ? _Ios3SendingProgress(
-                            isSending: isSending,
-                            onCompleted: onSendingProgressCompleted,
-                          )
-                        : Text(
-                            conversation.title,
-                            key: const ValueKey('conversation-contact-name'),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: CupertinoColors.white,
-                              fontFamily: 'SF Pro Text',
-                              fontSize: 20,
-                              height: 1,
-                              fontWeight: FontWeight.w700,
-                              shadows: [
-                                Shadow(
-                                  color: Color(0xAA26384E),
-                                  offset: Offset(0, -1),
+                child: IgnorePointer(
+                  child: Transform.translate(
+                    offset: Offset(screenCenterCorrection, 0),
+                    child: Center(
+                      child: SizedBox(
+                        width: 130,
+                        child: showSendingProgress
+                            ? _Ios3SendingProgress(
+                                isSending: isSending,
+                                onCompleted: onSendingProgressCompleted,
+                              )
+                            : Text(
+                                conversation.title,
+                                key: const ValueKey(
+                                  'conversation-contact-name',
                                 ),
-                              ],
-                            ),
-                          ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: CupertinoColors.white,
+                                  fontFamily: 'SF Pro Text',
+                                  fontSize: 20,
+                                  height: 1,
+                                  fontWeight: FontWeight.w700,
+                                  shadows: [
+                                    Shadow(
+                                      color: Color(0xAA26384E),
+                                      offset: Offset(0, -1),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                      ),
+                    ),
                   ),
                 ),
               ),

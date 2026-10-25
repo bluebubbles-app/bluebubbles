@@ -49,7 +49,7 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val CHANNEL = "bluebubbles/sms"
         private const val TAG = "BlueBubblesSms"
-        private const val NATIVE_BUILD = "2026-10-25-adaptive-launcher-icons-v2"
+        private const val NATIVE_BUILD = "2026-10-25-ios3-phone-stats"
         private const val ROLE_REQUEST = 4701
         private const val PERMISSION_REQUEST = 4702
         private const val MEDIA_PERMISSION_REQUEST = 4703
@@ -145,6 +145,7 @@ class MainActivity : FlutterActivity() {
             "loadConversations" -> loadConversations(result)
             "loadThreadMessages" -> loadThreadMessages(call, result)
             "getSmsMessageCount" -> getSmsMessageCount(result)
+            "getSmsStats" -> getSmsStats(result)
             "resolveOrCreateConversation" -> resolveOrCreateConversation(call, result)
             "searchContacts" -> searchContacts(call, result)
             "sendSms" -> sendSms(call, result)
@@ -1116,6 +1117,101 @@ class MainActivity : FlutterActivity() {
             } catch (error: Exception) {
                 runOnUiThread {
                     result.error("sms_count_failed", error.message, null)
+                }
+            }
+        }.start()
+    }
+
+    private fun getSmsStats(result: MethodChannel.Result) {
+        if (!isDefaultSmsApp() || !hasCoreSmsPermissions()) {
+            result.error("sms_access_denied", "SMS access is not active.", null)
+            return
+        }
+        Thread {
+            try {
+                var sent = 0
+                var received = 0
+                val threadCounts = mutableMapOf<String, Int>()
+
+                fun record(threadId: String, outgoing: Boolean) {
+                    if (outgoing) sent++ else received++
+                    if (threadId.isNotEmpty()) {
+                        threadCounts[threadId] =
+                            (threadCounts[threadId] ?: 0) + 1
+                    }
+                }
+
+                providerQuery(
+                    Telephony.Sms.CONTENT_URI,
+                    arrayOf(Telephony.Sms.THREAD_ID, Telephony.Sms.TYPE),
+                ) { cursor ->
+                    val threadColumn = cursor.getColumnIndexOrThrow(
+                        Telephony.Sms.THREAD_ID,
+                    )
+                    val typeColumn = cursor.getColumnIndexOrThrow(
+                        Telephony.Sms.TYPE,
+                    )
+                    while (cursor.moveToNext()) {
+                        val threadId = cursor.getLong(threadColumn).toString()
+                        when (cursor.getInt(typeColumn)) {
+                            Telephony.Sms.MESSAGE_TYPE_INBOX ->
+                                record(threadId, outgoing = false)
+                            Telephony.Sms.MESSAGE_TYPE_SENT ->
+                                record(threadId, outgoing = true)
+                        }
+                    }
+                }
+
+                // MMS messages live in a different provider table but are
+                // still carrier messages and belong in the classic SMS total.
+                runCatching {
+                    providerQuery(
+                        Telephony.Mms.CONTENT_URI,
+                        arrayOf(
+                            Telephony.Mms.THREAD_ID,
+                            Telephony.Mms.MESSAGE_BOX,
+                        ),
+                    ) { cursor ->
+                        val threadColumn = cursor.getColumnIndexOrThrow(
+                            Telephony.Mms.THREAD_ID,
+                        )
+                        val boxColumn = cursor.getColumnIndexOrThrow(
+                            Telephony.Mms.MESSAGE_BOX,
+                        )
+                        while (cursor.moveToNext()) {
+                            val threadId =
+                                cursor.getLong(threadColumn).toString()
+                            when (cursor.getInt(boxColumn)) {
+                                Telephony.Mms.MESSAGE_BOX_INBOX ->
+                                    record(threadId, outgoing = false)
+                                Telephony.Mms.MESSAGE_BOX_SENT ->
+                                    record(threadId, outgoing = true)
+                            }
+                        }
+                    }
+                }.onFailure { error ->
+                    Log.w(TAG, "MMS statistics query failed", error)
+                }
+
+                val topThread = threadCounts.maxByOrNull { it.value }
+                val total = sent + received
+                val stats = hashMapOf<String, Any?>(
+                    "total" to total,
+                    "sent" to sent,
+                    "received" to received,
+                    "sms" to total,
+                    "imessage" to 0,
+                    "topThreadId" to topThread?.key,
+                    "topCount" to (topThread?.value ?: 0),
+                )
+                runOnUiThread { result.success(stats) }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    result.error(
+                        "sms_stats_failed",
+                        error.message ?: "SMS statistics could not be loaded.",
+                        null,
+                    )
                 }
             }
         }.start()

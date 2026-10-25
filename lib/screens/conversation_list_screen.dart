@@ -371,6 +371,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
       CupertinoPageRoute<void>(
         builder: (_) => _Ios3StatsScreen(
           conversations: widget.conversations,
+          smsController: widget.smsController,
         ),
       ),
     );
@@ -1216,17 +1217,49 @@ class _Ios3FooterButton extends StatelessWidget {
       );
 }
 
-class _Ios3StatsScreen extends StatelessWidget {
-  const _Ios3StatsScreen({required this.conversations});
+class _Ios3StatsScreen extends StatefulWidget {
+  const _Ios3StatsScreen({
+    required this.conversations,
+    required this.smsController,
+  });
 
   final List<Conversation> conversations;
+  final AndroidSmsController smsController;
+
+  @override
+  State<_Ios3StatsScreen> createState() => _Ios3StatsScreenState();
+}
+
+class _Ios3StatsScreenState extends State<_Ios3StatsScreen> {
+  late final Future<SmsStatistics?> _phoneStats;
+
+  @override
+  void initState() {
+    super.initState();
+    _phoneStats = widget.smsController.loadSmsStatistics();
+  }
 
   @override
   Widget build(BuildContext context) {
+    return FutureBuilder<SmsStatistics?>(
+      future: _phoneStats,
+      builder: (context, snapshot) => _buildScreen(
+        context,
+        snapshot.data,
+        loading: snapshot.connectionState != ConnectionState.done,
+      ),
+    );
+  }
+
+  Widget _buildScreen(
+    BuildContext context,
+    SmsStatistics? phoneStats, {
+    required bool loading,
+  }) {
     var sent = 0;
     var received = 0;
     Conversation? topContact;
-    for (final conversation in conversations) {
+    for (final conversation in widget.conversations) {
       for (final message in conversation.messages) {
         if (message.isFromMe) {
           sent++;
@@ -1240,9 +1273,26 @@ class _Ios3StatsScreen extends StatelessWidget {
         topContact = conversation;
       }
     }
-    final total = sent + received;
+    var total = sent + received;
+    var sms = total;
+    var imessage = 0;
+    var topContactCount = topContact?.messages.length ?? 0;
+    if (phoneStats != null) {
+      total = phoneStats.total;
+      sent = phoneStats.sent;
+      received = phoneStats.received;
+      sms = phoneStats.sms;
+      imessage = phoneStats.imessage;
+      topContactCount = phoneStats.topCount;
+      topContact = null;
+      for (final conversation in widget.conversations) {
+        if (conversation.id == phoneStats.topThreadId) {
+          topContact = conversation;
+          break;
+        }
+      }
+    }
     final topContactName = topContact?.title ?? '—';
-    final topContactCount = topContact?.messages.length ?? 0;
 
     return CupertinoTheme(
       data: const CupertinoThemeData(brightness: Brightness.light),
@@ -1255,6 +1305,7 @@ class _Ios3StatsScreen extends StatelessWidget {
             child: Column(
               children: [
                 Container(
+                  width: double.infinity,
                   height: 44,
                   decoration: const BoxDecoration(
                     gradient: LinearGradient(
@@ -1306,16 +1357,24 @@ class _Ios3StatsScreen extends StatelessWidget {
                       ListView(
                         padding: const EdgeInsets.fromLTRB(7, 12, 7, 24),
                         children: [
-                          const Padding(
+                          Padding(
                             padding: EdgeInsets.fromLTRB(6, 0, 6, 5),
-                            child: Text(
-                              'General stats',
-                              style: TextStyle(
-                                color: Color(0xFF4A4A4A),
-                                fontFamily: 'SF Pro Text',
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                              ),
+                            child: Row(
+                              children: [
+                                const Expanded(
+                                  child: Text(
+                                    'General stats',
+                                    style: TextStyle(
+                                      color: Color(0xFF4A4A4A),
+                                      fontFamily: 'SF Pro Text',
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                                if (loading)
+                                  const CupertinoActivityIndicator(radius: 7),
+                              ],
                             ),
                           ),
                           _Ios3StatsGroup(
@@ -1323,8 +1382,8 @@ class _Ios3StatsScreen extends StatelessWidget {
                               _Ios3StatsRowData('Total', '$total'),
                               _Ios3StatsRowData('- Sent', '$sent'),
                               _Ios3StatsRowData('- Received', '$received'),
-                              _Ios3StatsRowData('- SMS', '$total'),
-                              const _Ios3StatsRowData('- iMessage', '0'),
+                              _Ios3StatsRowData('- SMS', '$sms'),
+                              _Ios3StatsRowData('- iMessage', '$imessage'),
                               _Ios3StatsRowData(
                                 'Top Contact',
                                 '$topContactCount messages',

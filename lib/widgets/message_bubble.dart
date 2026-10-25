@@ -554,14 +554,17 @@ class _ImageAttachment extends StatelessWidget {
               image,
               if (useIos3)
                 Positioned(
-                  left: 4,
-                  right: 4,
-                  top: 3,
-                  height: 20,
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  height: 18,
                   child: IgnorePointer(
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(15),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(19.5),
+                          topRight: Radius.circular(19.5),
+                        ),
                         gradient: const LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
@@ -1016,11 +1019,11 @@ class MessageBubblePainter extends CustomPainter {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: useIos3Green
-              ? const [Color(0x00BDFF43), Color(0x80BDFF43)]
+              ? const [Color(0x00BDFF43), Color(0x66BDFF43)]
               : isFromMe
                   ? const [Color(0x00FFFFFF), Color(0x7AFFFFFF)]
                   : const [Color(0x00FFFFFF), Color(0x24FFFFFF)],
-          stops: const [.35, 1],
+          stops: useIos3Green ? const [.78, 1] : const [.35, 1],
         ).createShader(Offset.zero & size);
       canvas.drawPath(
         bubble,
@@ -1053,7 +1056,7 @@ class MessageBubblePainter extends CustomPainter {
         Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.5
-          ..color = const Color(0xFF8D8D8D).withValues(alpha: .9),
+          ..color = const Color(0xFF8D8D8D).withValues(alpha: .2),
       );
     }
   }

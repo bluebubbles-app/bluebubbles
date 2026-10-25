@@ -36,6 +36,37 @@ class SmsContact {
   final Uint8List? avatarBytes;
 }
 
+class SmsStatistics {
+  const SmsStatistics({
+    required this.total,
+    required this.sent,
+    required this.received,
+    required this.sms,
+    required this.imessage,
+    required this.topCount,
+    this.topThreadId,
+  });
+
+  final int total;
+  final int sent;
+  final int received;
+  final int sms;
+  final int imessage;
+  final int topCount;
+  final String? topThreadId;
+
+  factory SmsStatistics.fromNative(Map<Object?, Object?> raw) =>
+      SmsStatistics(
+        total: (raw['total'] as num?)?.toInt() ?? 0,
+        sent: (raw['sent'] as num?)?.toInt() ?? 0,
+        received: (raw['received'] as num?)?.toInt() ?? 0,
+        sms: (raw['sms'] as num?)?.toInt() ?? 0,
+        imessage: (raw['imessage'] as num?)?.toInt() ?? 0,
+        topCount: (raw['topCount'] as num?)?.toInt() ?? 0,
+        topThreadId: raw['topThreadId']?.toString(),
+      );
+}
+
 class AndroidSmsController extends ChangeNotifier {
   AndroidSmsController() {
     _channel.setMethodCallHandler(_handleNativeCall);
@@ -202,6 +233,14 @@ class AndroidSmsController extends ChangeNotifier {
         .invokeMethod<num>('getSmsMessageCount')
         .timeout(_providerTimeout);
     return count?.toInt() ?? 0;
+  }
+
+  Future<SmsStatistics?> loadSmsStatistics() async {
+    if (!isActive) return null;
+    final raw = await _channel
+        .invokeMapMethod<Object?, Object?>('getSmsStats')
+        .timeout(_providerTimeout);
+    return raw == null ? null : SmsStatistics.fromNative(raw);
   }
 
   Future<String?> sendText(String address, String text) async {

@@ -741,20 +741,21 @@ class _Ios3SettingsHeader extends StatelessWidget {
                 padding: EdgeInsets.zero,
                 onPressed: onBack,
                 child: SizedBox(
-                  width: 96,
-                  height: 32,
+                  width: 92,
+                  height: 34,
                   child: CustomPaint(
                     painter: const _Ios3SettingsBackButtonPainter(),
                     child: const Padding(
-                      padding: EdgeInsets.only(left: 12, right: 5),
+                      padding: EdgeInsets.only(left: 8),
                       child: Center(
                         child: Text(
                           'Messages',
                           maxLines: 1,
                           style: TextStyle(
                             color: CupertinoColors.white,
+                            fontFamily: 'SF Pro Text',
                             fontSize: 13,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w600,
                             shadows: [
                               Shadow(
                                 color: Color(0xA6000000),
@@ -778,36 +779,30 @@ class _Ios3SettingsBackButtonPainter extends CustomPainter {
   const _Ios3SettingsBackButtonPainter();
 
   Path _path(Size size) => Path()
-    ..moveTo(14, 1)
+    ..moveTo(13, 1)
     ..lineTo(size.width - 7, 1)
-    ..quadraticBezierTo(size.width - 2, 1, size.width - 2, 6)
-    ..lineTo(size.width - 2, size.height - 6)
+    ..quadraticBezierTo(size.width - 1, 1, size.width - 1, 7)
+    ..lineTo(size.width - 1, size.height - 7)
     ..quadraticBezierTo(
-      size.width - 2,
+      size.width - 1,
       size.height - 1,
       size.width - 7,
       size.height - 1,
     )
-    ..lineTo(14, size.height - 1)
-    ..lineTo(2, size.height / 2)
+    ..lineTo(13, size.height - 1)
+    ..lineTo(1, size.height / 2)
     ..close();
 
   @override
   void paint(Canvas canvas, Size size) {
     final path = _path(size);
-    canvas.drawShadow(
-      path.shift(const Offset(0, 1)),
-      const Color(0x66000000),
-      1,
-      true,
-    );
     canvas.drawPath(
       path,
       Paint()
         ..shader = const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFF8EA9C8), Color(0xFF3F6188)],
+          colors: [Color(0xFF7894B5), Color(0xFF3D5D84)],
         ).createShader(Offset.zero & size),
     );
     canvas.drawPath(
@@ -815,14 +810,14 @@ class _Ios3SettingsBackButtonPainter extends CustomPainter {
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1
-        ..color = const Color(0xFF304966),
+        ..color = const Color(0xFF294767),
     );
     canvas.drawPath(
-      path.shift(const Offset(0, 1)),
+      path,
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = .7
-        ..color = const Color(0x99FFFFFF),
+        ..color = const Color(0x66FFFFFF),
     );
   }
 

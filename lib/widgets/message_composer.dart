@@ -600,6 +600,8 @@ class _MessageComposerState extends State<MessageComposer> {
     required bool isAudioDraft,
     required bool canSend,
   }) {
+    final useGreenSend = AppSettingsScope.of(context).sentBubbleColor ==
+        SentBubbleColor.green;
     return SafeArea(
       top: false,
       child: DecoratedBox(
@@ -748,7 +750,15 @@ class _MessageComposerState extends State<MessageComposer> {
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: canSend
-                              ? const [Color(0xFF96B5F9), Color(0xFF1B46CC)]
+                              ? (useGreenSend
+                                  ? const [
+                                      Color(0xFF61BB47),
+                                      Color(0xFF009A4A),
+                                    ]
+                                  : const [
+                                      Color(0xFF96B5F9),
+                                      Color(0xFF1B46CC),
+                                    ])
                               : const [Color(0xFFB9C3D8), Color(0xFF7083AD)],
                         ),
                         border: Border.all(
