@@ -12,6 +12,15 @@ import '../models/conversation.dart';
 import '../settings/app_settings.dart';
 import '../theme/messages_theme.dart';
 
+const double _ios3TopReflectionInset = 4;
+const double _ios3TopReflectionHeight = 6;
+const double _ios3TopReflectionRadius = 3;
+const LinearGradient _ios3TopReflectionGradient = LinearGradient(
+  begin: Alignment.topCenter,
+  end: Alignment.bottomCenter,
+  colors: [Color(0xCCFFFFFF), Color(0x00F3FFF2)],
+);
+
 double emojiOnlyTextScale(String text) {
   final compact = text.replaceAll(RegExp(r'\s+'), '');
   if (compact.isEmpty) return 1;
@@ -554,19 +563,16 @@ class _ImageAttachment extends StatelessWidget {
               image,
               if (useIos3)
                 Positioned(
-                  left: 4,
-                  right: 4,
+                  left: _ios3TopReflectionInset,
+                  right: _ios3TopReflectionInset,
                   top: 0,
-                  height: 20,
+                  height: _ios3TopReflectionHeight,
                   child: IgnorePointer(
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(15),
-                        gradient: const LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [Color(0xCFFFFFFF), Color(0x00FFFFFF)],
-                        ),
+                        borderRadius:
+                            BorderRadius.circular(_ios3TopReflectionRadius),
+                        gradient: _ios3TopReflectionGradient,
                       ),
                     ),
                   ),
@@ -997,19 +1003,17 @@ class MessageBubblePainter extends CustomPainter {
       canvas.clipPath(bubble);
       final highlightRect = RRect.fromRectAndRadius(
         Rect.fromLTWH(
-          size.width * .045,
-          size.height * .01,
-          size.width * .91,
-          size.height * .17,
+          _ios3TopReflectionInset,
+          0,
+          size.width - (_ios3TopReflectionInset * 2),
+          _ios3TopReflectionHeight,
         ),
-        Radius.circular(size.height * .085),
+        const Radius.circular(_ios3TopReflectionRadius),
       );
       final glossPaint = Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: const [Color(0xCCFFFFFF), Color(0x00F3FFF2)],
-        ).createShader(highlightRect.outerRect);
+        ..shader = _ios3TopReflectionGradient.createShader(
+          highlightRect.outerRect,
+        );
       canvas.drawRRect(highlightRect, glossPaint);
       final innerTint = Paint()
         ..shader = LinearGradient(
