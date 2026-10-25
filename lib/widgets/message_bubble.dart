@@ -1035,21 +1035,31 @@ class MessageBubblePainter extends CustomPainter {
       canvas.save();
       canvas.clipPath(bubble);
       final lowerReflection = Path();
-      final lowerStart = isFromMe ? 3.5 : 8.0;
-      final lowerEnd = size.width - (isFromMe ? 8.0 : 3.5);
+      const lowerInset = 1.4;
+      const cornerExtent = 9.0;
       final lowerY = size.height - 1.4;
       lowerReflection
-        ..moveTo(lowerStart, lowerY - 2.2)
-        ..quadraticBezierTo(lowerStart + 1.2, lowerY, lowerStart + 4, lowerY)
-        ..lineTo(lowerEnd - 4, lowerY)
-        ..quadraticBezierTo(lowerEnd - 1.2, lowerY, lowerEnd, lowerY - 2.2);
+        ..moveTo(lowerInset, lowerY - cornerExtent)
+        ..quadraticBezierTo(
+          lowerInset,
+          lowerY,
+          lowerInset + cornerExtent,
+          lowerY,
+        )
+        ..lineTo(size.width - lowerInset - cornerExtent, lowerY)
+        ..quadraticBezierTo(
+          size.width - lowerInset,
+          lowerY,
+          size.width - lowerInset,
+          lowerY - cornerExtent,
+        );
       canvas.drawPath(
         lowerReflection,
         Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.1
           ..strokeCap = StrokeCap.round
-          ..color = const Color(0xB8FFFFFF)
+          ..color = CupertinoColors.white.withValues(alpha: .65)
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, .35),
       );
       canvas.restore();
