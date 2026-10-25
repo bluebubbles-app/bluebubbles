@@ -1,0 +1,20 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <application>
+        <activity android:name="io.github.bluebubblesapp.bluebubbles.MainActivity">
+            <!-- The canonical manifest keeps this filter solely so
+                 `flutter run` can resolve MainActivity before Gradle merges
+                 manifests. The installed app launches through one of the
+                 selectable activity aliases instead. -->
+            <intent-filter tools:node="removeAll" />
+            <intent-filter>
+                <action android:name="android.intent.action.SENDTO" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="sms" />
+                <data android:scheme="smsto" />
+                <data android:scheme="mms" />
+                <data android:scheme="mmsto" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

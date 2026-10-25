@@ -5,6 +5,7 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 project_root="$(cd "$script_dir/.." && pwd)"
 manifest="$project_root/android/app/src/main/AndroidManifest.xml"
+launcher_overlay_source="$script_dir/android_sms/AndroidManifest.launcher-overlay.xml"
 native_source="$script_dir/android_sms"
 kotlin_target="$project_root/android/app/src/main/kotlin/io/github/bluebubblesapp/bluebubbles"
 icon_source="$project_root/assets/icon/app-icons"
@@ -45,6 +46,11 @@ fi
 
 mkdir -p "$kotlin_target"
 cp "$native_source/AndroidManifest.xml" "$manifest"
+for variant in debug profile release; do
+  variant_manifest_dir="$project_root/android/app/src/$variant"
+  mkdir -p "$variant_manifest_dir"
+  cp "$launcher_overlay_source" "$variant_manifest_dir/AndroidManifest.xml"
+done
 cp "$native_source/MainActivity.kt" "$kotlin_target/MainActivity.kt"
 cp "$native_source/SmsReceiver.kt" "$kotlin_target/SmsReceiver.kt"
 cp "$native_source/MmsReceiver.kt" "$kotlin_target/MmsReceiver.kt"
