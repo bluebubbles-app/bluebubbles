@@ -1275,14 +1275,12 @@ class _Ios3StatsScreenState extends State<_Ios3StatsScreen> {
     }
     var total = sent + received;
     var sms = total;
-    var imessage = 0;
     var topContactCount = topContact?.messages.length ?? 0;
     if (phoneStats != null) {
       total = phoneStats.total;
       sent = phoneStats.sent;
       received = phoneStats.received;
       sms = phoneStats.sms;
-      imessage = phoneStats.imessage;
       topContactCount = phoneStats.topCount;
       topContact = null;
       for (final conversation in widget.conversations) {
@@ -1338,9 +1336,9 @@ class _Ios3StatsScreenState extends State<_Ios3StatsScreen> {
                       Positioned(
                         left: 6,
                         child: _Ios3ListNavigationButton(
-                          width: 58,
+                          width: 74,
                           onPressed: () => Navigator.of(context).pop(),
-                          child: const Text('About'),
+                          child: const Text('Messages'),
                         ),
                       ),
                     ],
@@ -1383,7 +1381,6 @@ class _Ios3StatsScreenState extends State<_Ios3StatsScreen> {
                               _Ios3StatsRowData('- Sent', '$sent'),
                               _Ios3StatsRowData('- Received', '$received'),
                               _Ios3StatsRowData('- SMS', '$sms'),
-                              _Ios3StatsRowData('- iMessage', '$imessage'),
                               _Ios3StatsRowData(
                                 'Top Contact',
                                 '$topContactCount messages',

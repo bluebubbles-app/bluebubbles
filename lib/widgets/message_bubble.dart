@@ -554,17 +554,14 @@ class _ImageAttachment extends StatelessWidget {
               image,
               if (useIos3)
                 Positioned(
-                  left: 0,
-                  right: 0,
+                  left: 4,
+                  right: 4,
                   top: 0,
-                  height: 18,
+                  height: 20,
                   child: IgnorePointer(
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(19.5),
-                          topRight: Radius.circular(19.5),
-                        ),
+                        borderRadius: BorderRadius.circular(15),
                         gradient: const LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
@@ -1056,7 +1053,7 @@ class MessageBubblePainter extends CustomPainter {
         Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.5
-          ..color = const Color(0xFF8D8D8D).withValues(alpha: .2),
+          ..color = const Color(0xFF8D8D8D).withValues(alpha: .45),
       );
     }
   }
