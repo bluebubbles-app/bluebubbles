@@ -2083,8 +2083,8 @@ class _Ios3NavigationButton extends StatelessWidget {
       textScaler: MediaQuery.textScalerOf(context),
     )..layout();
     final width = backShape
-        ? (labelPainter.width + 28).clamp(92.0, 116.0).toDouble()
-        : (labelPainter.width + 22).clamp(48.0, 80.0).toDouble();
+        ? (labelPainter.width + 32).clamp(96.0, 128.0).toDouble()
+        : (labelPainter.width + 32).clamp(60.0, 96.0).toDouble();
     return CupertinoButton(
       minSize: ios3TopBarButtonHeight,
       padding: EdgeInsets.zero,

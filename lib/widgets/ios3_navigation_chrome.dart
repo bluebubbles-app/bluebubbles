@@ -71,8 +71,8 @@ class Ios3TopBarGloss extends StatelessWidget {
               Positioned(
                 left: 1,
                 right: 1,
-                top: 1.5,
-                height: .5,
+                top: 0,
+                height: 1,
                 child: ColoredBox(color: Color(0x80FFFFFF)),
               ),
             ],
