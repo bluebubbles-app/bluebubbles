@@ -24,6 +24,13 @@ import 'settings_screen.dart';
 
 const maxPinnedConversations = 9;
 const _collapsedSearchExtent = 60.0;
+const _ios3CollapsedSearchExtent = 40.0;
+
+double _initialConversationListOffset(InterfaceStyle style) {
+  if (style == InterfaceStyle.ios26) return 0;
+  if (style == InterfaceStyle.ios3) return _ios3CollapsedSearchExtent;
+  return _collapsedSearchExtent;
+}
 
 bool hasAvailablePinSlot(Iterable<Conversation> conversations) =>
     conversations.where((conversation) => conversation.isPinned).length <
@@ -117,9 +124,9 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
   void initState() {
     super.initState();
     _conversationListController = ScrollController(
-      initialScrollOffset: widget.interfaceStyle == InterfaceStyle.ios26
-          ? 0
-          : _collapsedSearchExtent,
+      initialScrollOffset: _initialConversationListOffset(
+        widget.interfaceStyle,
+      ),
     );
     _syncWasActive = widget.syncProgress.value.active;
     widget.syncProgress.addListener(_handleSyncProgress);
@@ -137,9 +144,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
     if (oldWidget.interfaceStyle != widget.interfaceStyle) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || !_conversationListController.hasClients) return;
-        final target = widget.interfaceStyle == InterfaceStyle.ios26
-            ? 0.0
-            : _collapsedSearchExtent;
+        final target = _initialConversationListOffset(widget.interfaceStyle);
         _conversationListController.jumpTo(
           target.clamp(
             0.0,
@@ -895,8 +900,9 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
     final baseTopBarHeight = settings.interfaceStyle == InterfaceStyle.ios3
         ? ios3TopBarHeight
         : 44.0;
-    final topCompensation =
-        (baseTopBarHeight - MediaQuery.paddingOf(context).top)
+    final topCompensation = settings.interfaceStyle == InterfaceStyle.ios3
+        ? 0.0
+        : (baseTopBarHeight - MediaQuery.paddingOf(context).top)
             .clamp(0.0, baseTopBarHeight)
             .toDouble();
     if (settings.interfaceStyle == InterfaceStyle.ios3) {

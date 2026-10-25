@@ -10,6 +10,9 @@ native_source="$script_dir/android_sms"
 kotlin_target="$project_root/android/app/src/main/kotlin/io/github/bluebubblesapp/bluebubbles"
 icon_source="$project_root/assets/icon/app-icons"
 icon_adaptive_source="$script_dir/android_sms/app_icons"
+launch_styles_source="$script_dir/android_sms/launch_styles.xml"
+launch_styles_v31_source="$script_dir/android_sms/launch_styles_v31.xml"
+transparent_splash_source="$script_dir/android_sms/transparent_splash_icon.xml"
 icon_drawable_target="$project_root/android/app/src/main/res/drawable-nodpi"
 icon_legacy_target="$project_root/android/app/src/main/res/mipmap-nodpi"
 icon_adaptive_target="$project_root/android/app/src/main/res/mipmap-anydpi-v26"
@@ -62,6 +65,23 @@ cp "$native_source/BlueBubblesMmsSentReceiver.kt" \
 cp "$native_source/RespondViaMessageService.kt" \
   "$kotlin_target/RespondViaMessageService.kt"
 cp "$native_source/SmsSendCompat.kt" "$kotlin_target/SmsSendCompat.kt"
+
+# Keep Android's mandatory launch window visually empty. Android 12+ always
+# creates a system splash screen, so use a transparent icon with a zero-length
+# animation; older versions skip the preview window entirely.
+for values_dir in values values-night; do
+  mkdir -p "$project_root/android/app/src/main/res/$values_dir"
+  cp "$launch_styles_source" \
+    "$project_root/android/app/src/main/res/$values_dir/styles.xml"
+done
+for values_dir in values-v31 values-night-v31; do
+  mkdir -p "$project_root/android/app/src/main/res/$values_dir"
+  cp "$launch_styles_v31_source" \
+    "$project_root/android/app/src/main/res/$values_dir/styles.xml"
+done
+mkdir -p "$project_root/android/app/src/main/res/drawable"
+cp "$transparent_splash_source" \
+  "$project_root/android/app/src/main/res/drawable/transparent_splash_icon.xml"
 
 # Install each supplied square as the full-bleed background of a real
 # adaptive icon. Using the complete artwork as a legacy drawable makes modern

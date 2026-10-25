@@ -742,8 +742,9 @@ class _ConversationScreenState extends State<ConversationScreen>
     final useIos3 = interfaceStyle == InterfaceStyle.ios3;
     final useIos26 = interfaceStyle == InterfaceStyle.ios26;
     final baseTopBarHeight = useIos3 ? ios3TopBarHeight : 44.0;
-    final topCompensation =
-        (baseTopBarHeight - MediaQuery.paddingOf(context).top)
+    final topCompensation = useIos3
+        ? 0.0
+        : (baseTopBarHeight - MediaQuery.paddingOf(context).top)
             .clamp(0.0, baseTopBarHeight)
             .toDouble();
     return AnnotatedRegion<SystemUiOverlayStyle>(
