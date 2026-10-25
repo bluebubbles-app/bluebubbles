@@ -13,7 +13,7 @@ import '../settings/app_settings.dart';
 import '../theme/messages_theme.dart';
 
 const double _ios3ReflectionInset = 8.25;
-const double _ios3ReflectionTop = 2;
+const double _ios3ReflectionTop = 0;
 const double _ios3ReflectionHeight = 18;
 const double _ios3ReflectionRadius = 9;
 const LinearGradient _ios3ReflectionGradient = LinearGradient(
