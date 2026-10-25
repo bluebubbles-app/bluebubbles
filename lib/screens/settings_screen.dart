@@ -306,22 +306,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final settings = AppSettingsScope.of(context);
-    return CupertinoPageScaffold(
-      backgroundColor: MessagesPalette.fill(context),
-      navigationBar: const CupertinoNavigationBar(
-        middle: Text('Settings'),
-      ),
-      child: SafeArea(
-        child: ListView(
+    final useIos3 = settings.interfaceStyle == InterfaceStyle.ios3;
+    final content = ListView(
+      padding: useIos3
+          ? const EdgeInsets.fromLTRB(10, 14, 10, 28)
+          : EdgeInsets.zero,
+      children: [
+        _SettingsSection(
+          useIos3: useIos3,
+          header: 'MESSAGING MODE',
+          footer:
+              'Preview Mode keeps your current SMS app unchanged. The first '
+              'native build handles SMS and carrier MMS. RCS is not '
+              'available through Android’s public SMS interface.',
           children: [
-            CupertinoListSection.insetGrouped(
-              header: const Text('MESSAGING MODE'),
-              footer: const Text(
-                'Preview Mode keeps your current SMS app unchanged. The first '
-                'native build handles SMS and carrier MMS. RCS is not '
-                'available through Android’s public SMS interface.',
-              ),
-              children: [
                 _StatusRow(
                   title: 'BlueBubbles',
                   value: widget.smsController.statusLabel,
@@ -359,11 +357,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ? null
                       : _showSmsDiagnostics,
                 ),
-              ],
-            ),
-            CupertinoListSection.insetGrouped(
-              header: const Text('APPEARANCE'),
-              children: [
+          ],
+        ),
+        _SettingsSection(
+          useIos3: useIos3,
+          header: 'APPEARANCE',
+          children: [
                 _ChoiceRow(
                   key: const ValueKey('interface-style-setting'),
                   title: 'Interface',
@@ -447,11 +446,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     if (value != null) await settings.setEmojiStyle(value);
                   },
                 ),
-              ],
-            ),
-            CupertinoListSection.insetGrouped(
-              header: const Text('REGION'),
-              children: [
+          ],
+        ),
+        _SettingsSection(
+          useIos3: useIos3,
+          header: 'REGION',
+          children: [
                 _ChoiceRow(
                   title: 'Language',
                   value: _languageLabel(settings.language),
@@ -504,15 +504,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     if (value != null) await settings.setClockFormat(value);
                   },
                 ),
-              ],
-            ),
-            CupertinoListSection.insetGrouped(
-              header: const Text('MESSAGES'),
-              footer: const Text(
-                'Backups use a portable JSON model. The same conversation '
-                'model stores imported data and Android SMS/MMS data.',
-              ),
-              children: [
+          ],
+        ),
+        _SettingsSection(
+          useIos3: useIos3,
+          header: 'MESSAGES',
+          footer: 'Backups use a portable JSON model. The same conversation '
+              'model stores imported data and Android SMS/MMS data.',
+          children: [
                 _ActionRow(
                   key: const ValueKey('import-messages-setting'),
                   title: 'Import Messages',
@@ -525,16 +524,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: CupertinoIcons.square_arrow_up,
                   onPressed: _transferring ? null : _exportMessages,
                 ),
-              ],
-            ),
-            if (_transferring)
-              const Padding(
-                padding: EdgeInsets.only(bottom: 24),
-                child: Center(child: CupertinoActivityIndicator()),
-              ),
           ],
         ),
+        if (_transferring)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 24),
+            child: Center(child: CupertinoActivityIndicator()),
+          ),
+      ],
+    );
+
+    if (useIos3) {
+      return AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle.dark,
+        child: CupertinoPageScaffold(
+          backgroundColor: const Color(0xFFDCE1EC),
+          child: SafeArea(
+            child: Column(
+              children: [
+                _Ios3SettingsHeader(
+                  onBack: () => Navigator.of(context).maybePop(),
+                ),
+                Expanded(
+                  child: Stack(
+                    children: [
+                      const Positioned.fill(
+                        child: CustomPaint(
+                          painter: _Ios3SettingsBackgroundPainter(),
+                        ),
+                      ),
+                      content,
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return CupertinoPageScaffold(
+      backgroundColor: MessagesPalette.fill(context),
+      navigationBar: const CupertinoNavigationBar(
+        middle: Text('Settings'),
       ),
+      child: SafeArea(child: content),
     );
   }
 
@@ -566,6 +601,255 @@ class _SettingsScreenState extends State<SettingsScreen> {
         SentBubbleColor.blue => 'Blue',
         SentBubbleColor.green => 'Green',
       };
+}
+
+class _SettingsSection extends StatelessWidget {
+  const _SettingsSection({
+    required this.useIos3,
+    required this.header,
+    required this.children,
+    this.footer,
+  });
+
+  final bool useIos3;
+  final String header;
+  final String? footer;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!useIos3) {
+      return CupertinoListSection.insetGrouped(
+        header: Text(header),
+        footer: footer == null ? null : Text(footer!),
+        children: children,
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 5),
+            child: Text(
+              header,
+              style: const TextStyle(
+                color: Color(0xFF636B78),
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: .35,
+                shadows: [
+                  Shadow(color: Color(0xE6FFFFFF), offset: Offset(0, 1)),
+                ],
+              ),
+            ),
+          ),
+          for (var index = 0; index < children.length; index++) ...[
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xFFFFFFFF), Color(0xFFF0F0F0)],
+                  stops: [0, .78],
+                ),
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(color: const Color(0xFF9A9A9A)),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x24000000),
+                    blurRadius: 2,
+                    offset: Offset(0, 1),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: children[index],
+              ),
+            ),
+            if (index != children.length - 1) const SizedBox(height: 9),
+          ],
+          if (footer != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+              child: Text(
+                footer!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Color(0xFF747B88),
+                  fontSize: 11,
+                  height: 1.18,
+                  shadows: [
+                    Shadow(color: Color(0xE6FFFFFF), offset: Offset(0, 1)),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Ios3SettingsHeader extends StatelessWidget {
+  const _Ios3SettingsHeader({required this.onBack});
+
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        height: 45,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFFC1D1E4),
+              Color(0xFF829DBB),
+              Color(0xFF4E6E93),
+            ],
+            stops: [0, .48, 1],
+          ),
+          border: Border(
+            bottom: BorderSide(color: Color(0xFF344B67)),
+          ),
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            const Text(
+              'Settings',
+              style: TextStyle(
+                color: CupertinoColors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                shadows: [
+                  Shadow(color: Color(0xB3000000), offset: Offset(0, -1)),
+                ],
+              ),
+            ),
+            Positioned(
+              left: 6,
+              child: CupertinoButton(
+                minSize: 32,
+                padding: EdgeInsets.zero,
+                onPressed: onBack,
+                child: SizedBox(
+                  width: 96,
+                  height: 32,
+                  child: CustomPaint(
+                    painter: const _Ios3SettingsBackButtonPainter(),
+                    child: const Padding(
+                      padding: EdgeInsets.only(left: 12, right: 5),
+                      child: Center(
+                        child: Text(
+                          'Messages',
+                          maxLines: 1,
+                          style: TextStyle(
+                            color: CupertinoColors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            shadows: [
+                              Shadow(
+                                color: Color(0xA6000000),
+                                offset: Offset(0, -1),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+class _Ios3SettingsBackButtonPainter extends CustomPainter {
+  const _Ios3SettingsBackButtonPainter();
+
+  Path _path(Size size) => Path()
+    ..moveTo(14, 1)
+    ..lineTo(size.width - 7, 1)
+    ..quadraticBezierTo(size.width - 2, 1, size.width - 2, 6)
+    ..lineTo(size.width - 2, size.height - 6)
+    ..quadraticBezierTo(
+      size.width - 2,
+      size.height - 1,
+      size.width - 7,
+      size.height - 1,
+    )
+    ..lineTo(14, size.height - 1)
+    ..lineTo(2, size.height / 2)
+    ..close();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = _path(size);
+    canvas.drawShadow(
+      path.shift(const Offset(0, 1)),
+      const Color(0x66000000),
+      1,
+      true,
+    );
+    canvas.drawPath(
+      path,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF8EA9C8), Color(0xFF3F6188)],
+        ).createShader(Offset.zero & size),
+    );
+    canvas.drawPath(
+      path,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = const Color(0xFF304966),
+    );
+    canvas.drawPath(
+      path.shift(const Offset(0, 1)),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = .7
+        ..color = const Color(0x99FFFFFF),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_Ios3SettingsBackButtonPainter oldDelegate) => false;
+}
+
+class _Ios3SettingsBackgroundPainter extends CustomPainter {
+  const _Ios3SettingsBackgroundPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()..color = const Color(0xFFDCE2EC),
+    );
+    final light = Paint()
+      ..color = const Color(0x30FFFFFF)
+      ..strokeWidth = 1;
+    final shade = Paint()
+      ..color = const Color(0x10000000)
+      ..strokeWidth = 1;
+    for (double x = 0; x < size.width; x += 4) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), light);
+      canvas.drawLine(Offset(x + 1, 0), Offset(x + 1, size.height), shade);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_Ios3SettingsBackgroundPainter oldDelegate) => false;
 }
 
 extension on AppIconStyle {
@@ -633,24 +917,44 @@ class _AppIconChoiceRow extends StatelessWidget {
   final VoidCallback onPressed;
 
   @override
-  Widget build(BuildContext context) => CupertinoListTile(
-        key: const ValueKey('app-icon-setting'),
-        leading: _AppIconPreview(style: style, size: 32),
-        title: Text(
-          'App Icon',
-          style: TextStyle(color: MessagesPalette.label(context)),
+  Widget build(BuildContext context) {
+    final useIos3 = AppSettingsScope.of(context).interfaceStyle ==
+        InterfaceStyle.ios3;
+    return CupertinoListTile(
+      key: const ValueKey('app-icon-setting'),
+      leading: _AppIconPreview(style: style, size: 32),
+      title: Text(
+        'App Icon',
+        style: TextStyle(
+          color: useIos3
+              ? CupertinoColors.black
+              : MessagesPalette.label(context),
+          fontSize: useIos3 ? 15 : null,
+          fontWeight: useIos3 ? FontWeight.w600 : null,
         ),
-        additionalInfo: changing
-            ? const CupertinoActivityIndicator(radius: 8)
-            : Text(
-                style.label,
-                style: TextStyle(
-                  color: MessagesPalette.secondaryLabel(context),
-                ),
+      ),
+      additionalInfo: changing
+          ? const CupertinoActivityIndicator(radius: 8)
+          : Text(
+              style.label,
+              style: TextStyle(
+                color: useIos3
+                    ? const Color(0xFF666B73)
+                    : MessagesPalette.secondaryLabel(context),
+                fontSize: useIos3 ? 13 : null,
               ),
-        trailing: const CupertinoListTileChevron(),
-        onTap: changing ? null : onPressed,
-      );
+            ),
+      trailing: useIos3
+          ? const Icon(
+              CupertinoIcons.chevron_forward,
+              color: Color(0xFF777C84),
+              size: 17,
+            )
+          : const CupertinoListTileChevron(),
+      backgroundColor: useIos3 ? CupertinoColors.transparent : null,
+      onTap: changing ? null : onPressed,
+    );
+  }
 }
 
 class _SliderSetting extends StatelessWidget {
@@ -675,25 +979,42 @@ class _SliderSetting extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final useIos3 = AppSettingsScope.of(context).interfaceStyle ==
+        InterfaceStyle.ios3;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 11, 12, 8),
+      padding: EdgeInsets.fromLTRB(
+        useIos3 ? 10 : 16,
+        useIos3 ? 8 : 11,
+        12,
+        useIos3 ? 5 : 8,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(leading, color: MessagesPalette.blue, size: 21),
-              const SizedBox(width: 12),
+              if (!useIos3) ...[
+                Icon(leading, color: MessagesPalette.blue, size: 21),
+                const SizedBox(width: 12),
+              ],
               Text(
                 title,
-                style: TextStyle(color: MessagesPalette.label(context)),
+                style: TextStyle(
+                  color: useIos3
+                      ? CupertinoColors.black
+                      : MessagesPalette.label(context),
+                  fontSize: useIos3 ? 15 : null,
+                  fontWeight: useIos3 ? FontWeight.w600 : null,
+                ),
               ),
               const Spacer(),
               Text(
                 '${((value - min) / (max - min) * 100).round()}%',
                 style: TextStyle(
-                  color: MessagesPalette.secondaryLabel(context),
-                  fontSize: 14,
+                  color: useIos3
+                      ? const Color(0xFF666B73)
+                      : MessagesPalette.secondaryLabel(context),
+                  fontSize: useIos3 ? 13 : 14,
                 ),
               ),
             ],
@@ -702,16 +1023,19 @@ class _SliderSetting extends StatelessWidget {
             value: value,
             min: min,
             max: max,
+            activeColor: useIos3 ? const Color(0xFF2F7CC2) : null,
             onChanged: onChanged,
           ),
           if (note != null)
             Padding(
-              padding: const EdgeInsets.fromLTRB(33, 0, 8, 4),
+              padding: EdgeInsets.fromLTRB(useIos3 ? 2 : 33, 0, 8, 4),
               child: Text(
                 note!,
                 style: TextStyle(
-                  color: MessagesPalette.secondaryLabel(context),
-                  fontSize: 12,
+                  color: useIos3
+                      ? const Color(0xFF747B88)
+                      : MessagesPalette.secondaryLabel(context),
+                  fontSize: useIos3 ? 11 : 12,
                   height: 1.25,
                   fontWeight: FontWeight.w400,
                 ),
@@ -736,16 +1060,31 @@ class _StatusRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final useIos3 = AppSettingsScope.of(context).interfaceStyle ==
+        InterfaceStyle.ios3;
     return CupertinoListTile(
-      leading: Icon(icon, color: MessagesPalette.blue, size: 21),
+      leading:
+          useIos3 ? null : Icon(icon, color: MessagesPalette.blue, size: 21),
       title: Text(
         title,
-        style: TextStyle(color: MessagesPalette.label(context)),
+        style: TextStyle(
+          color: useIos3
+              ? CupertinoColors.black
+              : MessagesPalette.label(context),
+          fontSize: useIos3 ? 15 : null,
+          fontWeight: useIos3 ? FontWeight.w600 : null,
+        ),
       ),
       additionalInfo: Text(
         value,
-        style: TextStyle(color: MessagesPalette.secondaryLabel(context)),
+        style: TextStyle(
+          color: useIos3
+              ? const Color(0xFF666B73)
+              : MessagesPalette.secondaryLabel(context),
+          fontSize: useIos3 ? 13 : null,
+        ),
       ),
+      backgroundColor: useIos3 ? CupertinoColors.transparent : null,
     );
   }
 }
@@ -766,17 +1105,38 @@ class _ChoiceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final useIos3 = AppSettingsScope.of(context).interfaceStyle ==
+        InterfaceStyle.ios3;
     return CupertinoListTile(
-      leading: Icon(icon, color: MessagesPalette.blue, size: 21),
+      leading:
+          useIos3 ? null : Icon(icon, color: MessagesPalette.blue, size: 21),
       title: Text(
         title,
-        style: TextStyle(color: MessagesPalette.label(context)),
+        style: TextStyle(
+          color: useIos3
+              ? CupertinoColors.black
+              : MessagesPalette.label(context),
+          fontSize: useIos3 ? 15 : null,
+          fontWeight: useIos3 ? FontWeight.w600 : null,
+        ),
       ),
       additionalInfo: Text(
         value,
-        style: TextStyle(color: MessagesPalette.secondaryLabel(context)),
+        style: TextStyle(
+          color: useIos3
+              ? const Color(0xFF666B73)
+              : MessagesPalette.secondaryLabel(context),
+          fontSize: useIos3 ? 13 : null,
+        ),
       ),
-      trailing: const CupertinoListTileChevron(),
+      trailing: useIos3
+          ? const Icon(
+              CupertinoIcons.chevron_forward,
+              color: Color(0xFF777C84),
+              size: 17,
+            )
+          : const CupertinoListTileChevron(),
+      backgroundColor: useIos3 ? CupertinoColors.transparent : null,
       onTap: onPressed,
     );
   }
@@ -796,16 +1156,33 @@ class _ActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final useIos3 = AppSettingsScope.of(context).interfaceStyle ==
+        InterfaceStyle.ios3;
     return CupertinoListTile(
-      leading: Icon(icon, color: MessagesPalette.blue, size: 21),
+      leading:
+          useIos3 ? null : Icon(icon, color: MessagesPalette.blue, size: 21),
       title: Text(
         title,
         style: TextStyle(
           color: onPressed == null
-              ? MessagesPalette.secondaryLabel(context)
-              : MessagesPalette.blue,
+              ? (useIos3
+                  ? const Color(0xFF8A8A8A)
+                  : MessagesPalette.secondaryLabel(context))
+              : (useIos3
+                  ? CupertinoColors.black
+                  : MessagesPalette.blue),
+          fontSize: useIos3 ? 15 : null,
+          fontWeight: useIos3 ? FontWeight.w600 : null,
         ),
       ),
+      trailing: useIos3
+          ? const Icon(
+              CupertinoIcons.chevron_forward,
+              color: Color(0xFF777C84),
+              size: 17,
+            )
+          : null,
+      backgroundColor: useIos3 ? CupertinoColors.transparent : null,
       onTap: onPressed,
     );
   }

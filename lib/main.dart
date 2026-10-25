@@ -1063,11 +1063,18 @@ class _MessagesUiAppState extends State<MessagesUiApp>
             return MediaQuery(
               data: mediaQuery.copyWith(
                 textScaler: TextScaler.linear(_settings.fontScale),
+                platformBrightness:
+                    _settings.interfaceStyle == InterfaceStyle.ios3
+                        ? Brightness.light
+                        : mediaQuery.platformBrightness,
               ),
               child: child!,
             );
           },
           theme: CupertinoThemeData(
+            brightness: _settings.interfaceStyle == InterfaceStyle.ios3
+                ? Brightness.light
+                : null,
             primaryColor: MessagesPalette.blue,
             textTheme: CupertinoTextThemeData(
               textStyle: TextStyle(

@@ -916,7 +916,9 @@ class _ConversationScreenState extends State<ConversationScreen>
                     if (_loadingMessages)
                       Positioned.fill(
                         child: ColoredBox(
-                          color: MessagesPalette.background(context),
+                          color: useIos3
+                              ? const Color(0xFFDCE1EC)
+                              : MessagesPalette.background(context),
                           child: const Center(
                             child: CupertinoActivityIndicator(),
                           ),
