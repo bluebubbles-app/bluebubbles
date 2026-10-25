@@ -639,6 +639,7 @@ class _SettingsSection extends StatelessWidget {
               header,
               style: const TextStyle(
                 color: Color(0xFF636B78),
+                fontFamily: 'SF Pro Text',
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
                 letterSpacing: .35,
@@ -648,32 +649,42 @@ class _SettingsSection extends StatelessWidget {
               ),
             ),
           ),
-          for (var index = 0; index < children.length; index++) ...[
-            DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0xFFFFFFFF), Color(0xFFF0F0F0)],
-                  stops: [0, .78],
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xFFFFFFFF), Color(0xFFF0F0F0)],
+                stops: [0, .78],
+              ),
+              borderRadius: BorderRadius.circular(9),
+              border: Border.all(color: const Color(0xFF9A9A9A)),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x24000000),
+                  blurRadius: 2,
+                  offset: Offset(0, 1),
                 ),
-                borderRadius: BorderRadius.circular(9),
-                border: Border.all(color: const Color(0xFF9A9A9A)),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x24000000),
-                    blurRadius: 2,
-                    offset: Offset(0, 1),
-                  ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var index = 0; index < children.length; index++) ...[
+                    children[index],
+                    if (index != children.length - 1)
+                      const SizedBox(
+                        height: 1,
+                        width: double.infinity,
+                        child: ColoredBox(color: Color(0xFFB4B4B4)),
+                      ),
+                  ],
                 ],
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: children[index],
-              ),
             ),
-            if (index != children.length - 1) const SizedBox(height: 9),
-          ],
+          ),
           if (footer != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
@@ -682,6 +693,7 @@ class _SettingsSection extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: Color(0xFF747B88),
+                  fontFamily: 'SF Pro Text',
                   fontSize: 11,
                   height: 1.18,
                   shadows: [
@@ -727,6 +739,7 @@ class _Ios3SettingsHeader extends StatelessWidget {
               'Settings',
               style: TextStyle(
                 color: CupertinoColors.white,
+                fontFamily: 'SF Pro Text',
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
                 shadows: [
@@ -927,8 +940,9 @@ class _AppIconChoiceRow extends StatelessWidget {
           color: useIos3
               ? CupertinoColors.black
               : MessagesPalette.label(context),
+          fontFamily: useIos3 ? 'SF Pro Text' : null,
           fontSize: useIos3 ? 15 : null,
-          fontWeight: useIos3 ? FontWeight.w600 : null,
+          fontWeight: useIos3 ? FontWeight.w700 : null,
         ),
       ),
       additionalInfo: changing
@@ -939,6 +953,7 @@ class _AppIconChoiceRow extends StatelessWidget {
                 color: useIos3
                     ? const Color(0xFF666B73)
                     : MessagesPalette.secondaryLabel(context),
+                fontFamily: useIos3 ? 'SF Pro Text' : null,
                 fontSize: useIos3 ? 13 : null,
               ),
             ),
@@ -1001,8 +1016,9 @@ class _SliderSetting extends StatelessWidget {
                   color: useIos3
                       ? CupertinoColors.black
                       : MessagesPalette.label(context),
+                  fontFamily: useIos3 ? 'SF Pro Text' : null,
                   fontSize: useIos3 ? 15 : null,
-                  fontWeight: useIos3 ? FontWeight.w600 : null,
+                  fontWeight: useIos3 ? FontWeight.w700 : null,
                 ),
               ),
               const Spacer(),
@@ -1012,6 +1028,7 @@ class _SliderSetting extends StatelessWidget {
                   color: useIos3
                       ? const Color(0xFF666B73)
                       : MessagesPalette.secondaryLabel(context),
+                  fontFamily: useIos3 ? 'SF Pro Text' : null,
                   fontSize: useIos3 ? 13 : 14,
                 ),
               ),
@@ -1033,6 +1050,7 @@ class _SliderSetting extends StatelessWidget {
                   color: useIos3
                       ? const Color(0xFF747B88)
                       : MessagesPalette.secondaryLabel(context),
+                  fontFamily: useIos3 ? 'SF Pro Text' : null,
                   fontSize: useIos3 ? 11 : 12,
                   height: 1.25,
                   fontWeight: FontWeight.w400,
@@ -1069,8 +1087,9 @@ class _StatusRow extends StatelessWidget {
           color: useIos3
               ? CupertinoColors.black
               : MessagesPalette.label(context),
+          fontFamily: useIos3 ? 'SF Pro Text' : null,
           fontSize: useIos3 ? 15 : null,
-          fontWeight: useIos3 ? FontWeight.w600 : null,
+          fontWeight: useIos3 ? FontWeight.w700 : null,
         ),
       ),
       additionalInfo: Text(
@@ -1079,6 +1098,7 @@ class _StatusRow extends StatelessWidget {
           color: useIos3
               ? const Color(0xFF666B73)
               : MessagesPalette.secondaryLabel(context),
+          fontFamily: useIos3 ? 'SF Pro Text' : null,
           fontSize: useIos3 ? 13 : null,
         ),
       ),
@@ -1114,8 +1134,9 @@ class _ChoiceRow extends StatelessWidget {
           color: useIos3
               ? CupertinoColors.black
               : MessagesPalette.label(context),
+          fontFamily: useIos3 ? 'SF Pro Text' : null,
           fontSize: useIos3 ? 15 : null,
-          fontWeight: useIos3 ? FontWeight.w600 : null,
+          fontWeight: useIos3 ? FontWeight.w700 : null,
         ),
       ),
       additionalInfo: Text(
@@ -1124,6 +1145,7 @@ class _ChoiceRow extends StatelessWidget {
           color: useIos3
               ? const Color(0xFF666B73)
               : MessagesPalette.secondaryLabel(context),
+          fontFamily: useIos3 ? 'SF Pro Text' : null,
           fontSize: useIos3 ? 13 : null,
         ),
       ),
@@ -1170,7 +1192,8 @@ class _ActionRow extends StatelessWidget {
                   ? CupertinoColors.black
                   : MessagesPalette.blue),
           fontSize: useIos3 ? 15 : null,
-          fontWeight: useIos3 ? FontWeight.w600 : null,
+          fontFamily: useIos3 ? 'SF Pro Text' : null,
+          fontWeight: useIos3 ? FontWeight.w700 : null,
         ),
       ),
       trailing: useIos3
