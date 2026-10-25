@@ -634,7 +634,7 @@ class _SettingsSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(8, 0, 8, 5),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 5),
             child: Text(
               header,
               style: const TextStyle(
@@ -687,7 +687,7 @@ class _SettingsSection extends StatelessWidget {
           ),
           if (footer != null)
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+              padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
               child: Text(
                 footer!,
                 textAlign: TextAlign.center,
@@ -933,7 +933,10 @@ class _AppIconChoiceRow extends StatelessWidget {
         InterfaceStyle.ios3;
     return CupertinoListTile(
       key: const ValueKey('app-icon-setting'),
-      leading: _AppIconPreview(style: style, size: 32),
+      leading: useIos3 ? null : _AppIconPreview(style: style, size: 32),
+      padding: useIos3
+          ? const EdgeInsetsDirectional.fromSTEB(16, 0, 12, 0)
+          : null,
       title: Text(
         'App Icon',
         style: TextStyle(
@@ -996,9 +999,9 @@ class _SliderSetting extends StatelessWidget {
         InterfaceStyle.ios3;
     return Padding(
       padding: EdgeInsets.fromLTRB(
-        useIos3 ? 10 : 16,
+        16,
         useIos3 ? 8 : 11,
-        12,
+        useIos3 ? 34 : 12,
         useIos3 ? 5 : 8,
       ),
       child: Column(
@@ -1081,6 +1084,9 @@ class _StatusRow extends StatelessWidget {
     return CupertinoListTile(
       leading:
           useIos3 ? null : Icon(icon, color: MessagesPalette.blue, size: 21),
+      padding: useIos3
+          ? const EdgeInsetsDirectional.fromSTEB(16, 0, 12, 0)
+          : null,
       title: Text(
         title,
         style: TextStyle(
@@ -1102,6 +1108,7 @@ class _StatusRow extends StatelessWidget {
           fontSize: useIos3 ? 13 : null,
         ),
       ),
+      trailing: useIos3 ? const SizedBox(width: 17) : null,
       backgroundColor: useIos3 ? CupertinoColors.transparent : null,
     );
   }
@@ -1128,6 +1135,9 @@ class _ChoiceRow extends StatelessWidget {
     return CupertinoListTile(
       leading:
           useIos3 ? null : Icon(icon, color: MessagesPalette.blue, size: 21),
+      padding: useIos3
+          ? const EdgeInsetsDirectional.fromSTEB(16, 0, 12, 0)
+          : null,
       title: Text(
         title,
         style: TextStyle(
@@ -1181,6 +1191,9 @@ class _ActionRow extends StatelessWidget {
     return CupertinoListTile(
       leading:
           useIos3 ? null : Icon(icon, color: MessagesPalette.blue, size: 21),
+      padding: useIos3
+          ? const EdgeInsetsDirectional.fromSTEB(16, 0, 12, 0)
+          : null,
       title: Text(
         title,
         style: TextStyle(
