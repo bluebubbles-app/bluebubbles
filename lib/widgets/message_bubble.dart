@@ -255,6 +255,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                             renderedTextScale: renderedTextScale,
                             foregroundColor: foregroundColor,
                             useIos3: useIos3,
+                            showTail: widget.showTail,
                           ),
                         ),
                       ),
@@ -433,12 +434,14 @@ class _MessageBubbleContent extends StatelessWidget {
     required this.renderedTextScale,
     required this.foregroundColor,
     required this.useIos3,
+    required this.showTail,
   });
 
   final ChatMessage message;
   final double renderedTextScale;
   final Color foregroundColor;
   final bool useIos3;
+  final bool showTail;
 
   @override
   Widget build(BuildContext context) {
@@ -451,6 +454,8 @@ class _MessageBubbleContent extends StatelessWidget {
           _ImageAttachment(
             attachment: attachment!,
             useIos3: useIos3,
+            isFromMe: message.isFromMe,
+            showTail: showTail && message.text.isEmpty,
           ),
         if (attachment?.kind == MessageAttachmentKind.audio)
           _AudioAttachment(
@@ -491,10 +496,14 @@ class _ImageAttachment extends StatelessWidget {
   const _ImageAttachment({
     required this.attachment,
     required this.useIos3,
+    required this.isFromMe,
+    required this.showTail,
   });
 
   final MessageAttachment attachment;
   final bool useIos3;
+  final bool isFromMe;
+  final bool showTail;
 
   @override
   Widget build(BuildContext context) {
@@ -553,37 +562,94 @@ class _ImageAttachment extends StatelessWidget {
           ),
         ),
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(useIos3 ? 19.5 : 12),
-        child: SizedBox(
-          width: 220,
-          height: 170,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              image,
-              if (useIos3)
-                Positioned(
-                  left: _ios3ReflectionInset,
-                  right: _ios3ReflectionInset,
-                  top: _ios3ReflectionTop,
-                  height: _ios3ReflectionHeight,
-                  child: IgnorePointer(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        borderRadius:
-                            BorderRadius.circular(_ios3ReflectionRadius),
-                        gradient: _ios3ReflectionGradient,
+      child: useIos3
+          ? SizedBox(
+              width: 220,
+              height: 170,
+              child: Stack(
+                clipBehavior: Clip.none,
+                fit: StackFit.expand,
+                children: [
+                  Positioned(
+                    left: isFromMe ? 0 : -10,
+                    top: 0,
+                    width: 230,
+                    height: 170,
+                    child: ClipPath(
+                      clipper: _Ios3MmsImageClipper(
+                        isFromMe: isFromMe,
+                        showTail: showTail,
+                      ),
+                      child: Transform.scale(
+                        scale: 1.035,
+                        child: image,
                       ),
                     ),
                   ),
-                ),
-            ],
-          ),
-        ),
-      ),
+                  Positioned(
+                    left: _ios3ReflectionInset,
+                    right: _ios3ReflectionInset,
+                    top: _ios3ReflectionTop,
+                    height: _ios3ReflectionHeight,
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius:
+                              BorderRadius.circular(_ios3ReflectionRadius),
+                          gradient: _ios3ReflectionGradient,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                width: 220,
+                height: 170,
+                child: image,
+              ),
+            ),
     );
   }
+}
+
+class _Ios3MmsImageClipper extends CustomClipper<Path> {
+  const _Ios3MmsImageClipper({
+    required this.isFromMe,
+    required this.showTail,
+  });
+
+  final bool isFromMe;
+  final bool showTail;
+
+  @override
+  Path getClip(Size size) {
+    const tailExtent = 10.0;
+    final bodyWidth = size.width - tailExtent;
+    final bodyOffset = isFromMe ? Offset.zero : const Offset(tailExtent, 0);
+    final body = Path()
+      ..addRRect(
+        RRect.fromRectAndRadius(
+          bodyOffset & Size(bodyWidth, size.height),
+          const Radius.circular(19.5),
+        ),
+      );
+    if (!showTail) return body;
+
+    var tail = MessageBubblePainter._ios3Tail(
+      Size(bodyWidth, size.height),
+      isFromMe: isFromMe,
+    );
+    if (!isFromMe) tail = tail.shift(bodyOffset);
+    return Path.combine(PathOperation.union, body, tail);
+  }
+
+  @override
+  bool shouldReclip(_Ios3MmsImageClipper oldClipper) =>
+      oldClipper.isFromMe != isFromMe || oldClipper.showTail != showTail;
 }
 
 class _AudioAttachment extends StatefulWidget {
