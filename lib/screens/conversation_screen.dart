@@ -17,7 +17,7 @@ import '../widgets/liquid_glass_surface.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/message_composer.dart';
 
-const double _ios3ConversationHeaderHeight = 65;
+const double _ios3ConversationHeaderHeight = 55;
 const double _ios3ConversationHeaderCenterY =
     _ios3ConversationHeaderHeight / 2;
 const double _ios3ConversationHeaderButtonHeight = 30;
