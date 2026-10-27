@@ -927,7 +927,11 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                         ? '${_selectedConversationIds.length} Selected'
                         : 'Messages',
                     key: const ValueKey('messages-title'),
-                    style: ios3TopBarTitleStyle,
+                    style: ios3TopBarTitleStyle.copyWith(
+                      fontWeight: _selectingConversations
+                          ? FontWeight.w700
+                          : FontWeight.w600,
+                    ),
                   ),
                 ),
                 Positioned(

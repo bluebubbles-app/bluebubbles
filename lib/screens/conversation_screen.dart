@@ -1637,16 +1637,19 @@ class _ConversationHeader extends StatelessWidget {
                                 isSending: isSending,
                                 onCompleted: onSendingProgressCompleted,
                               )
-                            : Text(
-                                conversation.title,
-                                key: const ValueKey(
-                                  'conversation-contact-name',
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                textAlign: TextAlign.center,
-                                style: ios3TopBarTitleStyle.copyWith(
-                                  fontWeight: FontWeight.w600,
+                            : Transform.translate(
+                                offset: const Offset(0, 2),
+                                child: Text(
+                                  conversation.title,
+                                  key: const ValueKey(
+                                    'conversation-contact-name',
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                  style: ios3TopBarTitleStyle.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
                       ),
