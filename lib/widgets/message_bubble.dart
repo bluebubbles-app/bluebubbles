@@ -21,6 +21,18 @@ const LinearGradient _ios3ReflectionGradient = LinearGradient(
   end: Alignment.bottomCenter,
   colors: [Color(0xCCFFFFFF), Color(0x00F3FFF2)],
 );
+const LinearGradient _ios3MmsTopReflectionGradient = LinearGradient(
+  begin: Alignment.topCenter,
+  end: Alignment.bottomCenter,
+  colors: [Color(0xCCFFFFFF), Color(0xB8FFFFFF), Color(0x00F3FFF2)],
+  stops: [0, .58, 1],
+);
+const LinearGradient _ios3BottomReflectionGradient = LinearGradient(
+  begin: Alignment.topCenter,
+  end: Alignment.bottomCenter,
+  colors: [Color(0x00F3FFF2), Color(0xB8FFFFFF), Color(0xCCFFFFFF)],
+  stops: [0, .42, 1],
+);
 
 double emojiOnlyTextScale(String text) {
   final compact = text.replaceAll(RegExp(r'\s+'), '');
@@ -596,7 +608,22 @@ class _ImageAttachment extends StatelessWidget {
                         decoration: BoxDecoration(
                           borderRadius:
                               BorderRadius.circular(_ios3ReflectionRadius),
-                          gradient: _ios3ReflectionGradient,
+                          gradient: _ios3MmsTopReflectionGradient,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: _ios3ReflectionInset,
+                    right: _ios3ReflectionInset,
+                    bottom: _ios3ReflectionTop,
+                    height: _ios3ReflectionHeight,
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius:
+                              BorderRadius.circular(_ios3ReflectionRadius),
+                          gradient: _ios3BottomReflectionGradient,
                         ),
                       ),
                     ),

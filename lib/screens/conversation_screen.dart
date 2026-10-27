@@ -1648,6 +1648,7 @@ class _ConversationHeader extends StatelessWidget {
                                   overflow: TextOverflow.ellipsis,
                                   textAlign: TextAlign.center,
                                   style: ios3TopBarTitleStyle.copyWith(
+                                    fontSize: 22,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
