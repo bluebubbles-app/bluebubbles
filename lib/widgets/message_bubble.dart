@@ -21,18 +21,6 @@ const LinearGradient _ios3ReflectionGradient = LinearGradient(
   end: Alignment.bottomCenter,
   colors: [Color(0xCCFFFFFF), Color(0x00F3FFF2)],
 );
-const LinearGradient _ios3MmsTopReflectionGradient = LinearGradient(
-  begin: Alignment.topCenter,
-  end: Alignment.bottomCenter,
-  colors: [Color(0xCCFFFFFF), Color(0xB8FFFFFF), Color(0x00F3FFF2)],
-  stops: [0, .58, 1],
-);
-const LinearGradient _ios3BottomReflectionGradient = LinearGradient(
-  begin: Alignment.topCenter,
-  end: Alignment.bottomCenter,
-  colors: [Color(0x00F3FFF2), Color(0xB8FFFFFF), Color(0xCCFFFFFF)],
-  stops: [0, .42, 1],
-);
 
 double emojiOnlyTextScale(String text) {
   final compact = text.replaceAll(RegExp(r'\s+'), '');
@@ -592,9 +580,29 @@ class _ImageAttachment extends StatelessWidget {
                         isFromMe: isFromMe,
                         showTail: showTail,
                       ),
-                      child: Transform.scale(
-                        scale: 1.035,
-                        child: image,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Transform.scale(
+                            scale: 1.035,
+                            child: image,
+                          ),
+                          Positioned(
+                            left: -16,
+                            right: -16,
+                            bottom: -12,
+                            height: 32,
+                            child: ImageFiltered(
+                              imageFilter: ImageFilter.blur(
+                                sigmaX: 5,
+                                sigmaY: 5,
+                              ),
+                              child: const ColoredBox(
+                                color: Color(0x59FFFFFF),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -608,22 +616,7 @@ class _ImageAttachment extends StatelessWidget {
                         decoration: BoxDecoration(
                           borderRadius:
                               BorderRadius.circular(_ios3ReflectionRadius),
-                          gradient: _ios3MmsTopReflectionGradient,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    left: _ios3ReflectionInset,
-                    right: _ios3ReflectionInset,
-                    bottom: _ios3ReflectionTop,
-                    height: _ios3ReflectionHeight,
-                    child: IgnorePointer(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          borderRadius:
-                              BorderRadius.circular(_ios3ReflectionRadius),
-                          gradient: _ios3BottomReflectionGradient,
+                          gradient: _ios3ReflectionGradient,
                         ),
                       ),
                     ),

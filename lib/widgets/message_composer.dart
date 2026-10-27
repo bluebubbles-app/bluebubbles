@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:ui';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/cupertino.dart';
@@ -1475,36 +1476,26 @@ class _Ios3MmsDraftEditor extends StatelessWidget {
                                   end: Alignment.bottomCenter,
                                   colors: [
                                     Color(0xCCFFFFFF),
-                                    Color(0xB8FFFFFF),
-                                    Color(0x00FFFFFF),
+                                    Color(0x00F3FFF2),
                                   ],
-                                  stops: [0, .58, 1],
                                 ),
                               ),
                             ),
                           ),
                         ),
-                        const Positioned(
+                        Positioned(
                           left: 5,
                           right: 5,
-                          bottom: 0,
-                          height: 10,
+                          bottom: -5,
+                          height: 16,
                           child: IgnorePointer(
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.all(
-                                  Radius.circular(5),
-                                ),
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    Color(0x00FFFFFF),
-                                    Color(0xB8FFFFFF),
-                                    Color(0xCCFFFFFF),
-                                  ],
-                                  stops: [0, .42, 1],
-                                ),
+                            child: ImageFiltered(
+                              imageFilter: ImageFilter.blur(
+                                sigmaX: 2.5,
+                                sigmaY: 2.5,
+                              ),
+                              child: const ColoredBox(
+                                color: Color(0x59FFFFFF),
                               ),
                             ),
                           ),
