@@ -17,10 +17,10 @@ import '../widgets/liquid_glass_surface.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/message_composer.dart';
 
-const double _ios3ConversationHeaderHeight = 55;
+const double _ios3ConversationHeaderHeight = 50;
 const double _ios3ConversationHeaderCenterY =
     _ios3ConversationHeaderHeight / 2;
-const double _ios3ConversationHeaderButtonHeight = 30;
+const double _ios3ConversationHeaderButtonHeight = 32;
 
 class ConversationScreen extends StatefulWidget {
   const ConversationScreen({
@@ -1645,7 +1645,9 @@ class _ConversationHeader extends StatelessWidget {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 textAlign: TextAlign.center,
-                                style: ios3TopBarTitleStyle,
+                                style: ios3TopBarTitleStyle.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                       ),
                     ),
@@ -2105,7 +2107,7 @@ class _Ios3NavigationButton extends StatelessWidget {
       textScaler: MediaQuery.textScalerOf(context),
     )..layout();
     final width = backShape
-        ? (labelPainter.width + 32).clamp(96.0, 128.0).toDouble()
+        ? (labelPainter.width + 26).clamp(88.0, 116.0).toDouble()
         : (labelPainter.width + 32).clamp(60.0, 96.0).toDouble();
     return CupertinoButton(
       minSize: height,

@@ -25,6 +25,9 @@ import 'settings_screen.dart';
 const maxPinnedConversations = 9;
 const _collapsedSearchExtent = 60.0;
 const _ios3CollapsedSearchExtent = 40.0;
+const _ios3ConversationListHeaderHeight = 50.0;
+const _ios3ConversationListHeaderCenterY =
+    _ios3ConversationListHeaderHeight / 2;
 
 double _initialConversationListOffset(InterfaceStyle style) {
   if (style == InterfaceStyle.ios26) return 0;
@@ -898,7 +901,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
   Widget _buildHeader(BuildContext context) {
     final settings = AppSettingsScope.of(context);
     final baseTopBarHeight = settings.interfaceStyle == InterfaceStyle.ios3
-        ? ios3TopBarHeight
+        ? _ios3ConversationListHeaderHeight
         : 44.0;
     final topCompensation = settings.interfaceStyle == InterfaceStyle.ios3
         ? 0.0
@@ -907,18 +910,18 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
             .toDouble();
     if (settings.interfaceStyle == InterfaceStyle.ios3) {
       return Container(
-        height: ios3TopBarHeight + topCompensation,
+        height: _ios3ConversationListHeaderHeight + topCompensation,
         decoration: ios3TopBarDecoration,
         child: Align(
           alignment: Alignment.bottomCenter,
           child: SizedBox(
             width: double.infinity,
-            height: ios3TopBarHeight,
+            height: _ios3ConversationListHeaderHeight,
             child: Stack(
               alignment: Alignment.center,
               children: [
                 Transform.translate(
-                  offset: const Offset(0, ios3TopBarVerticalOffset),
+                  offset: Offset.zero,
                   child: Text(
                     _selectingConversations
                         ? '${_selectedConversationIds.length} Selected'
@@ -929,7 +932,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                 ),
                 Positioned(
                   left: 6,
-                  top: ios3TopBarControlCenterY -
+                  top: _ios3ConversationListHeaderCenterY -
                       (ios3TopBarButtonHeight / 2),
                   child: _Ios3ListNavigationButton(
                     key: const ValueKey('edit-conversations-button'),
@@ -942,7 +945,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                 ),
                 Positioned(
                   right: 6,
-                  top: ios3TopBarControlCenterY -
+                  top: _ios3ConversationListHeaderCenterY -
                       (ios3TopBarButtonHeight / 2),
                   child: _Ios3ListNavigationButton(
                     key: const ValueKey('new-message-button'),
@@ -952,7 +955,9 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                     child: const Icon(CupertinoIcons.square_pencil, size: 18),
                   ),
                 ),
-                const Ios3TopBarGloss(),
+                const Ios3TopBarGloss(
+                  controlCenterY: _ios3ConversationListHeaderCenterY,
+                ),
               ],
             ),
           ),
