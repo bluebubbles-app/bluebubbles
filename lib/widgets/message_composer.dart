@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
-import 'dart:ui';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/cupertino.dart';
@@ -1484,18 +1483,21 @@ class _Ios3MmsDraftEditor extends StatelessWidget {
                           ),
                         ),
                         Positioned(
-                          left: 5,
-                          right: 5,
-                          bottom: -5,
-                          height: 16,
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          height: 9,
                           child: IgnorePointer(
-                            child: ImageFiltered(
-                              imageFilter: ImageFilter.blur(
-                                sigmaX: 2.5,
-                                sigmaY: 2.5,
-                              ),
-                              child: const ColoredBox(
-                                color: Color(0x59FFFFFF),
+                            child: const DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Color(0x00FFFFFF),
+                                    Color(0x66FFFFFF),
+                                  ],
+                                ),
                               ),
                             ),
                           ),

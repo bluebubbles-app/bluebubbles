@@ -22,6 +22,25 @@ const LinearGradient _ios3ReflectionGradient = LinearGradient(
   colors: [Color(0xCCFFFFFF), Color(0x00F3FFF2)],
 );
 
+void _paintIos3TopReflection(Canvas canvas, Size size) {
+  final reflection = RRect.fromRectAndRadius(
+    Rect.fromLTWH(
+      _ios3ReflectionInset,
+      _ios3ReflectionTop,
+      size.width - (_ios3ReflectionInset * 2),
+      _ios3ReflectionHeight,
+    ),
+    const Radius.circular(_ios3ReflectionRadius),
+  );
+  canvas.drawRRect(
+    reflection,
+    Paint()
+      ..shader = _ios3ReflectionGradient.createShader(
+        reflection.outerRect,
+      ),
+  );
+}
+
 double emojiOnlyTextScale(String text) {
   final compact = text.replaceAll(RegExp(r'\s+'), '');
   if (compact.isEmpty) return 1;
@@ -588,17 +607,20 @@ class _ImageAttachment extends StatelessWidget {
                             child: image,
                           ),
                           Positioned(
-                            left: -16,
-                            right: -16,
-                            bottom: -12,
-                            height: 32,
-                            child: ImageFiltered(
-                              imageFilter: ImageFilter.blur(
-                                sigmaX: 5,
-                                sigmaY: 5,
-                              ),
-                              child: const ColoredBox(
-                                color: Color(0x59FFFFFF),
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            height: 26,
+                            child: const DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Color(0x00FFFFFF),
+                                    Color(0x66FFFFFF),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -606,18 +628,10 @@ class _ImageAttachment extends StatelessWidget {
                       ),
                     ),
                   ),
-                  Positioned(
-                    left: _ios3ReflectionInset,
-                    right: _ios3ReflectionInset,
-                    top: _ios3ReflectionTop,
-                    height: _ios3ReflectionHeight,
+                  const Positioned.fill(
                     child: IgnorePointer(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          borderRadius:
-                              BorderRadius.circular(_ios3ReflectionRadius),
-                          gradient: _ios3ReflectionGradient,
-                        ),
+                      child: CustomPaint(
+                        painter: _Ios3TopReflectionPainter(),
                       ),
                     ),
                   ),
@@ -670,6 +684,18 @@ class _Ios3MmsImageClipper extends CustomClipper<Path> {
   @override
   bool shouldReclip(_Ios3MmsImageClipper oldClipper) =>
       oldClipper.isFromMe != isFromMe || oldClipper.showTail != showTail;
+}
+
+class _Ios3TopReflectionPainter extends CustomPainter {
+  const _Ios3TopReflectionPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    _paintIos3TopReflection(canvas, size);
+  }
+
+  @override
+  bool shouldRepaint(_Ios3TopReflectionPainter oldDelegate) => false;
 }
 
 class _AudioAttachment extends StatefulWidget {
@@ -1088,20 +1114,7 @@ class MessageBubblePainter extends CustomPainter {
     if (useIos3Shape && !ios3Media) {
       canvas.save();
       canvas.clipPath(bubble);
-      final highlightRect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          _ios3ReflectionInset,
-          _ios3ReflectionTop,
-          size.width - (_ios3ReflectionInset * 2),
-          _ios3ReflectionHeight,
-        ),
-        const Radius.circular(_ios3ReflectionRadius),
-      );
-      final glossPaint = Paint()
-        ..shader = _ios3ReflectionGradient.createShader(
-          highlightRect.outerRect,
-        );
-      canvas.drawRRect(highlightRect, glossPaint);
+      _paintIos3TopReflection(canvas, size);
       final innerTint = Paint()
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
