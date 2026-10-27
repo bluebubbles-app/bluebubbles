@@ -17,6 +17,11 @@ import '../widgets/liquid_glass_surface.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/message_composer.dart';
 
+const double _ios3ConversationHeaderHeight = 65;
+const double _ios3ConversationHeaderCenterY =
+    _ios3ConversationHeaderHeight / 2;
+const double _ios3ConversationHeaderButtonHeight = 30;
+
 class ConversationScreen extends StatefulWidget {
   const ConversationScreen({
     super.key,
@@ -741,7 +746,8 @@ class _ConversationScreenState extends State<ConversationScreen>
     final interfaceStyle = AppSettingsScope.of(context).interfaceStyle;
     final useIos3 = interfaceStyle == InterfaceStyle.ios3;
     final useIos26 = interfaceStyle == InterfaceStyle.ios26;
-    final baseTopBarHeight = useIos3 ? ios3TopBarHeight : 44.0;
+    final baseTopBarHeight =
+        useIos3 ? _ios3ConversationHeaderHeight : 44.0;
     final topCompensation = useIos3
         ? 0.0
         : (baseTopBarHeight - MediaQuery.paddingOf(context).top)
@@ -781,11 +787,14 @@ class _ConversationScreenState extends State<ConversationScreen>
                             padding: EdgeInsets.fromLTRB(
                               useIos3 ? 14 : 10,
                               _selectionMode
-                                  ? 64
+                                  ? (useIos3
+                                      ? _ios3ConversationHeaderHeight + 12
+                                      : 64)
                                   : (useIos26
                                               ? 106
                                               : useIos3
-                                                  ? ios3TopBarHeight + 12
+                                                  ? _ios3ConversationHeaderHeight +
+                                                      12
                                                   : 92) +
                                           topCompensation,
                               14,
@@ -1590,24 +1599,25 @@ class _ConversationHeader extends StatelessWidget {
         (viewPadding.right - viewPadding.left) / 2;
     return Container(
       key: const ValueKey('conversation-header-ios3'),
-      height: ios3TopBarHeight + topCompensation,
+      height: _ios3ConversationHeaderHeight + topCompensation,
       decoration: ios3TopBarDecoration,
       child: Align(
         alignment: Alignment.bottomCenter,
         child: SizedBox(
           width: double.infinity,
-          height: ios3TopBarHeight,
+          height: _ios3ConversationHeaderHeight,
           child: Stack(
             alignment: Alignment.center,
             children: [
               Positioned(
                 left: 6,
-                top: ios3TopBarControlCenterY -
-                    (ios3TopBarButtonHeight / 2),
+                top: _ios3ConversationHeaderCenterY -
+                    (_ios3ConversationHeaderButtonHeight / 2),
                 child: _Ios3NavigationButton(
                   key: const ValueKey('conversation-back-button'),
                   label: backLabel,
                   backShape: true,
+                  height: _ios3ConversationHeaderButtonHeight,
                   onPressed: () => Navigator.of(context).maybePop(),
                 ),
               ),
@@ -1616,7 +1626,7 @@ class _ConversationHeader extends StatelessWidget {
                   child: Transform.translate(
                     offset: Offset(
                       screenCenterCorrection,
-                      ios3TopBarVerticalOffset,
+                      0,
                     ),
                     child: Center(
                       child: SizedBox(
@@ -1643,14 +1653,17 @@ class _ConversationHeader extends StatelessWidget {
               ),
               Positioned(
                 right: 6,
-                top: ios3TopBarControlCenterY -
-                    (ios3TopBarButtonHeight / 2),
+                top: _ios3ConversationHeaderCenterY -
+                    (_ios3ConversationHeaderButtonHeight / 2),
                 child: _Ios3NavigationButton(
                   label: 'Edit',
+                  height: _ios3ConversationHeaderButtonHeight,
                   onPressed: onEdit,
                 ),
               ),
-              const Ios3TopBarGloss(),
+              const Ios3TopBarGloss(
+                controlCenterY: _ios3ConversationHeaderCenterY,
+              ),
             ],
           ),
         ),
@@ -2068,11 +2081,13 @@ class _Ios3NavigationButton extends StatelessWidget {
     required this.label,
     required this.onPressed,
     this.backShape = false,
+    this.height = ios3TopBarButtonHeight,
   });
 
   final String label;
   final VoidCallback onPressed;
   final bool backShape;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
@@ -2087,14 +2102,14 @@ class _Ios3NavigationButton extends StatelessWidget {
         ? (labelPainter.width + 32).clamp(96.0, 128.0).toDouble()
         : (labelPainter.width + 32).clamp(60.0, 96.0).toDouble();
     return CupertinoButton(
-      minSize: ios3TopBarButtonHeight,
+      minSize: height,
       padding: EdgeInsets.zero,
       onPressed: onPressed,
       child: CustomPaint(
         painter: _Ios3NavigationButtonPainter(backShape: backShape),
         child: SizedBox(
           width: width,
-          height: ios3TopBarButtonHeight,
+          height: height,
           child: Padding(
             padding: EdgeInsets.only(left: backShape ? 8 : 0),
             child: Center(
@@ -2214,28 +2229,28 @@ class _SelectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     if (AppSettingsScope.of(context).interfaceStyle == InterfaceStyle.ios3) {
       return Container(
-        height: ios3TopBarHeight,
+        height: _ios3ConversationHeaderHeight,
         decoration: ios3TopBarDecoration,
         child: Stack(
           alignment: Alignment.center,
           children: [
-            Transform.translate(
-              offset: const Offset(0, ios3TopBarVerticalOffset),
-              child: Text(
-                '$selectionCount Selected',
-                style: ios3TopBarTitleStyle,
-              ),
+            Text(
+              '$selectionCount Selected',
+              style: ios3TopBarTitleStyle,
             ),
             Positioned(
               right: 6,
-              top: ios3TopBarControlCenterY -
-                  (ios3TopBarButtonHeight / 2),
+              top: _ios3ConversationHeaderCenterY -
+                  (_ios3ConversationHeaderButtonHeight / 2),
               child: _Ios3NavigationButton(
                 label: 'Done',
+                height: _ios3ConversationHeaderButtonHeight,
                 onPressed: onCancel,
               ),
             ),
-            const Ios3TopBarGloss(),
+            const Ios3TopBarGloss(
+              controlCenterY: _ios3ConversationHeaderCenterY,
+            ),
           ],
         ),
       );

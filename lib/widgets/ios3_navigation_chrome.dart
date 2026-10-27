@@ -54,10 +54,15 @@ const TextStyle ios3TopBarButtonTextStyle = TextStyle(
 );
 
 class Ios3TopBarGloss extends StatelessWidget {
-  const Ios3TopBarGloss({super.key});
+  const Ios3TopBarGloss({
+    super.key,
+    this.controlCenterY = ios3TopBarControlCenterY,
+  });
+
+  final double controlCenterY;
 
   @override
-  Widget build(BuildContext context) => const Positioned.fill(
+  Widget build(BuildContext context) => Positioned.fill(
         child: IgnorePointer(
           child: Stack(
             children: [
@@ -65,10 +70,10 @@ class Ios3TopBarGloss extends StatelessWidget {
                 left: 0,
                 right: 0,
                 top: 1,
-                height: ios3TopBarControlCenterY - 1,
-                child: ColoredBox(color: Color(0x14FFFFFF)),
+                height: controlCenterY - 1,
+                child: const ColoredBox(color: Color(0x14FFFFFF)),
               ),
-              Positioned(
+              const Positioned(
                 left: 1,
                 right: 1,
                 top: 0,
