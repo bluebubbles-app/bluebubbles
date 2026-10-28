@@ -953,10 +953,10 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                       (ios3TopBarButtonHeight / 2),
                   child: _Ios3ListNavigationButton(
                     key: const ValueKey('new-message-button'),
-                    width: 38,
+                    width: 26,
                     onPressed:
                         _selectingConversations ? null : _composeNewMessage,
-                    child: const Icon(CupertinoIcons.square_pencil, size: 18),
+                    child: const Icon(CupertinoIcons.square_pencil, size: 16),
                   ),
                 ),
                 const Ios3TopBarGloss(
@@ -1160,14 +1160,12 @@ class _Ios3ListBottomBar extends StatelessWidget {
               key: const ValueKey('ios3-about-button'),
               label: 'About',
               height: 32,
-              fontWeight: FontWeight.w600,
               onPressed: onAbout,
             ),
             Ios3NavigationButton(
               key: const ValueKey('open-settings-button'),
               label: 'Settings',
               height: 32,
-              fontWeight: FontWeight.w600,
               onPressed: onSettings,
             ),
           ],
@@ -1590,32 +1588,15 @@ class _Ios3ListNavigationButton extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) => CupertinoButton(
-        minSize: ios3TopBarButtonHeight,
-        padding: EdgeInsets.zero,
+  Widget build(BuildContext context) => Ios3ButtonSurface(
+        width: width,
+        height: ios3TopBarButtonHeight,
         onPressed: onPressed,
-        child: Container(
-          width: width,
-          height: ios3TopBarButtonHeight,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(4),
-            gradient: ios3TopBarButtonGradient,
-            border: Border.all(color: const Color(0x80000000), width: 1),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x33FFFFFF),
-                blurRadius: 0,
-                offset: Offset(0, 1),
-              ),
-            ],
-          ),
-          child: IconTheme(
-            data: const IconThemeData(color: CupertinoColors.white),
-            child: DefaultTextStyle(
-              style: ios3TopBarButtonTextStyle,
-              child: child,
-            ),
+        child: IconTheme(
+          data: const IconThemeData(color: CupertinoColors.white),
+          child: DefaultTextStyle(
+            style: ios3TopBarButtonTextStyle,
+            child: child,
           ),
         ),
       );

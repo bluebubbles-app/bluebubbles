@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/cupertino.dart';
 
 const double ios3TopBarHeight = 45;
@@ -48,10 +50,43 @@ const TextStyle ios3TopBarButtonTextStyle = TextStyle(
   fontSize: 13,
   height: 1,
   fontWeight: FontWeight.w700,
+  letterSpacing: -.39,
   shadows: [
-    Shadow(color: Color(0x4D000000), offset: Offset(0, -1)),
+    Shadow(color: Color(0xFF000000), offset: Offset(0, -1)),
   ],
 );
+
+class Ios3ButtonSurface extends StatelessWidget {
+  const Ios3ButtonSurface({
+    super.key,
+    required this.width,
+    required this.height,
+    required this.onPressed,
+    required this.child,
+    this.backShape = false,
+  });
+
+  final double width;
+  final double height;
+  final VoidCallback? onPressed;
+  final Widget child;
+  final bool backShape;
+
+  @override
+  Widget build(BuildContext context) => CupertinoButton(
+        minSize: height,
+        padding: EdgeInsets.zero,
+        onPressed: onPressed,
+        child: CustomPaint(
+          painter: _Ios3NavigationButtonPainter(backShape: backShape),
+          child: SizedBox(
+            width: width,
+            height: height,
+            child: Center(child: child),
+          ),
+        ),
+      );
+}
 
 class Ios3NavigationButton extends StatelessWidget {
   const Ios3NavigationButton({
@@ -60,20 +95,16 @@ class Ios3NavigationButton extends StatelessWidget {
     required this.onPressed,
     this.backShape = false,
     this.height = ios3TopBarButtonHeight,
-    this.fontWeight = FontWeight.w700,
   });
 
   final String label;
   final VoidCallback onPressed;
   final bool backShape;
   final double height;
-  final FontWeight fontWeight;
 
   @override
   Widget build(BuildContext context) {
-    final labelStyle = ios3TopBarButtonTextStyle.copyWith(
-      fontWeight: fontWeight,
-    );
+    const labelStyle = ios3TopBarButtonTextStyle;
     final labelPainter = TextPainter(
       text: TextSpan(text: label, style: labelStyle),
       maxLines: 1,
@@ -83,27 +114,16 @@ class Ios3NavigationButton extends StatelessWidget {
     final width = backShape
         ? (labelPainter.width + 26).clamp(88.0, 116.0).toDouble()
         : (labelPainter.width + 32).clamp(60.0, 96.0).toDouble();
-    return CupertinoButton(
-      minSize: height,
-      padding: EdgeInsets.zero,
+    return Ios3ButtonSurface(
+      width: width,
+      height: height,
       onPressed: onPressed,
-      child: CustomPaint(
-        painter: _Ios3NavigationButtonPainter(backShape: backShape),
-        child: SizedBox(
-          width: width,
-          height: height,
-          child: Padding(
-            padding: EdgeInsets.only(left: backShape ? 8 : 0),
-            child: Center(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: labelStyle,
-              ),
-            ),
-          ),
-        ),
+      backShape: backShape,
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: labelStyle,
       ),
     );
   }
@@ -142,16 +162,35 @@ class _Ios3NavigationButtonPainter extends CustomPainter {
     }
     final rect = Offset.zero & size;
     canvas.drawPath(
+      path.shift(const Offset(0, 1)),
+      Paint()..color = const Color(0x33FFFFFF),
+    );
+    canvas.drawPath(
       path,
       Paint()
         ..shader = ios3TopBarButtonGradient.createShader(rect),
     );
+    canvas.save();
+    canvas.clipPath(path);
+    canvas.drawPath(
+      path.shift(const Offset(0, 2)),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..color = const Color(0x40FFFFFF)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+    );
+    canvas.restore();
     canvas.drawPath(
       path,
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1
-        ..color = const Color(0x80000000),
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0x80000000), Color(0x80708EA8)],
+        ).createShader(rect),
     );
     canvas.drawPath(
       path,

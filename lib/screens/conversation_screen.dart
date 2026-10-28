@@ -1628,7 +1628,6 @@ class _ConversationHeader extends StatelessWidget {
                   label: backLabel,
                   backShape: true,
                   height: _ios3ConversationHeaderButtonHeight,
-                  fontWeight: FontWeight.w600,
                   onPressed: () => Navigator.of(context).maybePop(),
                 ),
               ),
@@ -1675,7 +1674,6 @@ class _ConversationHeader extends StatelessWidget {
                 child: Ios3NavigationButton(
                   label: 'Edit',
                   height: _ios3ConversationHeaderButtonHeight,
-                  fontWeight: FontWeight.w600,
                   onPressed: onEdit,
                 ),
               ),
