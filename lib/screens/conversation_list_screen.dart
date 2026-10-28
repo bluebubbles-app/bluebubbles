@@ -956,7 +956,10 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                     width: 26,
                     onPressed:
                         _selectingConversations ? null : _composeNewMessage,
-                    child: const Icon(CupertinoIcons.square_pencil, size: 16),
+                    child: Transform.translate(
+                      offset: const Offset(1.5, -1.5),
+                      child: const Icon(CupertinoIcons.square_pencil, size: 16),
+                    ),
                   ),
                 ),
                 const Ios3TopBarGloss(
