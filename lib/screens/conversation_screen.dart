@@ -395,8 +395,18 @@ class _ConversationScreenState extends State<ConversationScreen>
   }
 
   void _sendAttachment(MessageAttachment attachment, String caption) {
+    final previousLength = widget.conversation.messages.length;
     widget.onSendAttachment?.call(attachment, caption);
     _refreshSendingState();
+    final insertedCount = widget.conversation.messages.length - previousLength;
+    if (insertedCount <= 0) return;
+    _messageListKey.currentState?.insertAllItems(
+      0,
+      insertedCount,
+      duration: _messageInsertionDuration,
+    );
+    Timer(const Duration(milliseconds: 40), _scrollToBottom);
+    Timer(_messageInsertionDuration, _scrollToBottom);
   }
 
   bool get _hasPendingOutgoingMessage => widget.conversation.messages.any(

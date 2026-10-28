@@ -583,8 +583,8 @@ class _ImageAttachment extends StatelessWidget {
       ),
       child: useIos3
           ? SizedBox(
-              width: 220,
-              height: 170,
+              width: 128,
+              height: 100,
               child: Stack(
                 clipBehavior: Clip.none,
                 fit: StackFit.expand,
@@ -592,8 +592,8 @@ class _ImageAttachment extends StatelessWidget {
                   Positioned(
                     left: isFromMe ? 0 : -10,
                     top: 0,
-                    width: 230,
-                    height: 170,
+                    width: 138,
+                    height: 100,
                     child: ClipPath(
                       clipper: _Ios3MmsImageClipper(
                         isFromMe: isFromMe,
@@ -610,7 +610,7 @@ class _ImageAttachment extends StatelessWidget {
                             left: 0,
                             right: 0,
                             bottom: 0,
-                            height: 26,
+                            height: 13,
                             child: const DecoratedBox(
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(

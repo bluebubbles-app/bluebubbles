@@ -677,35 +677,80 @@ class _MessagesUiAppState extends State<MessagesUiApp>
     if (address == null || address.isEmpty) return;
     final now = DateTime.now();
     final pendingId = 'sending-${now.microsecondsSinceEpoch}';
-    final preview = caption.trim().isNotEmpty
-        ? caption.trim()
+    final trimmedCaption = caption.trim();
+    final separateIos3Caption =
+        _settings.interfaceStyle == InterfaceStyle.ios3 &&
+        attachment.kind == MessageAttachmentKind.image &&
+        trimmedCaption.isNotEmpty;
+    final preview = trimmedCaption.isNotEmpty
+        ? trimmedCaption
         : attachment.kind == MessageAttachmentKind.audio
             ? 'Audio Message'
             : 'Photo';
     final pending = ChatMessage(
       id: pendingId,
-      text: caption.trim(),
+      text: separateIos3Caption ? '' : trimmedCaption,
       sentAt: now,
       isFromMe: true,
       deliveryState: DeliveryState.sending,
       attachment: attachment,
     );
+    final pendingCaption = separateIos3Caption
+        ? ChatMessage(
+            id: 'sending-${now.microsecondsSinceEpoch + 1}',
+            text: trimmedCaption,
+            sentAt: now.add(const Duration(microseconds: 1)),
+            isFromMe: true,
+            deliveryState: DeliveryState.sending,
+          )
+        : null;
     setState(() {
       conversation.messages.add(pending);
+      if (pendingCaption != null) conversation.messages.add(pendingCaption);
       conversation
         ..preview = preview
         ..updatedAt = now;
     });
     unawaited(_cacheOptimisticMessage(conversation, pending));
-    unawaited(
-      _sendPhoneAttachment(
-        conversation,
-        address,
-        attachment,
-        caption.trim(),
-        pendingId,
-      ),
+    if (pendingCaption != null) {
+      unawaited(_cacheOptimisticMessage(conversation, pendingCaption));
+      unawaited(
+        _sendIos3MmsThenSms(
+          conversation,
+          address,
+          attachment,
+          pendingId,
+          pendingCaption,
+        ),
+      );
+    } else {
+      unawaited(
+        _sendPhoneAttachment(
+          conversation,
+          address,
+          attachment,
+          trimmedCaption,
+          pendingId,
+        ),
+      );
+    }
+  }
+
+  Future<void> _sendIos3MmsThenSms(
+    Conversation conversation,
+    String address,
+    MessageAttachment attachment,
+    String mmsPendingId,
+    ChatMessage pendingSms,
+  ) async {
+    await _sendPhoneAttachment(
+      conversation,
+      address,
+      attachment,
+      '',
+      mmsPendingId,
     );
+    await _sendPhoneMessage(conversation, address, pendingSms);
   }
 
   Future<void> _sendPhoneAttachment(
