@@ -826,7 +826,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                       : (useIos26
                           ? 104
                           : useIos3
-                              ? 58 + MediaQuery.paddingOf(context).bottom
+                              ? 62 + MediaQuery.paddingOf(context).bottom
                               : 28),
                 ),
               ),
@@ -841,7 +841,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
               left: 16,
               right: 16,
               bottom: MediaQuery.paddingOf(context).bottom +
-                  (useIos3 ? 48 : 12),
+                  (useIos3 ? 52 : 12),
               child: ValueListenableBuilder<SmsSyncProgress>(
                 valueListenable: widget.syncProgress,
                 builder: (context, progress, _) => IgnorePointer(
@@ -1141,8 +1141,8 @@ class _Ios3ListBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        height: 40 + bottomPadding,
-        padding: EdgeInsets.fromLTRB(6, 5, 6, 5 + bottomPadding),
+        height: 44 + bottomPadding,
+        padding: EdgeInsets.fromLTRB(6, 6, 6, 6 + bottomPadding),
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
@@ -1156,69 +1156,21 @@ class _Ios3ListBottomBar extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _Ios3FooterButton(
+            Ios3NavigationButton(
               key: const ValueKey('ios3-about-button'),
               label: 'About',
+              height: 32,
+              fontWeight: FontWeight.w600,
               onPressed: onAbout,
             ),
-            _Ios3FooterButton(
+            Ios3NavigationButton(
               key: const ValueKey('open-settings-button'),
               label: 'Settings',
+              height: 32,
+              fontWeight: FontWeight.w600,
               onPressed: onSettings,
             ),
           ],
-        ),
-      );
-}
-
-class _Ios3FooterButton extends StatelessWidget {
-  const _Ios3FooterButton({
-    super.key,
-    required this.label,
-    required this.onPressed,
-  });
-
-  final String label;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) => CupertinoButton(
-        minSize: 28,
-        padding: EdgeInsets.zero,
-        onPressed: onPressed,
-        child: Container(
-          height: 26,
-          constraints: const BoxConstraints(minWidth: 56),
-          padding: const EdgeInsets.symmetric(horizontal: 9),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(4),
-            gradient: const LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Color(0xFF7897BA), Color(0xFF45678E)],
-            ),
-            border: Border.all(color: const Color(0xFF294767), width: 1),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x99FFFFFF),
-                blurRadius: .5,
-                offset: Offset(0, 1),
-              ),
-            ],
-          ),
-          child: Text(
-            label,
-            style: const TextStyle(
-              color: CupertinoColors.white,
-              fontFamily: 'SF Pro Text',
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              shadows: [
-                Shadow(color: Color(0xAA20344C), offset: Offset(0, -1)),
-              ],
-            ),
-          ),
         ),
       );
 }

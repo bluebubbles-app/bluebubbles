@@ -53,6 +53,120 @@ const TextStyle ios3TopBarButtonTextStyle = TextStyle(
   ],
 );
 
+class Ios3NavigationButton extends StatelessWidget {
+  const Ios3NavigationButton({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    this.backShape = false,
+    this.height = ios3TopBarButtonHeight,
+    this.fontWeight = FontWeight.w700,
+  });
+
+  final String label;
+  final VoidCallback onPressed;
+  final bool backShape;
+  final double height;
+  final FontWeight fontWeight;
+
+  @override
+  Widget build(BuildContext context) {
+    final labelStyle = ios3TopBarButtonTextStyle.copyWith(
+      fontWeight: fontWeight,
+    );
+    final labelPainter = TextPainter(
+      text: TextSpan(text: label, style: labelStyle),
+      maxLines: 1,
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout();
+    final width = backShape
+        ? (labelPainter.width + 26).clamp(88.0, 116.0).toDouble()
+        : (labelPainter.width + 32).clamp(60.0, 96.0).toDouble();
+    return CupertinoButton(
+      minSize: height,
+      padding: EdgeInsets.zero,
+      onPressed: onPressed,
+      child: CustomPaint(
+        painter: _Ios3NavigationButtonPainter(backShape: backShape),
+        child: SizedBox(
+          width: width,
+          height: height,
+          child: Padding(
+            padding: EdgeInsets.only(left: backShape ? 8 : 0),
+            child: Center(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: labelStyle,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Ios3NavigationButtonPainter extends CustomPainter {
+  const _Ios3NavigationButtonPainter({required this.backShape});
+
+  final bool backShape;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path();
+    if (backShape) {
+      path
+        ..moveTo(13, 1)
+        ..lineTo(size.width - 7, 1)
+        ..quadraticBezierTo(size.width - 1, 1, size.width - 1, 7)
+        ..lineTo(size.width - 1, size.height - 7)
+        ..quadraticBezierTo(
+          size.width - 1,
+          size.height - 1,
+          size.width - 7,
+          size.height - 1,
+        )
+        ..lineTo(13, size.height - 1)
+        ..lineTo(1, size.height / 2)
+        ..close();
+    } else {
+      path.addRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(1, 1, size.width - 2, size.height - 2),
+          const Radius.circular(4),
+        ),
+      );
+    }
+    final rect = Offset.zero & size;
+    canvas.drawPath(
+      path,
+      Paint()
+        ..shader = ios3TopBarButtonGradient.createShader(rect),
+    );
+    canvas.drawPath(
+      path,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = const Color(0x80000000),
+    );
+    canvas.drawPath(
+      path,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = .7
+        ..color = const Color(0x33FFFFFF),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_Ios3NavigationButtonPainter oldDelegate) =>
+      oldDelegate.backShape != backShape;
+}
+
 class Ios3TopBarGloss extends StatelessWidget {
   const Ios3TopBarGloss({
     super.key,
