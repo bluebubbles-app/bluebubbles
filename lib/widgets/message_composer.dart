@@ -512,7 +512,7 @@ class _MessageComposerState extends State<MessageComposer> {
                                       child: CupertinoTextField(
                                         controller: _controller,
                                         focusNode: _focusNode,
-                                        placeholder: 'iMessage',
+                                        placeholder: 'Message',
                                         placeholderStyle: const TextStyle(
                                           fontFamily: 'SF Pro Text',
                                           color: Color(0x4D3C3C43),
@@ -716,7 +716,7 @@ class _MessageComposerState extends State<MessageComposer> {
                               : CupertinoTextField(
                                   controller: _controller,
                                   focusNode: _focusNode,
-                                  placeholder: 'iMessage',
+                                  placeholder: 'Message',
                                   placeholderStyle: const TextStyle(
                                     fontFamily: 'SF Pro Text',
                                     color: Color(0xFF999999),
@@ -1062,7 +1062,7 @@ class _MessageComposerState extends State<MessageComposer> {
                                         child: CupertinoTextField(
                                           controller: _controller,
                                           focusNode: _focusNode,
-                                          placeholder: 'iMessage',
+                                          placeholder: 'Message',
                                           placeholderStyle: TextStyle(
                                             fontFamily: 'SF Pro Text',
                                             color: MessagesPalette
