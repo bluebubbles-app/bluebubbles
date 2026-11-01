@@ -41,18 +41,29 @@ class SmsReceiver : BroadcastReceiver() {
                 }
                 val sentAt = parts.first().timestampMillis.takeIf { it > 0 }
                     ?: System.currentTimeMillis()
+                val receivedAt = System.currentTimeMillis()
                 val threadId = MessageNotifier.threadIdFor(appContext, address)
                 val values = ContentValues().apply {
                     put(Telephony.Sms.ADDRESS, address)
                     put(Telephony.Sms.BODY, body)
-                    put(Telephony.Sms.DATE, System.currentTimeMillis())
+                    put(Telephony.Sms.DATE, receivedAt)
                     put(Telephony.Sms.DATE_SENT, sentAt)
                     put(Telephony.Sms.READ, 0)
                     put(Telephony.Sms.SEEN, 0)
                     threadId?.let { put(Telephony.Sms.THREAD_ID, it) }
                 }
-                appContext.contentResolver.insert(Telephony.Sms.Inbox.CONTENT_URI, values)
-                MessageNotifier.show(appContext, address, body, sentAt, threadId)
+                val insertedId = appContext.contentResolver
+                    .insert(Telephony.Sms.Inbox.CONTENT_URI, values)
+                    ?.lastPathSegment
+                    ?.toLongOrNull()
+                MessageNotifier.show(
+                    appContext,
+                    address,
+                    body,
+                    receivedAt,
+                    threadId,
+                    smsMessageId = insertedId,
+                )
             } finally {
                 pendingResult.finish()
             }
@@ -149,6 +160,7 @@ internal object MessageNotifier {
         timestamp: Long = System.currentTimeMillis(),
         threadId: Long? = null,
         enableActions: Boolean = true,
+        smsMessageId: Long? = null,
     ) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
@@ -172,10 +184,14 @@ internal object MessageNotifier {
         val messages = resolvedThreadId?.let {
             recentUnreadMessages(context, it)
         }.orEmpty().let { history ->
-            val current = NotificationMessage(body, timestamp)
+            val current = NotificationMessage(body, timestamp, smsMessageId)
             val includesCurrent = history.any { message ->
-                message.body == body &&
-                    kotlin.math.abs(message.timestamp - timestamp) < 5_000L
+                if (smsMessageId != null) {
+                    message.smsMessageId == smsMessageId
+                } else {
+                    message.body == body &&
+                        kotlin.math.abs(message.timestamp - timestamp) < 5_000L
+                }
             }
             (if (includesCurrent) history else history + current)
                 .sortedBy(NotificationMessage::timestamp)
@@ -337,12 +353,13 @@ internal object MessageNotifier {
         val messages = mutableListOf<NotificationMessage>()
         context.contentResolver.query(
             Telephony.Sms.CONTENT_URI,
-            arrayOf(Telephony.Sms.BODY, Telephony.Sms.DATE),
+            arrayOf(BaseColumns._ID, Telephony.Sms.BODY, Telephony.Sms.DATE),
             "${Telephony.Sms.THREAD_ID} = ? AND ${Telephony.Sms.TYPE} = ? AND " +
                 "${Telephony.Sms.READ} = 0",
             arrayOf(threadId.toString(), Telephony.Sms.MESSAGE_TYPE_INBOX.toString()),
             "${Telephony.Sms.DATE} DESC, ${BaseColumns._ID} DESC",
         )?.use { cursor ->
+            val idIndex = cursor.getColumnIndexOrThrow(BaseColumns._ID)
             val bodyIndex = cursor.getColumnIndexOrThrow(Telephony.Sms.BODY)
             val dateIndex = cursor.getColumnIndexOrThrow(Telephony.Sms.DATE)
             while (cursor.moveToNext() && messages.size < MAX_NOTIFICATION_MESSAGES) {
@@ -350,6 +367,7 @@ internal object MessageNotifier {
                     NotificationMessage(
                         body = cursor.getString(bodyIndex).orEmpty(),
                         timestamp = cursor.getLong(dateIndex),
+                        smsMessageId = cursor.getLong(idIndex),
                     ),
                 )
             }
@@ -506,4 +524,5 @@ private data class NotificationContact(
 private data class NotificationMessage(
     val body: String,
     val timestamp: Long,
+    val smsMessageId: Long? = null,
 )
