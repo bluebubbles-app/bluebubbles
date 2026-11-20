@@ -1580,7 +1580,7 @@ class _MediaLibrarySheetState extends State<_MediaLibrarySheet> {
   }
 
   void _onScroll() {
-    if (_scrollController.position.extentAfter < 500) {
+    if (_scrollController.position.extentAfter < 1000) {
       unawaited(_loadNextPage());
     }
   }
@@ -1657,6 +1657,7 @@ class _MediaLibrarySheetState extends State<_MediaLibrarySheet> {
         .toDouble();
     return GridView.builder(
       controller: _scrollController,
+      cacheExtent: 600,
       padding: widget.useIos26
           ? const EdgeInsets.fromLTRB(10, 0, 10, 16)
           : const EdgeInsets.fromLTRB(6, 10, 6, 16),

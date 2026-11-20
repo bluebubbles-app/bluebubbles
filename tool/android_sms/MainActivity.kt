@@ -42,6 +42,7 @@ import io.flutter.plugin.common.MethodChannel
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.ByteBuffer
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -78,6 +79,7 @@ class MainActivity : FlutterActivity() {
     @Volatile private var lastThreadLoad = "Not started"
     @Volatile private var suppressProviderReloadUntil = 0L
     private val enrichmentGeneration = AtomicInteger(0)
+    private val photoThumbnailExecutor = Executors.newFixedThreadPool(4)
     private val mainHandler = Handler(Looper.getMainLooper())
     private val notifyMessagesChanged = Runnable {
         if (::channel.isInitialized) channel.invokeMethod("messagesChanged", null)
@@ -470,7 +472,7 @@ class MainActivity : FlutterActivity() {
             .coerceAtLeast(0)
         Thread {
             try {
-                val images = mutableListOf<Map<String, Any?>>()
+                val media = mutableListOf<Triple<Uri, String, String?>>()
                 val projection = arrayOf(
                     MediaStore.Images.Media._ID,
                     MediaStore.Images.Media.DISPLAY_NAME,
@@ -516,24 +518,36 @@ class MainActivity : FlutterActivity() {
                         MediaStore.Images.Media.MIME_TYPE,
                     )
                     var skipped = 0
-                    while (mediaCursor.moveToNext() && images.size < limit) {
+                    while (mediaCursor.moveToNext() && media.size < limit) {
                         if (!pagedByProvider && skipped++ < offset) continue
                         val uri = Uri.withAppendedPath(
                             MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                             mediaCursor.getLong(idIndex).toString(),
                         )
-                        val thumbnail = mediaThumbnail(uri) ?: continue
-                        images.add(
-                            hashMapOf(
-                                "uri" to uri.toString(),
-                                "mimeType" to mediaCursor.getString(mimeIndex)
-                                    .orEmpty()
+                        media.add(
+                            Triple(
+                                uri,
+                                mediaCursor.getString(mimeIndex).orEmpty()
                                     .ifEmpty { "image/jpeg" },
-                                "name" to mediaCursor.getString(nameIndex),
-                                "thumbnailBytes" to thumbnail,
+                                mediaCursor.getString(nameIndex),
                             ),
                         )
                     }
+                }
+                // Decode thumbnails concurrently, but keep MediaStore's sort order.
+                val thumbnails = media.map { item ->
+                    photoThumbnailExecutor.submit<ByteArray?> {
+                        mediaThumbnail(item.first)
+                    }
+                }
+                val images = media.mapIndexedNotNull { index, item ->
+                    val thumbnail = thumbnails[index].get() ?: return@mapIndexedNotNull null
+                    hashMapOf<String, Any?>(
+                        "uri" to item.first.toString(),
+                        "mimeType" to item.second,
+                        "name" to item.third,
+                        "thumbnailBytes" to thumbnail,
+                    )
                 }
                 runOnUiThread { result.success(images) }
             } catch (error: Exception) {
@@ -1984,6 +1998,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onDestroy() {
         mainHandler.removeCallbacks(notifyMessagesChanged)
+        photoThumbnailExecutor.shutdownNow()
         releaseVoiceRecorder(deleteFile = true)
         if (observerRegistered) contentResolver.unregisterContentObserver(smsObserver)
         super.onDestroy()
