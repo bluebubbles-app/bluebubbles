@@ -24,13 +24,12 @@ const LinearGradient ios3TopBarButtonGradient = LinearGradient(
   begin: Alignment.topCenter,
   end: Alignment.bottomCenter,
   colors: [
-    Color(0xFF4582B7),
-    Color(0xFF4073A0),
-    Color(0xFF4073A0),
-    Color(0xFF4275A1),
-    Color(0xFF4376A2),
+    Color(0xFFA5B9CA),
+    Color(0xFF809DB8),
+    Color(0xFF5479A1),
+    Color(0xFF365E8C),
   ],
-  stops: [0, .283654, .5, .730769, 1],
+  stops: [0, .25, .65, 1],
 );
 
 const TextStyle ios3TopBarTitleStyle = TextStyle(
@@ -139,32 +138,29 @@ class _Ios3NavigationButtonPainter extends CustomPainter {
     final path = Path();
     if (backShape) {
       path
-        ..moveTo(13, 1)
-        ..lineTo(size.width - 7, 1)
-        ..quadraticBezierTo(size.width - 1, 1, size.width - 1, 7)
-        ..lineTo(size.width - 1, size.height - 7)
+        ..moveTo(17, 1)
+        ..lineTo(size.width - 9, 1)
+        ..quadraticBezierTo(size.width - 1, 1, size.width - 1, 9)
+        ..lineTo(size.width - 1, size.height - 9)
         ..quadraticBezierTo(
           size.width - 1,
           size.height - 1,
-          size.width - 7,
+          size.width - 9,
           size.height - 1,
         )
-        ..lineTo(13, size.height - 1)
+        ..lineTo(17, size.height - 1)
         ..lineTo(1, size.height / 2)
         ..close();
     } else {
       path.addRRect(
         RRect.fromRectAndRadius(
           Rect.fromLTWH(1, 1, size.width - 2, size.height - 2),
-          const Radius.circular(4),
+          const Radius.circular(8),
         ),
       );
     }
     final rect = Offset.zero & size;
-    canvas.drawPath(
-      path.shift(const Offset(0, 1)),
-      Paint()..color = const Color(0x33FFFFFF),
-    );
+    canvas.drawShadow(path, const Color(0x660D2741), 2, false);
     canvas.drawPath(
       path,
       Paint()
@@ -173,12 +169,11 @@ class _Ios3NavigationButtonPainter extends CustomPainter {
     canvas.save();
     canvas.clipPath(path);
     canvas.drawPath(
-      path.shift(const Offset(0, 2)),
+      path.shift(const Offset(0, 1)),
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 2
-        ..color = const Color(0x40FFFFFF)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+        ..strokeWidth = 1.4
+        ..color = const Color(0xA6FFFFFF),
     );
     canvas.restore();
     canvas.drawPath(
@@ -189,15 +184,8 @@ class _Ios3NavigationButtonPainter extends CustomPainter {
         ..shader = const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0x80000000), Color(0x80708EA8)],
+          colors: [Color(0xFF4E6478), Color(0xFF324B69)],
         ).createShader(rect),
-    );
-    canvas.drawPath(
-      path,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = .7
-        ..color = const Color(0x33FFFFFF),
     );
   }
 
