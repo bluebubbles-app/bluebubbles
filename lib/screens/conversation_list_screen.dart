@@ -785,10 +785,17 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                             ),
                             if (widget.loadError != null) ...[
                               const SizedBox(height: 8),
-                              CupertinoButton(
-                                onPressed: _retryPhoneMessages,
-                                child: const Text('Try Again'),
-                              ),
+                              if (useIos3)
+                                Ios3NavigationButton(
+                                  label: 'Try Again',
+                                  height: 32,
+                                  onPressed: _retryPhoneMessages,
+                                )
+                              else
+                                CupertinoButton(
+                                  onPressed: _retryPhoneMessages,
+                                  child: const Text('Try Again'),
+                                ),
                             ],
                           ],
                         ],
@@ -1279,10 +1286,10 @@ class _Ios3StatsScreenState extends State<_Ios3StatsScreen> {
                         left: 6,
                         top: ios3TopBarControlCenterY -
                             (ios3TopBarButtonHeight / 2),
-                        child: _Ios3ListNavigationButton(
-                          width: 74,
+                        child: Ios3NavigationButton(
+                          label: 'Messages',
+                          backShape: true,
                           onPressed: () => Navigator.of(context).pop(),
-                          child: const Text('Messages'),
                         ),
                       ),
                       const Ios3TopBarGloss(),

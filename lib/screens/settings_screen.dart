@@ -733,79 +733,16 @@ class _Ios3SettingsHeader extends StatelessWidget {
               left: 6,
               top: ios3TopBarControlCenterY -
                   (ios3TopBarButtonHeight / 2),
-              child: CupertinoButton(
-                minSize: ios3TopBarButtonHeight,
-                padding: EdgeInsets.zero,
+              child: Ios3NavigationButton(
+                label: 'Messages',
+                backShape: true,
                 onPressed: onBack,
-                child: SizedBox(
-                  width: 92,
-                  height: ios3TopBarButtonHeight,
-                  child: CustomPaint(
-                    painter: const _Ios3SettingsBackButtonPainter(),
-                    child: const Padding(
-                      padding: EdgeInsets.only(left: 8),
-                      child: Center(
-                        child: Text(
-                          'Messages',
-                          maxLines: 1,
-                          style: ios3TopBarButtonTextStyle,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
               ),
             ),
             const Ios3TopBarGloss(),
           ],
         ),
       );
-}
-
-class _Ios3SettingsBackButtonPainter extends CustomPainter {
-  const _Ios3SettingsBackButtonPainter();
-
-  Path _path(Size size) => Path()
-    ..moveTo(13, 1)
-    ..lineTo(size.width - 7, 1)
-    ..quadraticBezierTo(size.width - 1, 1, size.width - 1, 7)
-    ..lineTo(size.width - 1, size.height - 7)
-    ..quadraticBezierTo(
-      size.width - 1,
-      size.height - 1,
-      size.width - 7,
-      size.height - 1,
-    )
-    ..lineTo(13, size.height - 1)
-    ..lineTo(1, size.height / 2)
-    ..close();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final path = _path(size);
-    canvas.drawPath(
-      path,
-      Paint()
-        ..shader = ios3TopBarButtonGradient.createShader(Offset.zero & size),
-    );
-    canvas.drawPath(
-      path,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1
-        ..color = const Color(0x80000000),
-    );
-    canvas.drawPath(
-      path,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = .7
-        ..color = const Color(0x33FFFFFF),
-    );
-  }
-
-  @override
-  bool shouldRepaint(_Ios3SettingsBackButtonPainter oldDelegate) => false;
 }
 
 class _Ios3SettingsBackgroundPainter extends CustomPainter {

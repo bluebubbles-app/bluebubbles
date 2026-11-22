@@ -1010,10 +1010,17 @@ class _ConversationScreenState extends State<ConversationScreen>
                                   style: MessagesText.secondary(context),
                                 ),
                                 const SizedBox(height: 8),
-                                CupertinoButton(
-                                  onPressed: _loadMessages,
-                                  child: const Text('Try Again'),
-                                ),
+                                if (useIos3)
+                                  Ios3NavigationButton(
+                                    label: 'Try Again',
+                                    height: 32,
+                                    onPressed: _loadMessages,
+                                  )
+                                else
+                                  CupertinoButton(
+                                    onPressed: _loadMessages,
+                                    child: const Text('Try Again'),
+                                  ),
                               ],
                             ),
                           ),
