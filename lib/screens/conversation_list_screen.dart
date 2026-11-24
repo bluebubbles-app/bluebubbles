@@ -944,28 +944,27 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
                 Positioned(
                   left: 6,
                   top: _ios3ConversationListHeaderCenterY -
-                      (ios3TopBarButtonHeight / 2),
-                  child: _Ios3ListNavigationButton(
+                      (ios3ConversationButtonHeight / 2),
+                  child: Ios3NavigationButton(
                     key: const ValueKey('edit-conversations-button'),
-                    width: 58,
+                    label: _selectingConversations ? 'Done' : 'Edit',
+                    height: ios3ConversationButtonHeight,
                     onPressed: _toggleConversationSelectionMode,
-                    child: Text(
-                      _selectingConversations ? 'Done' : 'Edit',
-                    ),
                   ),
                 ),
                 Positioned(
                   right: 6,
                   top: _ios3ConversationListHeaderCenterY -
-                      (ios3TopBarButtonHeight / 2),
+                      (ios3ConversationButtonHeight / 2),
                   child: _Ios3ListNavigationButton(
                     key: const ValueKey('new-message-button'),
-                    width: 26,
+                    width: ios3ConversationButtonHeight,
+                    height: ios3ConversationButtonHeight,
                     onPressed:
                         _selectingConversations ? null : _composeNewMessage,
                     child: Transform.translate(
-                      offset: const Offset(1.5, -1.5),
-                      child: const Icon(CupertinoIcons.square_pencil, size: 16),
+                      offset: const Offset(1, -1),
+                      child: const Icon(CupertinoIcons.square_pencil, size: 19),
                     ),
                   ),
                 ),
@@ -1169,13 +1168,13 @@ class _Ios3ListBottomBar extends StatelessWidget {
             Ios3NavigationButton(
               key: const ValueKey('ios3-about-button'),
               label: 'About',
-              height: 32,
+              height: ios3ConversationButtonHeight,
               onPressed: onAbout,
             ),
             Ios3NavigationButton(
               key: const ValueKey('open-settings-button'),
               label: 'Settings',
-              height: 32,
+              height: ios3ConversationButtonHeight,
               onPressed: onSettings,
             ),
           ],
@@ -1589,18 +1588,20 @@ class _Ios3ListNavigationButton extends StatelessWidget {
   const _Ios3ListNavigationButton({
     super.key,
     required this.width,
+    this.height = ios3TopBarButtonHeight,
     required this.onPressed,
     required this.child,
   });
 
   final double width;
+  final double height;
   final VoidCallback? onPressed;
   final Widget child;
 
   @override
   Widget build(BuildContext context) => Ios3ButtonSurface(
         width: width,
-        height: ios3TopBarButtonHeight,
+        height: height,
         onPressed: onPressed,
         child: IconTheme(
           data: const IconThemeData(color: CupertinoColors.white),

@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 const double ios3TopBarHeight = 45;
 const double ios3TopBarControlCenterY = 22.5;
 const double ios3TopBarButtonHeight = 24;
+const double ios3ConversationButtonHeight = 32;
 const double ios3TopBarVerticalOffset =
     ios3TopBarControlCenterY - (ios3TopBarHeight / 2);
 

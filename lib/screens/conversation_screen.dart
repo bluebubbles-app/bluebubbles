@@ -20,7 +20,8 @@ import '../widgets/message_composer.dart';
 const double _ios3ConversationHeaderHeight = 50;
 const double _ios3ConversationHeaderCenterY =
     _ios3ConversationHeaderHeight / 2;
-const double _ios3ConversationHeaderButtonHeight = 32;
+const double _ios3ConversationHeaderButtonHeight =
+    ios3ConversationButtonHeight;
 
 class ConversationScreen extends StatefulWidget {
   const ConversationScreen({

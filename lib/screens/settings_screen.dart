@@ -732,10 +732,11 @@ class _Ios3SettingsHeader extends StatelessWidget {
             Positioned(
               left: 6,
               top: ios3TopBarControlCenterY -
-                  (ios3TopBarButtonHeight / 2),
+                  (ios3ConversationButtonHeight / 2),
               child: Ios3NavigationButton(
                 label: 'Messages',
                 backShape: true,
+                height: ios3ConversationButtonHeight,
                 onPressed: onBack,
               ),
             ),
