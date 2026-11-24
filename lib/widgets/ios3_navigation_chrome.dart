@@ -114,7 +114,7 @@ class Ios3NavigationButton extends StatelessWidget {
       textScaler: MediaQuery.textScalerOf(context),
     )..layout();
     final desiredWidth = backShape
-        ? (labelPainter.width + 34).clamp(92.0, 136.0).toDouble()
+        ? (labelPainter.width + 24).clamp(84.0, 136.0).toDouble()
         : (labelPainter.width + 32).clamp(60.0, 96.0).toDouble();
     final width = maxWidth == null
         ? desiredWidth
@@ -135,7 +135,7 @@ class Ios3NavigationButton extends StatelessWidget {
               width: width,
               height: height,
               child: Padding(
-                padding: const EdgeInsets.only(left: 18, right: 16),
+                padding: const EdgeInsets.only(left: 18, right: 6),
                 child: Align(alignment: Alignment.centerLeft, child: text),
               ),
             )
