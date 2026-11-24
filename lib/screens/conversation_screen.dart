@@ -1041,15 +1041,23 @@ class _ConversationScreenState extends State<ConversationScreen>
                               onSendingProgressCompleted:
                                   _handleSendingProgressCompleted,
                               topCompensation: topCompensation,
-                              backUnreadCount: widget.allConversations
-                                  .where(
-                                    (item) =>
-                                        item.id != widget.conversation.id,
-                                  )
-                                  .fold<int>(
-                                    0,
-                                    (sum, item) => sum + item.unreadCount,
-                                  ),
+                              backUnreadCount: useIos3
+                                  ? widget.allConversations
+                                      .where(
+                                        (item) =>
+                                            item.id != widget.conversation.id &&
+                                            item.unreadCount > 0,
+                                      )
+                                      .length
+                                  : widget.allConversations
+                                      .where(
+                                        (item) =>
+                                            item.id != widget.conversation.id,
+                                      )
+                                      .fold<int>(
+                                        0,
+                                        (sum, item) => sum + item.unreadCount,
+                                      ),
                               onCall: widget.onCall,
                               onOpenContact: widget.onOpenContact,
                               onEdit: _enterSelectionMode,
@@ -1615,6 +1623,10 @@ class _ConversationHeader extends StatelessWidget {
     final viewPadding = MediaQuery.viewPaddingOf(context);
     final screenCenterCorrection =
         (viewPadding.right - viewPadding.left) / 2;
+    final maxBackWidth =
+        (MediaQuery.sizeOf(context).width / 2 - 75)
+            .clamp(88.0, 136.0)
+            .toDouble();
     return Container(
       key: const ValueKey('conversation-header-ios3'),
       height: _ios3ConversationHeaderHeight + topCompensation,
@@ -1636,6 +1648,7 @@ class _ConversationHeader extends StatelessWidget {
                   label: backLabel,
                   backShape: true,
                   height: _ios3ConversationHeaderButtonHeight,
+                  maxWidth: maxBackWidth,
                   onPressed: () => Navigator.of(context).maybePop(),
                 ),
               ),

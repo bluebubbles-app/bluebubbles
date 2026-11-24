@@ -546,6 +546,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               children: [
                 _Ios3SettingsHeader(
+                  unreadConversationCount: widget.conversations
+                      .where((conversation) => conversation.unreadCount > 0)
+                      .length,
                   onBack: () => Navigator.of(context).maybePop(),
                 ),
                 Expanded(
@@ -710,8 +713,12 @@ class _SettingsSection extends StatelessWidget {
 }
 
 class _Ios3SettingsHeader extends StatelessWidget {
-  const _Ios3SettingsHeader({required this.onBack});
+  const _Ios3SettingsHeader({
+    required this.unreadConversationCount,
+    required this.onBack,
+  });
 
+  final int unreadConversationCount;
   final VoidCallback onBack;
 
   @override
@@ -734,9 +741,14 @@ class _Ios3SettingsHeader extends StatelessWidget {
               top: ios3TopBarControlCenterY -
                   (ios3ConversationButtonHeight / 2),
               child: Ios3NavigationButton(
-                label: 'Messages',
+                label: unreadConversationCount > 0
+                    ? 'Messages ($unreadConversationCount)'
+                    : 'Messages',
                 backShape: true,
                 height: ios3ConversationButtonHeight,
+                maxWidth: (MediaQuery.sizeOf(context).width / 2 - 75)
+                    .clamp(88.0, 136.0)
+                    .toDouble(),
                 onPressed: onBack,
               ),
             ),

@@ -95,12 +95,14 @@ class Ios3NavigationButton extends StatelessWidget {
     required this.onPressed,
     this.backShape = false,
     this.height = ios3TopBarButtonHeight,
+    this.maxWidth,
   });
 
   final String label;
   final VoidCallback onPressed;
   final bool backShape;
   final double height;
+  final double? maxWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -111,20 +113,33 @@ class Ios3NavigationButton extends StatelessWidget {
       textDirection: Directionality.of(context),
       textScaler: MediaQuery.textScalerOf(context),
     )..layout();
-    final width = backShape
-        ? (labelPainter.width + 26).clamp(88.0, 116.0).toDouble()
+    final desiredWidth = backShape
+        ? (labelPainter.width + 34).clamp(92.0, 136.0).toDouble()
         : (labelPainter.width + 32).clamp(60.0, 96.0).toDouble();
+    final width = maxWidth == null
+        ? desiredWidth
+        : desiredWidth.clamp(0.0, maxWidth!).toDouble();
+    final text = Text(
+      label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: labelStyle,
+    );
     return Ios3ButtonSurface(
       width: width,
       height: height,
       onPressed: onPressed,
       backShape: backShape,
-      child: Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: labelStyle,
-      ),
+      child: backShape
+          ? SizedBox(
+              width: width,
+              height: height,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 18, right: 16),
+                child: Align(alignment: Alignment.centerLeft, child: text),
+              ),
+            )
+          : text,
     );
   }
 }
